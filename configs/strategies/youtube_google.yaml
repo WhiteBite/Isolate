@@ -1,0 +1,48 @@
+# YouTube/Google Specific Strategy - оптимизирована для Google сервисов
+id: "zapret_youtube_google"
+name: "YouTube Google"
+description: "Специализированная стратегия для YouTube и Google сервисов с multisplit"
+family: sni_frag
+engine: zapret
+
+mode_capabilities:
+  supports_socks: false
+  supports_global: true
+
+global_template:
+  binary: "binaries/winws.exe"
+  args:
+    # QUIC fake для YouTube
+    - "--wf-tcp=443"
+    - "--wf-udp=443"
+    - "--filter-udp=443"
+    - "--hostlist=hostlists/youtube.txt"
+    - "--dpi-desync=fake"
+    - "--dpi-desync-repeats=6"
+    - "--dpi-desync-fake-quic=binaries/quic_initial_www_google_com.bin"
+    - "--new"
+    # TCP multisplit для Google/YouTube с ip-id=zero
+    - "--filter-tcp=443"
+    - "--hostlist=hostlists/youtube.txt"
+    - "--ip-id=zero"
+    - "--dpi-desync=multisplit"
+    - "--dpi-desync-split-seqovl=681"
+    - "--dpi-desync-split-pos=1"
+    - "--dpi-desync-split-seqovl-pattern=binaries/tls_clienthello_www_google_com.bin"
+  env: {}
+  requires_admin: true
+
+requirements:
+  min_rights: "admin"
+  os:
+    - windows
+  binaries:
+    - "binaries/winws.exe"
+    - "binaries/WinDivert64.sys"
+    - "binaries/tls_clienthello_www_google_com.bin"
+    - "binaries/quic_initial_www_google_com.bin"
+
+weight_hint: 13
+services:
+  - youtube
+  - google

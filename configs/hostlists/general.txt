@@ -1,0 +1,74 @@
+# Isolate General Hostlist
+# Commonly blocked domains for DPI bypass
+# Format: one domain per line
+
+# === Discord ===
+dis.gd
+discord.app
+discord.co
+discord.com
+discord.design
+discord.dev
+discord.gift
+discord.gifts
+discord.gg
+discord.media
+discord.new
+discord.store
+discord.status
+discord-activities.com
+discordactivities.com
+discordapp.com
+discordapp.net
+discordcdn.com
+discordmerch.com
+discordpartygames.com
+discordsays.com
+discordsez.com
+discordstatus.com
+discord-attachments-uploads-prd.storage.googleapis.com
+
+# === Discord Extensions ===
+frankerfacez.com
+ffzap.com
+betterttv.net
+7tv.app
+7tv.io
+
+# === Cloudflare ECH ===
+cloudflare-ech.com
+encryptedsni.com
+cloudflareaccess.com
+cloudflareapps.com
+cloudflarebolt.com
+cloudflareclient.com
+cloudflareinsights.com
+cloudflareok.com
+cloudflarepartners.com
+cloudflareportal.com
+cloudflarepreview.com
+cloudflareresolve.com
+cloudflaressl.com
+cloudflarestatus.com
+cloudflarestorage.com
+cloudflarestream.com
+cloudflaretest.com
+
+# === Telegram ===
+telegram.org
+telegram.me
+t.me
+telegram.dog
+telegra.ph
+telesco.pe
+tdesktop.com
+tg.dev
+tx.me
+web.telegram.org
+desktop.telegram.org
+
+# === Other Services ===
+rutracker.org
+nnmclub.to
+spotify.com
+open.spotify.com

@@ -1,0 +1,56 @@
+# General Fakedsplit Strategy (ALT) - из general (ALT).bat
+id: "zapret_general_fakedsplit"
+name: "General Fakedsplit"
+description: "Альтернативная стратегия с fakedsplit для обхода DPI"
+family: sni_frag
+engine: zapret
+
+mode_capabilities:
+  supports_socks: false
+  supports_global: true
+
+global_template:
+  binary: "binaries/winws.exe"
+  args:
+    # QUIC fake для общего списка
+    - "--wf-tcp=80,443"
+    - "--wf-udp=443,50000-65535"
+    - "--filter-udp=443"
+    - "--hostlist=hostlists/general.txt"
+    - "--dpi-desync=fake"
+    - "--dpi-desync-repeats=6"
+    - "--dpi-desync-fake-quic=binaries/quic_initial_www_google_com.bin"
+    - "--new"
+    # Discord voice/STUN
+    - "--filter-udp=50000-65535"
+    - "--dpi-desync=fake"
+    - "--dpi-desync-any-protocol"
+    - "--dpi-desync-cutoff=n3"
+    - "--dpi-desync-repeats=12"
+    - "--new"
+    # TCP fake+fakedsplit
+    - "--filter-tcp=80,443"
+    - "--hostlist=hostlists/general.txt"
+    - "--dpi-desync=fake,fakedsplit"
+    - "--dpi-desync-repeats=6"
+    - "--dpi-desync-fooling=ts"
+    - "--dpi-desync-fakedsplit-pattern=0x00"
+    - "--dpi-desync-fake-tls=binaries/tls_clienthello_www_google_com.bin"
+  env: {}
+  requires_admin: true
+
+requirements:
+  min_rights: "admin"
+  os:
+    - windows
+  binaries:
+    - "binaries/winws.exe"
+    - "binaries/WinDivert64.sys"
+    - "binaries/tls_clienthello_www_google_com.bin"
+    - "binaries/quic_initial_www_google_com.bin"
+
+weight_hint: 9
+services:
+  - discord
+  - youtube
+  - general

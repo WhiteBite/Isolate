@@ -7,7 +7,9 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{debug, info};
 
+use crate::core::app_routing::AppRouter;
 use crate::core::config::ConfigManager;
+use crate::core::domain_routing::DomainRouter;
 use crate::core::env_info::collect_env_info;
 use crate::core::errors::{IsolateError, Result};
 use crate::core::models::EnvInfo;
@@ -44,6 +46,10 @@ pub struct AppState {
     pub storage: Arc<Storage>,
     /// Информация об окружении
     pub env_info: Arc<RwLock<EnvInfo>>,
+    /// Domain-based routing manager
+    pub domain_router: Arc<DomainRouter>,
+    /// Application-based routing manager
+    pub app_router: Arc<AppRouter>,
 }
 
 impl AppState {
@@ -92,12 +98,19 @@ impl AppState {
             "Environment info collected"
         );
 
+        // 8. Создаём роутеры
+        let domain_router = Arc::new(DomainRouter::new(storage.clone()));
+        let app_router = Arc::new(AppRouter::new(storage.clone()));
+        debug!("Routing managers created");
+
         let state = Self {
             orchestrator,
             strategy_engine,
             config_manager,
             storage,
             env_info: Arc::new(RwLock::new(env_info)),
+            domain_router,
+            app_router,
         };
 
         info!("Application state initialized successfully");

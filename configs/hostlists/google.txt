@@ -1,0 +1,28 @@
+# Isolate Google/YouTube Hostlist
+# Google and YouTube domains for DPI bypass
+# Format: one domain per line
+
+# === YouTube ===
+youtube.com
+youtu.be
+youtube-nocookie.com
+youtubekids.com
+youtube-ui.l.google.com
+wide-youtube.l.google.com
+yt-video-upload.l.google.com
+
+# === YouTube API ===
+youtubei.googleapis.com
+youtubeembeddedplayer.googleapis.com
+jnn-pa.googleapis.com
+
+# === YouTube CDN ===
+ytimg.com
+ytimg.l.google.com
+yt3.ggpht.com
+yt4.ggpht.com
+yt3.googleusercontent.com
+googlevideo.com
+
+# === Discord CDN (Google Storage) ===
+stable.dl2.discordapp.net

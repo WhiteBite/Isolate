@@ -58,6 +58,7 @@ pub fn run() {
             commands::install_update,
             // Log commands
             commands::get_logs,
+            commands::clear_logs,
             commands::export_logs,
             // VLESS commands
             commands::import_vless,
@@ -95,6 +96,44 @@ pub fn run() {
             // Mode commands
             commands::is_silent_mode,
             commands::is_portable_mode,
+            // Proxy management commands
+            commands::get_proxies,
+            commands::add_proxy,
+            commands::update_proxy,
+            commands::delete_proxy,
+            commands::apply_proxy,
+            commands::test_proxy,
+            commands::import_proxy_url,
+            commands::import_subscription,
+            // Routing commands
+            commands::get_domain_routes,
+            commands::add_domain_route,
+            commands::remove_domain_route,
+            commands::get_app_routes,
+            commands::add_app_route,
+            commands::remove_app_route,
+            commands::get_installed_apps,
+            // Testing commands
+            commands::run_tests,
+            commands::cancel_tests,
+            // TUN mode commands
+            commands::start_tun,
+            commands::stop_tun,
+            commands::is_tun_running,
+            commands::get_tun_status,
+            commands::get_tun_config,
+            commands::set_tun_config,
+            commands::is_tun_available,
+            commands::restart_tun,
+            // Tray commands
+            commands::update_tray,
+            commands::set_tray_optimizing,
+            commands::set_tray_error,
+            commands::get_tray_state,
+            // System Proxy commands
+            commands::set_system_proxy,
+            commands::clear_system_proxy,
+            commands::is_system_proxy_set,
         ])
         .setup(move |app| {
             let window = app.get_webview_window("main").unwrap();

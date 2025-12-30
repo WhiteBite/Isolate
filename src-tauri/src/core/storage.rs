@@ -9,7 +9,7 @@ use std::sync::Mutex;
 use tracing::{debug, info};
 
 use crate::core::errors::{IsolateError, Result};
-use crate::core::models::Settings;
+use crate::core::models::{AppRoute, DomainRoute, ProxyConfig, ProxyProtocol, Settings};
 
 // ============================================================================
 // Constants
@@ -272,6 +272,377 @@ impl Storage {
     }
 
     // ========================================================================
+    // Proxy Management
+    // ========================================================================
+
+    /// Save a proxy configuration
+    pub fn save_proxy(&self, proxy: &ProxyConfig) -> Result<()> {
+        let conn = self.conn.lock().map_err(|e| {
+            IsolateError::Storage(format!("Failed to lock connection: {}", e))
+        })?;
+
+        let protocol = serde_json::to_string(&proxy.protocol)?;
+        let custom_fields = serde_json::to_string(&proxy.custom_fields)?;
+
+        conn.execute(
+            r#"
+            INSERT INTO proxies (id, name, protocol, server, port, username, password, uuid, tls, sni, transport, custom_fields, active, created_at, updated_at)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, datetime('now'), datetime('now'))
+            "#,
+            params![
+                proxy.id,
+                proxy.name,
+                protocol.trim_matches('"'),
+                proxy.server,
+                proxy.port,
+                proxy.username,
+                proxy.password,
+                proxy.uuid,
+                proxy.tls as i32,
+                proxy.sni,
+                proxy.transport,
+                custom_fields,
+                proxy.active as i32,
+            ],
+        )?;
+
+        debug!(id = %proxy.id, name = %proxy.name, "Proxy saved");
+        Ok(())
+    }
+
+    /// Get a proxy by ID
+    pub fn get_proxy(&self, id: &str) -> Result<Option<ProxyConfig>> {
+        let conn = self.conn.lock().map_err(|e| {
+            IsolateError::Storage(format!("Failed to lock connection: {}", e))
+        })?;
+
+        let result = conn
+            .query_row(
+                r#"
+                SELECT id, name, protocol, server, port, username, password, uuid, tls, sni, transport, custom_fields, active
+                FROM proxies
+                WHERE id = ?1
+                "#,
+                params![id],
+                |row| {
+                    let protocol_str: String = row.get(2)?;
+                    let custom_fields_str: String = row.get(11)?;
+                    let tls_int: i32 = row.get(8)?;
+                    let active_int: i32 = row.get(12)?;
+
+                    Ok(ProxyConfigRow {
+                        id: row.get(0)?,
+                        name: row.get(1)?,
+                        protocol: protocol_str,
+                        server: row.get(3)?,
+                        port: row.get(4)?,
+                        username: row.get(5)?,
+                        password: row.get(6)?,
+                        uuid: row.get(7)?,
+                        tls: tls_int != 0,
+                        sni: row.get(9)?,
+                        transport: row.get(10)?,
+                        custom_fields: custom_fields_str,
+                        active: active_int != 0,
+                    })
+                },
+            )
+            .optional()?;
+
+        match result {
+            Some(row) => Ok(Some(row.into_proxy_config()?)),
+            None => Ok(None),
+        }
+    }
+
+    /// Get all proxies
+    pub fn get_all_proxies(&self) -> Result<Vec<ProxyConfig>> {
+        let conn = self.conn.lock().map_err(|e| {
+            IsolateError::Storage(format!("Failed to lock connection: {}", e))
+        })?;
+
+        let mut stmt = conn.prepare(
+            r#"
+            SELECT id, name, protocol, server, port, username, password, uuid, tls, sni, transport, custom_fields, active
+            FROM proxies
+            ORDER BY created_at DESC
+            "#,
+        )?;
+
+        let rows = stmt.query_map([], |row| {
+            let protocol_str: String = row.get(2)?;
+            let custom_fields_str: String = row.get(11)?;
+            let tls_int: i32 = row.get(8)?;
+            let active_int: i32 = row.get(12)?;
+
+            Ok(ProxyConfigRow {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                protocol: protocol_str,
+                server: row.get(3)?,
+                port: row.get(4)?,
+                username: row.get(5)?,
+                password: row.get(6)?,
+                uuid: row.get(7)?,
+                tls: tls_int != 0,
+                sni: row.get(9)?,
+                transport: row.get(10)?,
+                custom_fields: custom_fields_str,
+                active: active_int != 0,
+            })
+        })?;
+
+        let mut proxies = Vec::new();
+        for row in rows {
+            let row = row?;
+            proxies.push(row.into_proxy_config()?);
+        }
+
+        Ok(proxies)
+    }
+
+    /// Delete a proxy by ID
+    pub fn delete_proxy(&self, id: &str) -> Result<()> {
+        let conn = self.conn.lock().map_err(|e| {
+            IsolateError::Storage(format!("Failed to lock connection: {}", e))
+        })?;
+
+        let deleted = conn.execute("DELETE FROM proxies WHERE id = ?1", params![id])?;
+
+        if deleted == 0 {
+            return Err(IsolateError::Storage(format!("Proxy '{}' not found", id)));
+        }
+
+        debug!(id = %id, "Proxy deleted");
+        Ok(())
+    }
+
+    /// Update an existing proxy
+    pub fn update_proxy(&self, proxy: &ProxyConfig) -> Result<()> {
+        let conn = self.conn.lock().map_err(|e| {
+            IsolateError::Storage(format!("Failed to lock connection: {}", e))
+        })?;
+
+        let protocol = serde_json::to_string(&proxy.protocol)?;
+        let custom_fields = serde_json::to_string(&proxy.custom_fields)?;
+
+        let updated = conn.execute(
+            r#"
+            UPDATE proxies
+            SET name = ?2, protocol = ?3, server = ?4, port = ?5, username = ?6, password = ?7,
+                uuid = ?8, tls = ?9, sni = ?10, transport = ?11, custom_fields = ?12, active = ?13,
+                updated_at = datetime('now')
+            WHERE id = ?1
+            "#,
+            params![
+                proxy.id,
+                proxy.name,
+                protocol.trim_matches('"'),
+                proxy.server,
+                proxy.port,
+                proxy.username,
+                proxy.password,
+                proxy.uuid,
+                proxy.tls as i32,
+                proxy.sni,
+                proxy.transport,
+                custom_fields,
+                proxy.active as i32,
+            ],
+        )?;
+
+        if updated == 0 {
+            return Err(IsolateError::Storage(format!("Proxy '{}' not found", proxy.id)));
+        }
+
+        debug!(id = %proxy.id, name = %proxy.name, "Proxy updated");
+        Ok(())
+    }
+
+    /// Set proxy active state
+    pub fn set_proxy_active(&self, id: &str, active: bool) -> Result<()> {
+        let conn = self.conn.lock().map_err(|e| {
+            IsolateError::Storage(format!("Failed to lock connection: {}", e))
+        })?;
+
+        // If activating, deactivate all other proxies first
+        if active {
+            conn.execute("UPDATE proxies SET active = 0", [])?;
+        }
+
+        let updated = conn.execute(
+            "UPDATE proxies SET active = ?2, updated_at = datetime('now') WHERE id = ?1",
+            params![id, active as i32],
+        )?;
+
+        if updated == 0 {
+            return Err(IsolateError::Storage(format!("Proxy '{}' not found", id)));
+        }
+
+        debug!(id = %id, active, "Proxy active state updated");
+        Ok(())
+    }
+
+    /// Get the currently active proxy
+    pub fn get_active_proxy(&self) -> Result<Option<ProxyConfig>> {
+        let conn = self.conn.lock().map_err(|e| {
+            IsolateError::Storage(format!("Failed to lock connection: {}", e))
+        })?;
+
+        let result = conn
+            .query_row(
+                r#"
+                SELECT id, name, protocol, server, port, username, password, uuid, tls, sni, transport, custom_fields, active
+                FROM proxies
+                WHERE active = 1
+                LIMIT 1
+                "#,
+                [],
+                |row| {
+                    let protocol_str: String = row.get(2)?;
+                    let custom_fields_str: String = row.get(11)?;
+                    let tls_int: i32 = row.get(8)?;
+                    let active_int: i32 = row.get(12)?;
+
+                    Ok(ProxyConfigRow {
+                        id: row.get(0)?,
+                        name: row.get(1)?,
+                        protocol: protocol_str,
+                        server: row.get(3)?,
+                        port: row.get(4)?,
+                        username: row.get(5)?,
+                        password: row.get(6)?,
+                        uuid: row.get(7)?,
+                        tls: tls_int != 0,
+                        sni: row.get(9)?,
+                        transport: row.get(10)?,
+                        custom_fields: custom_fields_str,
+                        active: active_int != 0,
+                    })
+                },
+            )
+            .optional()?;
+
+        match result {
+            Some(row) => Ok(Some(row.into_proxy_config()?)),
+            None => Ok(None),
+        }
+    }
+
+    // ========================================================================
+    // Domain Routes
+    // ========================================================================
+
+    /// Save a domain route
+    pub fn save_domain_route(&self, route: &DomainRoute) -> Result<()> {
+        let conn = self.conn.lock().map_err(|e| {
+            IsolateError::Storage(format!("Failed to lock connection: {}", e))
+        })?;
+
+        conn.execute(
+            "INSERT OR REPLACE INTO domain_routes (domain, proxy_id) VALUES (?1, ?2)",
+            params![route.domain, route.proxy_id],
+        )?;
+
+        debug!(domain = %route.domain, proxy_id = %route.proxy_id, "Domain route saved");
+        Ok(())
+    }
+
+    /// Delete a domain route
+    pub fn delete_domain_route(&self, domain: &str) -> Result<()> {
+        let conn = self.conn.lock().map_err(|e| {
+            IsolateError::Storage(format!("Failed to lock connection: {}", e))
+        })?;
+
+        conn.execute(
+            "DELETE FROM domain_routes WHERE domain = ?1",
+            params![domain],
+        )?;
+
+        debug!(domain = %domain, "Domain route deleted");
+        Ok(())
+    }
+
+    /// Get all domain routes
+    pub fn get_domain_routes(&self) -> Result<Vec<DomainRoute>> {
+        let conn = self.conn.lock().map_err(|e| {
+            IsolateError::Storage(format!("Failed to lock connection: {}", e))
+        })?;
+
+        let mut stmt = conn.prepare("SELECT domain, proxy_id FROM domain_routes")?;
+        let rows = stmt.query_map([], |row| {
+            Ok(DomainRoute {
+                domain: row.get(0)?,
+                proxy_id: row.get(1)?,
+            })
+        })?;
+
+        let mut routes = Vec::new();
+        for row in rows {
+            routes.push(row?);
+        }
+
+        Ok(routes)
+    }
+
+    // ========================================================================
+    // App Routes
+    // ========================================================================
+
+    /// Save an app route
+    pub fn save_app_route(&self, route: &AppRoute) -> Result<()> {
+        let conn = self.conn.lock().map_err(|e| {
+            IsolateError::Storage(format!("Failed to lock connection: {}", e))
+        })?;
+
+        conn.execute(
+            "INSERT OR REPLACE INTO app_routes (app_path, app_name, proxy_id) VALUES (?1, ?2, ?3)",
+            params![route.app_path, route.app_name, route.proxy_id],
+        )?;
+
+        debug!(app_path = %route.app_path, app_name = %route.app_name, proxy_id = %route.proxy_id, "App route saved");
+        Ok(())
+    }
+
+    /// Delete an app route
+    pub fn delete_app_route(&self, app_path: &str) -> Result<()> {
+        let conn = self.conn.lock().map_err(|e| {
+            IsolateError::Storage(format!("Failed to lock connection: {}", e))
+        })?;
+
+        conn.execute(
+            "DELETE FROM app_routes WHERE app_path = ?1",
+            params![app_path],
+        )?;
+
+        debug!(app_path = %app_path, "App route deleted");
+        Ok(())
+    }
+
+    /// Get all app routes
+    pub fn get_app_routes(&self) -> Result<Vec<AppRoute>> {
+        let conn = self.conn.lock().map_err(|e| {
+            IsolateError::Storage(format!("Failed to lock connection: {}", e))
+        })?;
+
+        let mut stmt = conn.prepare("SELECT app_path, app_name, proxy_id FROM app_routes")?;
+        let rows = stmt.query_map([], |row| {
+            Ok(AppRoute {
+                app_path: row.get(0)?,
+                app_name: row.get(1)?,
+                proxy_id: row.get(2)?,
+            })
+        })?;
+
+        let mut routes = Vec::new();
+        for row in rows {
+            routes.push(row?);
+        }
+
+        Ok(routes)
+    }
+
+    // ========================================================================
     // Test History
     // ========================================================================
 
@@ -375,11 +746,49 @@ impl Storage {
                 timestamp INTEGER NOT NULL
             );
 
+            -- Domain routing rules
+            CREATE TABLE IF NOT EXISTS domain_routes (
+                domain TEXT PRIMARY KEY,
+                proxy_id TEXT NOT NULL
+            );
+
+            -- App routing rules
+            CREATE TABLE IF NOT EXISTS app_routes (
+                app_path TEXT PRIMARY KEY,
+                app_name TEXT NOT NULL,
+                proxy_id TEXT NOT NULL
+            );
+
+            -- Proxies table
+            CREATE TABLE IF NOT EXISTS proxies (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                protocol TEXT NOT NULL,
+                server TEXT NOT NULL,
+                port INTEGER NOT NULL,
+                username TEXT,
+                password TEXT,
+                uuid TEXT,
+                tls INTEGER NOT NULL DEFAULT 0,
+                sni TEXT,
+                transport TEXT,
+                custom_fields TEXT NOT NULL DEFAULT '{}',
+                active INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+
             -- Индексы
             CREATE INDEX IF NOT EXISTS idx_test_history_strategy
                 ON test_history(strategy_id, timestamp DESC);
             CREATE INDEX IF NOT EXISTS idx_strategy_cache_timestamp
                 ON strategy_cache(timestamp);
+            CREATE INDEX IF NOT EXISTS idx_domain_routes_proxy
+                ON domain_routes(proxy_id);
+            CREATE INDEX IF NOT EXISTS idx_app_routes_proxy
+                ON app_routes(proxy_id);
+            CREATE INDEX IF NOT EXISTS idx_proxies_active
+                ON proxies(active);
             "#,
         )?;
 
@@ -408,6 +817,49 @@ pub struct TestHistoryEntry {
     pub score: f64,
     pub latency_ms: f64,
     pub timestamp: i64,
+}
+
+/// Helper struct for reading proxy from database
+struct ProxyConfigRow {
+    id: String,
+    name: String,
+    protocol: String,
+    server: String,
+    port: u16,
+    username: Option<String>,
+    password: Option<String>,
+    uuid: Option<String>,
+    tls: bool,
+    sni: Option<String>,
+    transport: Option<String>,
+    custom_fields: String,
+    active: bool,
+}
+
+impl ProxyConfigRow {
+    fn into_proxy_config(self) -> Result<ProxyConfig> {
+        let protocol: ProxyProtocol = serde_json::from_str(&format!("\"{}\"", self.protocol))
+            .unwrap_or(ProxyProtocol::Socks5);
+        
+        let custom_fields: std::collections::HashMap<String, String> = 
+            serde_json::from_str(&self.custom_fields).unwrap_or_default();
+
+        Ok(ProxyConfig {
+            id: self.id,
+            name: self.name,
+            protocol,
+            server: self.server,
+            port: self.port,
+            username: self.username,
+            password: self.password,
+            uuid: self.uuid,
+            tls: self.tls,
+            sni: self.sni,
+            transport: self.transport,
+            custom_fields,
+            active: self.active,
+        })
+    }
 }
 
 // ============================================================================

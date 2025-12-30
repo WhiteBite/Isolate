@@ -51,6 +51,9 @@
             "icons/icon.icns",
             "icons/icon.ico"
         ],
+        "resources": [
+            "icons/tray_*.ico"
+        ],
         "windows": {
             "certificateThumbprint": null,
             "digestAlgorithm": "sha256",

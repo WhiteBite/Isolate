@@ -152,6 +152,12 @@ impl VlessConfig {
         self
     }
 
+    /// Set config ID
+    pub fn with_id(mut self, id: impl Into<String>) -> Self {
+        self.id = id.into();
+        self
+    }
+
     /// Set VLESS flow (xtls-rprx-vision)
     pub fn with_flow(mut self, flow: VlessFlow) -> Self {
         self.flow = flow;

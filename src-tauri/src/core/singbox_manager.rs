@@ -13,12 +13,18 @@ use std::time::Duration;
 
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
-use tokio::process::Child;
+use serde_json::json;
+use tokio::process::{Child, Command};
 use tokio::sync::RwLock;
 use tracing::{debug, error, info, warn};
 
 use crate::core::errors::{IsolateError, Result};
+use crate::core::models::{AppRoute, DomainRoute, ProxyConfig};
 use crate::core::paths::get_binaries_dir;
+use crate::core::singbox_config::{
+    self, generate_dns_config_fakeip, generate_dns_config_with_mode, generate_outbound,
+    generate_route_rules, DnsMode,
+};
 use crate::core::vless_engine::{self, VlessConfig};
 
 // ============================================================================
@@ -188,6 +194,429 @@ impl SingboxManager {
         );
 
         Ok(instance_info)
+    }
+
+    /// Start sing-box with routing rules
+    ///
+    /// This method generates a sing-box configuration with:
+    /// - DNS configuration (fake-ip for TUN mode, direct for SOCKS mode)
+    /// - Domain-based routing rules
+    /// - Application-based routing rules
+    ///
+    /// # Arguments
+    /// * `proxy` - Proxy configuration to use as outbound
+    /// * `domain_routes` - Domain-based routing rules
+    /// * `app_routes` - Application-based routing rules
+    /// * `socks_port` - SOCKS port for the inbound
+    ///
+    /// # Returns
+    /// SingboxInstance with running process information
+    pub async fn start_with_routing(
+        &self,
+        proxy: &ProxyConfig,
+        domain_routes: &[DomainRoute],
+        app_routes: &[AppRoute],
+        socks_port: u16,
+    ) -> Result<SingboxInstance> {
+        let config_id = &proxy.id;
+
+        // Check if already running
+        {
+            let instances = self.instances.read().await;
+            if let Some(instance) = instances.get(config_id) {
+                if instance.info.status == SingboxStatus::Running {
+                    info!(
+                        config_id = %config_id,
+                        socks_port = instance.info.socks_port,
+                        "Sing-box instance already running"
+                    );
+                    return Ok(instance.info.clone());
+                }
+            }
+        }
+
+        // Check port availability
+        {
+            let used_ports = self.used_ports.read().await;
+            if let Some(existing_id) = used_ports.get(&socks_port) {
+                if existing_id != config_id {
+                    return Err(IsolateError::Process(format!(
+                        "Port {} is already in use by config '{}'",
+                        socks_port, existing_id
+                    )));
+                }
+            }
+        }
+
+        info!(
+            config_id = %config_id,
+            socks_port = socks_port,
+            server = %proxy.server,
+            domain_routes = domain_routes.len(),
+            app_routes = app_routes.len(),
+            "Starting sing-box with routing rules"
+        );
+
+        // Generate sing-box configuration with routing
+        let singbox_config = self.generate_routing_config(
+            proxy,
+            domain_routes,
+            app_routes,
+            socks_port,
+        )?;
+
+        // Write config to temp file
+        let config_path = get_temp_config_path(config_id);
+        let config_json = serde_json::to_string_pretty(&singbox_config)?;
+        tokio::fs::write(&config_path, &config_json).await?;
+
+        debug!(
+            config_id = %config_id,
+            config_path = %config_path.display(),
+            "Wrote sing-box config"
+        );
+
+        // Create initial instance info
+        let mut instance_info = SingboxInstance {
+            config_id: config_id.clone(),
+            config_name: proxy.name.clone(),
+            socks_port,
+            status: SingboxStatus::Starting,
+            pid: None,
+            started_at: None,
+            last_health_check: None,
+            health_check_failures: 0,
+        };
+
+        // Start sing-box process
+        let singbox_path = get_singbox_path();
+        if !singbox_path.exists() {
+            return Err(IsolateError::Process(format!(
+                "sing-box binary not found at: {}",
+                singbox_path.display()
+            )));
+        }
+
+        let child = Command::new(&singbox_path)
+            .args(["run", "-c", config_path.to_str().unwrap()])
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .kill_on_drop(true)
+            .spawn()
+            .map_err(|e| IsolateError::Process(format!("Failed to start sing-box: {}", e)))?;
+
+        // Update instance info
+        instance_info.pid = child.id();
+        instance_info.started_at = Some(
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs()
+        );
+        instance_info.status = SingboxStatus::Running;
+
+        // Store instance
+        {
+            let mut instances = self.instances.write().await;
+            instances.insert(config_id.clone(), RunningInstance {
+                info: instance_info.clone(),
+                child,
+            });
+        }
+
+        // Reserve port
+        {
+            let mut used_ports = self.used_ports.write().await;
+            used_ports.insert(socks_port, config_id.clone());
+        }
+
+        // Wait a bit for sing-box to initialize
+        tokio::time::sleep(Duration::from_millis(500)).await;
+
+        // Perform initial health check
+        if let Err(e) = self.health_check(config_id).await {
+            warn!(
+                config_id = %config_id,
+                error = %e,
+                "Initial health check failed, but process may still be starting"
+            );
+        }
+
+        info!(
+            config_id = %config_id,
+            socks_port = socks_port,
+            pid = ?instance_info.pid,
+            "Sing-box instance with routing started"
+        );
+
+        Ok(instance_info)
+    }
+
+    /// Generate sing-box configuration with routing rules
+    fn generate_routing_config(
+        &self,
+        proxy: &ProxyConfig,
+        domain_routes: &[DomainRoute],
+        app_routes: &[AppRoute],
+        socks_port: u16,
+    ) -> Result<serde_json::Value> {
+        // Generate outbound for the proxy
+        let proxy_outbound = generate_outbound(proxy)
+            .map_err(|e| IsolateError::Config(format!("Failed to generate outbound: {}", e)))?;
+
+        // Build outbounds array
+        let outbounds = vec![
+            proxy_outbound,
+            json!({
+                "type": "direct",
+                "tag": "direct"
+            }),
+            json!({
+                "type": "block",
+                "tag": "block"
+            }),
+            json!({
+                "type": "dns",
+                "tag": "dns-out"
+            }),
+        ];
+
+        // Generate DNS configuration (direct mode for SOCKS proxy)
+        let dns = generate_dns_config_with_mode(&[proxy.clone()], DnsMode::Direct);
+
+        // Generate routing rules
+        let route = generate_route_rules(domain_routes, app_routes, &proxy.id);
+
+        // Build complete config
+        let config = json!({
+            "log": {
+                "level": "info",
+                "timestamp": true
+            },
+            "dns": dns,
+            "inbounds": [
+                {
+                    "type": "socks",
+                    "tag": "socks-in",
+                    "listen": "127.0.0.1",
+                    "listen_port": socks_port,
+                    "sniff": true,
+                    "sniff_override_destination": true,
+                    "sniff_timeout": "300ms",
+                    "domain_strategy": "prefer_ipv4"
+                },
+                {
+                    "type": "http",
+                    "tag": "http-in",
+                    "listen": "127.0.0.1",
+                    "listen_port": socks_port + 1,
+                    "sniff": true,
+                    "sniff_override_destination": true
+                }
+            ],
+            "outbounds": outbounds,
+            "route": route,
+            "experimental": {
+                "cache_file": {
+                    "enabled": false
+                }
+            }
+        });
+
+        Ok(config)
+    }
+
+    /// Start sing-box with TUN mode and routing rules
+    ///
+    /// TUN mode captures all system traffic and routes it through the proxy.
+    /// Uses fake-ip DNS for proper domain resolution.
+    ///
+    /// # Arguments
+    /// * `proxy` - Proxy configuration to use as outbound
+    /// * `domain_routes` - Domain-based routing rules
+    /// * `app_routes` - Application-based routing rules
+    /// * `tun_name` - Name for the TUN interface
+    ///
+    /// # Returns
+    /// SingboxInstance with running process information
+    pub async fn start_with_tun_routing(
+        &self,
+        proxy: &ProxyConfig,
+        domain_routes: &[DomainRoute],
+        app_routes: &[AppRoute],
+        tun_name: &str,
+    ) -> Result<SingboxInstance> {
+        let config_id = format!("{}-tun", proxy.id);
+
+        // Check if already running
+        {
+            let instances = self.instances.read().await;
+            if let Some(instance) = instances.get(&config_id) {
+                if instance.info.status == SingboxStatus::Running {
+                    info!(
+                        config_id = %config_id,
+                        "Sing-box TUN instance already running"
+                    );
+                    return Ok(instance.info.clone());
+                }
+            }
+        }
+
+        info!(
+            config_id = %config_id,
+            server = %proxy.server,
+            tun_name = %tun_name,
+            domain_routes = domain_routes.len(),
+            app_routes = app_routes.len(),
+            "Starting sing-box with TUN mode"
+        );
+
+        // Generate sing-box configuration with TUN
+        let singbox_config = self.generate_tun_routing_config(
+            proxy,
+            domain_routes,
+            app_routes,
+            tun_name,
+        )?;
+
+        // Write config to temp file
+        let config_path = get_temp_config_path(&config_id);
+        let config_json = serde_json::to_string_pretty(&singbox_config)?;
+        tokio::fs::write(&config_path, &config_json).await?;
+
+        debug!(
+            config_id = %config_id,
+            config_path = %config_path.display(),
+            "Wrote sing-box TUN config"
+        );
+
+        // Create initial instance info
+        let mut instance_info = SingboxInstance {
+            config_id: config_id.clone(),
+            config_name: format!("{} (TUN)", proxy.name),
+            socks_port: 0, // TUN mode doesn't use SOCKS port
+            status: SingboxStatus::Starting,
+            pid: None,
+            started_at: None,
+            last_health_check: None,
+            health_check_failures: 0,
+        };
+
+        // Start sing-box process
+        let singbox_path = get_singbox_path();
+        if !singbox_path.exists() {
+            return Err(IsolateError::Process(format!(
+                "sing-box binary not found at: {}",
+                singbox_path.display()
+            )));
+        }
+
+        let child = Command::new(&singbox_path)
+            .args(["run", "-c", config_path.to_str().unwrap()])
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .kill_on_drop(true)
+            .spawn()
+            .map_err(|e| IsolateError::Process(format!("Failed to start sing-box: {}", e)))?;
+
+        // Update instance info
+        instance_info.pid = child.id();
+        instance_info.started_at = Some(
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs()
+        );
+        instance_info.status = SingboxStatus::Running;
+
+        // Store instance
+        {
+            let mut instances = self.instances.write().await;
+            instances.insert(config_id.clone(), RunningInstance {
+                info: instance_info.clone(),
+                child,
+            });
+        }
+
+        // Wait a bit for sing-box to initialize
+        tokio::time::sleep(Duration::from_millis(1000)).await;
+
+        info!(
+            config_id = %config_id,
+            pid = ?instance_info.pid,
+            "Sing-box TUN instance started"
+        );
+
+        Ok(instance_info)
+    }
+
+    /// Generate sing-box configuration with TUN mode and routing rules
+    fn generate_tun_routing_config(
+        &self,
+        proxy: &ProxyConfig,
+        domain_routes: &[DomainRoute],
+        app_routes: &[AppRoute],
+        tun_name: &str,
+    ) -> Result<serde_json::Value> {
+        // Generate outbound for the proxy
+        let proxy_outbound = generate_outbound(proxy)
+            .map_err(|e| IsolateError::Config(format!("Failed to generate outbound: {}", e)))?;
+
+        // Build outbounds array
+        let outbounds = vec![
+            proxy_outbound,
+            json!({
+                "type": "direct",
+                "tag": "direct"
+            }),
+            json!({
+                "type": "block",
+                "tag": "block"
+            }),
+            json!({
+                "type": "dns",
+                "tag": "dns-out"
+            }),
+        ];
+
+        // Generate DNS configuration with fake-ip for TUN mode
+        let dns = generate_dns_config_fakeip(&[proxy.clone()]);
+
+        // Generate routing rules
+        let route = generate_route_rules(domain_routes, app_routes, &proxy.id);
+
+        // Build complete config with TUN inbound
+        let config = json!({
+            "log": {
+                "level": "info",
+                "timestamp": true
+            },
+            "dns": dns,
+            "inbounds": [
+                {
+                    "type": "tun",
+                    "tag": "tun-in",
+                    "interface_name": tun_name,
+                    "inet4_address": "172.19.0.1/30",
+                    "inet6_address": "fdfe:dcba:9876::1/126",
+                    "mtu": 9000,
+                    "auto_route": true,
+                    "strict_route": true,
+                    "stack": "system",
+                    "sniff": true,
+                    "sniff_override_destination": true
+                }
+            ],
+            "outbounds": outbounds,
+            "route": route,
+            "experimental": {
+                "cache_file": {
+                    "enabled": false
+                }
+            }
+        });
+
+        Ok(config)
     }
 
     /// Stop a running sing-box instance

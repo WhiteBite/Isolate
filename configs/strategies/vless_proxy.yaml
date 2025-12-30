@@ -1,0 +1,32 @@
+# VLESS Proxy Strategy - Sing-box based proxy
+id: "vless_proxy"
+name: "VLESS Proxy"
+description: "Прокси через VLESS сервер"
+family: vless
+engine: singbox
+
+mode_capabilities:
+  supports_socks: true
+  supports_global: false
+
+socks_template:
+  binary: "binaries/sing-box.exe"
+  args:
+    - "run"
+    - "-c"
+    - "{{config_path}}"
+  env: {}
+  requires_admin: false
+
+requirements:
+  min_rights: "user"
+  os:
+    - windows
+  binaries:
+    - "binaries/sing-box.exe"
+
+weight_hint: 5
+services:
+  - discord
+  - youtube
+  - telegram

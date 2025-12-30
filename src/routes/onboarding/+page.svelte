@@ -1,29 +1,141 @@
 <script lang="ts">
+  import { onMount, onDestroy } from 'svelte';
   import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
+  import type { UnlistenFn } from '@tauri-apps/api/event';
+  import type { Service, DiagnosticResult, OptimizationProgress } from '$lib/api';
 
-  let currentStep = $state(1);
-  const totalSteps = 4;
+  // Step definitions
+  type Step = 'welcome' | 'services' | 'diagnostics' | 'optimization' | 'complete';
+  const steps: Step[] = ['welcome', 'services', 'diagnostics', 'optimization', 'complete'];
   
-  let selectedServices = $state<string[]>(['discord', 'youtube']);
-  let telemetryEnabled = $state(false);
+  // State
+  let currentStep = $state<Step>('welcome');
+  let currentStepIndex = $derived(steps.indexOf(currentStep));
+  
+  // Services state
+  let availableServices = $state<Service[]>([]);
+  let selectedServices = $state<Set<string>>(new Set(['youtube', 'discord']));
+  let loadingServices = $state(true);
+  
+  // Diagnostics state
+  let diagnosticResult = $state<DiagnosticResult | null>(null);
+  let diagnosticError = $state<string | null>(null);
+  let isDiagnosing = $state(false);
+  
+  // Optimization state
+  let optimizationProgress = $state<OptimizationProgress | null>(null);
+  let optimizationResult = $state<{ strategy_id: string; strategy_name: string; score: number } | null>(null);
+  let optimizationError = $state<string | null>(null);
+  let isOptimizing = $state(false);
+  
+  // Event listeners
+  let unlistenProgress: UnlistenFn | null = null;
+  let unlistenComplete: UnlistenFn | null = null;
+  let unlistenFailed: UnlistenFn | null = null;
 
-  const availableServices = [
-    { id: 'discord', name: 'Discord', description: 'Голосовые и видеозвонки' },
-    { id: 'youtube', name: 'YouTube', description: 'Видеохостинг' },
-    { id: 'telegram', name: 'Telegram', description: 'Мессенджер' }
-  ];
+  onMount(async () => {
+    if (!browser) return;
+    await loadServices();
+    await setupEventListeners();
+  });
 
-  function toggleService(serviceId: string) {
-    if (selectedServices.includes(serviceId)) {
-      selectedServices = selectedServices.filter(id => id !== serviceId);
-    } else {
-      selectedServices = [...selectedServices, serviceId];
+  onDestroy(() => {
+    unlistenProgress?.();
+    unlistenComplete?.();
+    unlistenFailed?.();
+  });
+
+  async function loadServices() {
+    try {
+      const { getServices } = await import('$lib/api');
+      availableServices = await getServices();
+      if (availableServices.length === 0) {
+        // Fallback services
+        availableServices = [
+          { id: 'youtube', name: 'YouTube', critical: true },
+          { id: 'discord', name: 'Discord', critical: true },
+          { id: 'twitch', name: 'Twitch', critical: false },
+          { id: 'telegram', name: 'Telegram', critical: false },
+          { id: 'spotify', name: 'Spotify', critical: false }
+        ];
+      }
+    } catch (e) {
+      console.error('Failed to load services:', e);
+      availableServices = [
+        { id: 'youtube', name: 'YouTube', critical: true },
+        { id: 'discord', name: 'Discord', critical: true },
+        { id: 'twitch', name: 'Twitch', critical: false },
+        { id: 'telegram', name: 'Telegram', critical: false }
+      ];
+    } finally {
+      loadingServices = false;
     }
   }
 
-  function isServiceSelected(serviceId: string): boolean {
-    return selectedServices.includes(serviceId);
+  async function setupEventListeners() {
+    const { listen } = await import('@tauri-apps/api/event');
+    
+    unlistenProgress = await listen('optimization:progress', (event) => {
+      optimizationProgress = event.payload as OptimizationProgress;
+    });
+    
+    unlistenComplete = await listen('optimization:complete', (event) => {
+      const result = event.payload as { strategy_id: string; strategy_name: string; score: number };
+      optimizationResult = result;
+      isOptimizing = false;
+      // Auto-advance to complete step
+      setTimeout(() => {
+        currentStep = 'complete';
+      }, 1500);
+    });
+    
+    unlistenFailed = await listen('optimization:failed', (event) => {
+      optimizationError = event.payload as string;
+      isOptimizing = false;
+    });
+  }
+
+  function toggleService(serviceId: string) {
+    const newSet = new Set(selectedServices);
+    if (newSet.has(serviceId)) {
+      newSet.delete(serviceId);
+    } else {
+      newSet.add(serviceId);
+    }
+    selectedServices = newSet;
+  }
+
+  async function runDiagnostics() {
+    isDiagnosing = true;
+    diagnosticError = null;
+    diagnosticResult = null;
+    
+    try {
+      const { diagnose } = await import('$lib/api');
+      diagnosticResult = await diagnose();
+    } catch (e) {
+      console.error('Diagnostics failed:', e);
+      diagnosticError = String(e);
+    } finally {
+      isDiagnosing = false;
+    }
+  }
+
+  async function runOptimization() {
+    isOptimizing = true;
+    optimizationError = null;
+    optimizationResult = null;
+    optimizationProgress = null;
+    
+    try {
+      const { runOptimization: optimize } = await import('$lib/api');
+      await optimize('turbo');
+    } catch (e) {
+      console.error('Optimization failed:', e);
+      optimizationError = String(e);
+      isOptimizing = false;
+    }
   }
 
   async function completeOnboarding() {
@@ -39,43 +151,49 @@
           auto_apply: true,
           minimize_to_tray: true,
           block_quic: true,
-          default_mode: 'turbo'
+          default_mode: 'turbo',
+          system_proxy: false,
+          tun_mode: false,
+          per_domain_routing: false,
+          per_app_routing: false,
+          test_timeout: 5,
+          test_services: Array.from(selectedServices),
+          language: 'ru',
+          telemetry_enabled: false
         }
       });
       
-      // Save selected services
-      for (const service of availableServices) {
-        await invoke('toggle_service', {
-          serviceId: service.id,
-          enabled: selectedServices.includes(service.id)
-        });
-      }
-      
-      // Save telemetry preference
-      await invoke('set_setting', { key: 'telemetry_enabled', value: telemetryEnabled });
-      
       // Mark onboarding complete
-      await invoke('set_setting', { key: 'onboarding_complete', value: true });
+      await invoke('set_setting', { key: 'onboarding_complete', value: true }).catch(() => {});
       
       goto('/');
     } catch (e) {
       console.error('Failed to complete onboarding:', e);
-      // Navigate anyway to not block the user
       goto('/');
     }
   }
-  
+
   function nextStep() {
-    if (currentStep < totalSteps) {
-      currentStep++;
+    const idx = currentStepIndex;
+    if (idx < steps.length - 1) {
+      const next = steps[idx + 1];
+      currentStep = next;
+      
+      // Auto-run actions on step enter
+      if (next === 'diagnostics' && !diagnosticResult && !isDiagnosing) {
+        runDiagnostics();
+      } else if (next === 'optimization' && !optimizationResult && !isOptimizing) {
+        runOptimization();
+      }
     } else {
       completeOnboarding();
     }
   }
-  
+
   function prevStep() {
-    if (currentStep > 1) {
-      currentStep--;
+    const idx = currentStepIndex;
+    if (idx > 0) {
+      currentStep = steps[idx - 1];
     }
   }
 
@@ -83,218 +201,90 @@
     completeOnboarding();
   }
 
-  function getServiceButtonClass(serviceId: string): string {
-    const isSelected = selectedServices.includes(serviceId);
-    const base = 'w-full p-4 rounded-xl border-2 transition-all duration-200 text-left flex items-center gap-4';
-    if (isSelected) {
-      return `${base} border-primary-500 bg-primary-500/10`;
-    }
-    return `${base} border-gray-700 bg-gray-700/50 hover:border-gray-600`;
+  function getServiceIcon(serviceId: string): string {
+    const icons: Record<string, string> = {
+      youtube: '📺',
+      discord: '💬',
+      twitch: '🎮',
+      telegram: '✈️',
+      spotify: '🎵',
+      google: '🔍'
+    };
+    return icons[serviceId] || '🌐';
   }
 
-  function getCheckboxClass(isChecked: boolean): string {
-    const base = 'w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors';
-    if (isChecked) {
-      return `${base} border-primary-500 bg-primary-500`;
-    }
-    return `${base} border-gray-500`;
-  }
-
-  function getTelemetryButtonClass(): string {
-    const base = 'w-full p-4 rounded-xl border-2 transition-all duration-200 text-left flex items-center gap-4';
-    if (telemetryEnabled) {
-      return `${base} border-primary-500 bg-primary-500/10`;
-    }
-    return `${base} border-gray-700 bg-gray-700/50`;
+  function getStageText(stage: string): string {
+    const stages: Record<string, string> = {
+      'initializing': 'Инициализация...',
+      'checking_cache': 'Проверка кэша...',
+      'diagnosing': 'Диагностика DPI...',
+      'selecting_candidates': 'Выбор стратегий...',
+      'testing_vless': 'Тестирование VLESS...',
+      'testing_zapret': 'Тестирование Zapret...',
+      'selecting_best': 'Выбор лучшей...',
+      'applying': 'Применение стратегии...',
+      'completed': 'Завершено!',
+      'failed': 'Ошибка'
+    };
+    return stages[stage] || stage;
   }
 </script>
 
-<div class="flex flex-col items-center justify-center min-h-screen p-8">
-  <div class="w-full max-w-md">
+<div class="min-h-screen bg-[#0a0e27] flex flex-col items-center justify-center p-8">
+  <div class="w-full max-w-lg">
     <!-- Progress Indicator -->
-    <div class="flex justify-center gap-2 mb-8">
-      {#each Array(totalSteps) as _, i}
+    <div class="flex justify-center items-center gap-2 mb-8">
+      {#each steps as step, i}
         <div 
-          class="h-1.5 w-12 rounded-full transition-colors duration-300 {i + 1 <= currentStep ? 'bg-primary-500' : 'bg-gray-700'}"
+          class="h-2 rounded-full transition-all duration-500 {i <= currentStepIndex ? 'bg-[#00d4ff]' : 'bg-[#2a2f4a]'} {i === currentStepIndex ? 'w-8' : 'w-4'}"
         ></div>
       {/each}
     </div>
 
-    <!-- Step Content -->
-    <div class="bg-gray-800 rounded-2xl p-8 space-y-6 min-h-[400px] flex flex-col">
+    <!-- Step Content Container -->
+    <div class="bg-[#1a1f3a] rounded-2xl p-8 border border-[#2a2f4a] min-h-[500px] flex flex-col">
       
       <!-- Step 1: Welcome -->
-      {#if currentStep === 1}
-        <div class="flex-1 flex flex-col items-center justify-center text-center space-y-6">
-          <div class="w-20 h-20 bg-primary-500/20 rounded-full flex items-center justify-center">
-            <svg class="w-10 h-10 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      {#if currentStep === 'welcome'}
+        <div class="flex-1 flex flex-col items-center justify-center text-center space-y-6 animate-fade-in">
+          <div class="w-24 h-24 bg-[#00d4ff]/20 rounded-full flex items-center justify-center">
+            <svg class="w-12 h-12 text-[#00d4ff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
           </div>
           
           <div>
             <h1 class="text-3xl font-bold text-white mb-3">Добро пожаловать в Isolate</h1>
-            <p class="text-gray-400 leading-relaxed">
+            <p class="text-[#a0a0a0] leading-relaxed max-w-md">
               Isolate автоматически находит и применяет лучший способ обхода DPI-блокировок для вашего интернет-провайдера.
             </p>
           </div>
           
-          <div class="space-y-3 text-left w-full">
-            <div class="flex items-center gap-3 text-gray-300">
-              <svg class="w-5 h-5 text-primary-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-              </svg>
+          <div class="space-y-3 text-left w-full max-w-sm">
+            <div class="flex items-center gap-3 text-[#a0a0a0]">
+              <div class="w-8 h-8 rounded-lg bg-[#00ff88]/20 flex items-center justify-center flex-shrink-0">
+                <svg class="w-4 h-4 text-[#00ff88]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
               <span>Автоматический подбор стратегии</span>
             </div>
-            <div class="flex items-center gap-3 text-gray-300">
-              <svg class="w-5 h-5 text-primary-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-              </svg>
+            <div class="flex items-center gap-3 text-[#a0a0a0]">
+              <div class="w-8 h-8 rounded-lg bg-[#00ff88]/20 flex items-center justify-center flex-shrink-0">
+                <svg class="w-4 h-4 text-[#00ff88]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
               <span>Поддержка Discord, YouTube, Telegram</span>
             </div>
-            <div class="flex items-center gap-3 text-gray-300">
-              <svg class="w-5 h-5 text-primary-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-              </svg>
+            <div class="flex items-center gap-3 text-[#a0a0a0]">
+              <div class="w-8 h-8 rounded-lg bg-[#00ff88]/20 flex items-center justify-center flex-shrink-0">
+                <svg class="w-4 h-4 text-[#00ff88]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
               <span>Работает в один клик</span>
             </div>
           </div>
         </div>
-
-      <!-- Step 2: Select Services -->
-      {:else if currentStep === 2}
-        <div class="flex-1 flex flex-col">
-          <div class="text-center mb-6">
-            <h2 class="text-2xl font-bold text-white mb-2">Выберите сервисы</h2>
-            <p class="text-gray-400">Какие сервисы вы хотите разблокировать?</p>
-          </div>
-          
-          <div class="space-y-3 flex-1">
-            {#each availableServices as service}
-              <button
-                onclick={() => toggleService(service.id)}
-                class={getServiceButtonClass(service.id)}
-              >
-                <div class={getCheckboxClass(isServiceSelected(service.id))}>
-                  {#if isServiceSelected(service.id)}
-                    <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
-                    </svg>
-                  {/if}
-                </div>
-                <div>
-                  <div class="font-medium text-white">{service.name}</div>
-                  <div class="text-sm text-gray-400">{service.description}</div>
-                </div>
-              </button>
-            {/each}
-          </div>
-          
-          {#if selectedServices.length === 0}
-            <p class="text-amber-400 text-sm text-center mt-4">
-              Выберите хотя бы один сервис
-            </p>
-          {/if}
-        </div>
-
-      <!-- Step 3: Telemetry -->
-      {:else if currentStep === 3}
-        <div class="flex-1 flex flex-col items-center justify-center text-center space-y-6">
-          <div class="w-20 h-20 bg-gray-700 rounded-full flex items-center justify-center">
-            <svg class="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
-          </div>
-          
-          <div>
-            <h2 class="text-2xl font-bold text-white mb-2">Помогите улучшить Isolate</h2>
-            <p class="text-gray-400 leading-relaxed">
-              Анонимная статистика помогает нам понять, какие стратегии работают лучше всего у разных провайдеров.
-            </p>
-          </div>
-          
-          <button
-            onclick={() => telemetryEnabled = !telemetryEnabled}
-            class={getTelemetryButtonClass()}
-          >
-            <div class={getCheckboxClass(telemetryEnabled)}>
-              {#if telemetryEnabled}
-                <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
-                </svg>
-              {/if}
-            </div>
-            <div>
-              <div class="font-medium text-white">Отправлять анонимную статистику</div>
-              <div class="text-sm text-gray-400">Только данные о работе стратегий</div>
-            </div>
-          </button>
-          
-          <div class="text-xs text-gray-500 space-y-1">
-            <p>Мы <strong>не</strong> собираем:</p>
-            <p>• IP-адреса • Личные данные • Историю посещений</p>
-          </div>
-        </div>
-
-      <!-- Step 4: Ready -->
-      {:else if currentStep === 4}
-        <div class="flex-1 flex flex-col items-center justify-center text-center space-y-6">
-          <div class="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center">
-            <svg class="w-10 h-10 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-          
-          <div>
-            <h2 class="text-2xl font-bold text-white mb-2">Всё готово!</h2>
-            <p class="text-gray-400 leading-relaxed">
-              Isolate настроен и готов к работе. Нажмите «Начать», чтобы запустить автоматическую оптимизацию.
-            </p>
-          </div>
-          
-          <div class="bg-gray-700/50 rounded-xl p-4 w-full text-left space-y-2">
-            <div class="flex justify-between text-sm">
-              <span class="text-gray-400">Сервисы:</span>
-              <span class="text-white">
-                {selectedServices.map(id => 
-                  availableServices.find(s => s.id === id)?.name
-                ).join(', ')}
-              </span>
-            </div>
-            <div class="flex justify-between text-sm">
-              <span class="text-gray-400">Телеметрия:</span>
-              <span class="text-white">{telemetryEnabled ? 'Включена' : 'Отключена'}</span>
-            </div>
-          </div>
-        </div>
       {/if}
-
-      <!-- Navigation Buttons -->
-      <div class="flex gap-3 pt-4">
-        {#if currentStep > 1}
-          <button
-            onclick={prevStep}
-            class="flex-1 py-3 px-6 bg-gray-700 hover:bg-gray-600 rounded-xl font-medium transition-colors"
-          >
-            Назад
-          </button>
-        {:else}
-          <button
-            onclick={skipOnboarding}
-            class="flex-1 py-3 px-6 text-gray-400 hover:text-gray-300 rounded-xl font-medium transition-colors"
-          >
-            Пропустить
-          </button>
-        {/if}
-        
-        <button
-          onclick={nextStep}
-          disabled={currentStep === 2 && selectedServices.length === 0}
-          class="flex-1 py-3 px-6 bg-primary-600 hover:bg-primary-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded-xl font-medium transition-colors"
-        >
-          {currentStep === totalSteps ? 'Начать' : 'Далее'}
-        </button>
-      </div>
-    </div>
-  </div>
-</div>

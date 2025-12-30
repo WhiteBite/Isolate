@@ -28,6 +28,9 @@ pub enum IsolateError {
     #[error("Storage error: {0}")]
     Storage(String),
 
+    #[error("Validation error: {0}")]
+    Validation(String),
+
     #[error("Requires administrator privileges")]
     RequiresAdmin,
 
@@ -51,6 +54,9 @@ pub enum IsolateError {
 
     #[error("Database error: {0}")]
     Database(#[from] rusqlite::Error),
+
+    #[error("System proxy error: {0}")]
+    SystemProxy(String),
 }
 
 pub type Result<T> = std::result::Result<T, IsolateError>;

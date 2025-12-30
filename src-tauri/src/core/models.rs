@@ -1,6 +1,7 @@
 //! Data models for Isolate
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 // ============================================================================
 // Strategy Models
@@ -40,7 +41,7 @@ pub struct LaunchTemplate {
     pub binary: String,
     pub args: Vec<String>,
     #[serde(default)]
-    pub env: std::collections::HashMap<String, String>,
+    pub env: HashMap<String, String>,
     pub log_file: Option<String>,
     #[serde(default)]
     pub requires_admin: bool,
@@ -135,6 +136,31 @@ pub struct Service {
     #[serde(default)]
     pub critical: bool,
     pub tests: Vec<TestDefinition>,
+    /// Simple test URL for quick connectivity checks
+    #[serde(default)]
+    pub test_url: Option<String>,
+}
+
+impl Service {
+    /// Get the test URL for this service
+    /// Falls back to extracting URL from first HTTPS test if test_url is not set
+    pub fn get_test_url(&self) -> Option<String> {
+        if let Some(ref url) = self.test_url {
+            return Some(url.clone());
+        }
+        
+        // Try to extract from tests
+        for test in &self.tests {
+            match test {
+                TestDefinition::HttpsGet { url, .. } => return Some(url.clone()),
+                TestDefinition::HttpsHead { url, .. } => return Some(url.clone()),
+                TestDefinition::WebSocket { url, .. } => return Some(url.clone()),
+                _ => continue,
+            }
+        }
+        
+        None
+    }
 }
 
 fn default_true() -> bool {
@@ -231,7 +257,7 @@ pub struct AppStatus {
     pub is_active: bool,
     pub current_strategy: Option<String>,
     pub current_strategy_name: Option<String>,
-    pub services_status: std::collections::HashMap<String, bool>,
+    pub services_status: HashMap<String, bool>,
 }
 
 /// IP stack type for dual-stack support
@@ -340,6 +366,107 @@ pub struct LogEntry {
 }
 
 // ============================================================================
+// Proxy Protocol Models
+// ============================================================================
+
+/// Supported proxy protocols
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum ProxyProtocol {
+    #[default]
+    Socks5,
+    Http,
+    Https,
+    Shadowsocks,
+    Trojan,
+    Vmess,
+    Vless,
+    Tuic,
+    Hysteria,
+    Hysteria2,
+    Wireguard,
+    Ssh,
+}
+
+impl std::fmt::Display for ProxyProtocol {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ProxyProtocol::Socks5 => write!(f, "SOCKS5"),
+            ProxyProtocol::Http => write!(f, "HTTP"),
+            ProxyProtocol::Https => write!(f, "HTTPS"),
+            ProxyProtocol::Shadowsocks => write!(f, "Shadowsocks"),
+            ProxyProtocol::Trojan => write!(f, "Trojan"),
+            ProxyProtocol::Vmess => write!(f, "VMess"),
+            ProxyProtocol::Vless => write!(f, "VLESS"),
+            ProxyProtocol::Tuic => write!(f, "TUIC"),
+            ProxyProtocol::Hysteria => write!(f, "Hysteria"),
+            ProxyProtocol::Hysteria2 => write!(f, "Hysteria2"),
+            ProxyProtocol::Wireguard => write!(f, "WireGuard"),
+            ProxyProtocol::Ssh => write!(f, "SSH"),
+        }
+    }
+}
+
+/// Universal proxy configuration supporting all protocols
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProxyConfig {
+    pub id: String,
+    pub name: String,
+    pub protocol: ProxyProtocol,
+    pub server: String,
+    pub port: u16,
+    pub username: Option<String>,
+    pub password: Option<String>,
+    pub uuid: Option<String>,
+    pub tls: bool,
+    pub sni: Option<String>,
+    pub transport: Option<String>,
+    #[serde(default)]
+    pub custom_fields: HashMap<String, String>,
+    #[serde(default)]
+    pub active: bool,
+}
+
+impl Default for ProxyConfig {
+    fn default() -> Self {
+        Self {
+            id: String::new(),
+            name: String::new(),
+            protocol: ProxyProtocol::default(),
+            server: String::new(),
+            port: 1080,
+            username: None,
+            password: None,
+            uuid: None,
+            tls: false,
+            sni: None,
+            transport: None,
+            custom_fields: HashMap::new(),
+            active: false,
+        }
+    }
+}
+
+// ============================================================================
+// Routing Models
+// ============================================================================
+
+/// Domain-based routing rule
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DomainRoute {
+    pub domain: String,
+    pub proxy_id: String,
+}
+
+/// Application-based routing rule
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AppRoute {
+    pub app_name: String,
+    pub app_path: String,
+    pub proxy_id: String,
+}
+
+// ============================================================================
 // VLESS Models
 // ============================================================================
 
@@ -356,6 +483,12 @@ pub struct VlessConfig {
     pub sni: Option<String>,
     #[serde(default)]
     pub active: bool,
+    /// Per-domain routing rules
+    #[serde(default)]
+    pub per_domain_routing: Vec<DomainRoute>,
+    /// Per-application routing rules
+    #[serde(default)]
+    pub per_app_routing: Vec<AppRoute>,
 }
 
 impl VlessConfig {
@@ -446,6 +579,8 @@ impl VlessConfig {
             security,
             sni,
             active: false,
+            per_domain_routing: Vec::new(),
+            per_app_routing: Vec::new(),
         })
     }
 

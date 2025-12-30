@@ -1,0 +1,55 @@
+# General Multisplit Strategy - основная стратегия из general.bat
+id: "zapret_general_multisplit"
+name: "General Multisplit"
+description: "Универсальная стратегия с multisplit фрагментацией для обхода DPI"
+family: sni_frag
+engine: zapret
+
+mode_capabilities:
+  supports_socks: false
+  supports_global: true
+
+global_template:
+  binary: "binaries/winws.exe"
+  args:
+    # QUIC fake для общего списка
+    - "--wf-tcp=80,443"
+    - "--wf-udp=443,50000-65535"
+    - "--filter-udp=443"
+    - "--hostlist=hostlists/general.txt"
+    - "--dpi-desync=fake"
+    - "--dpi-desync-repeats=6"
+    - "--dpi-desync-fake-quic=binaries/quic_initial_www_google_com.bin"
+    - "--new"
+    # Discord voice/STUN
+    - "--filter-udp=50000-65535"
+    - "--dpi-desync=fake"
+    - "--dpi-desync-any-protocol"
+    - "--dpi-desync-cutoff=d3"
+    - "--dpi-desync-repeats=6"
+    - "--new"
+    # TCP multisplit для общего списка
+    - "--filter-tcp=80,443"
+    - "--hostlist=hostlists/general.txt"
+    - "--dpi-desync=multisplit"
+    - "--dpi-desync-split-seqovl=568"
+    - "--dpi-desync-split-pos=1"
+    - "--dpi-desync-split-seqovl-pattern=binaries/tls_clienthello_4pda_to.bin"
+  env: {}
+  requires_admin: true
+
+requirements:
+  min_rights: "admin"
+  os:
+    - windows
+  binaries:
+    - "binaries/winws.exe"
+    - "binaries/WinDivert64.sys"
+    - "binaries/tls_clienthello_4pda_to.bin"
+    - "binaries/quic_initial_www_google_com.bin"
+
+weight_hint: 12
+services:
+  - discord
+  - youtube
+  - general

@@ -144,8 +144,8 @@
 - [x] **3.4.3** Автооптимизация при запуске ✅
 - [x] **3.4.4** Выбор сервисов (критичные/некритичные) ✅
 - [x] **3.4.5** Block QUIC toggle ✅
-- [ ] **3.4.6** Телеметрия toggle
-- [ ] **3.4.7** VLESS конфигурация (импорт vless://)
+- [x] **3.4.6** Телеметрия toggle ✅
+- [x] **3.4.7** VLESS конфигурация (импорт vless://) ✅
 
 ### 3.5 Логи
 - [x] **3.5.1** Страница логов ✅
@@ -159,37 +159,40 @@
 
 ### 4.1 Zapret/winws
 - [ ] **4.1.1** Скопировать winws.exe и WinDivert64.sys в `src-tauri/binaries/`
-- [ ] **4.1.2** Создать конфиги стратегий для Discord
-- [ ] **4.1.3** Создать конфиги стратегий для YouTube
+- [x] **4.1.2** Создать конфиги стратегий для Discord ✅ (discord_fake.yaml)
+- [x] **4.1.3** Создать конфиги стратегий для YouTube ✅ (youtube_split.yaml)
 - [ ] **4.1.4** Тестирование на реальном DPI
+- [x] **4.1.5** NoDPI Engine для управления winws ✅ (nodpi_engine.rs)
 
 ### 4.2 Sing-box
 - [ ] **4.2.1** Скопировать sing-box.exe в `src-tauri/binaries/`
-- [ ] **4.2.2** Шаблон конфига для VLESS
-- [ ] **4.2.3** Парсинг vless:// ссылок
-- [ ] **4.2.4** Интеграция с Strategy Engine
+- [x] **4.2.2** Шаблон конфига для VLESS ✅ (vless_template.json улучшен)
+- [x] **4.2.3** Парсинг vless:// ссылок ✅ (с поддержкой Reality, flow)
+- [x] **4.2.4** Интеграция с Strategy Engine ✅
+- [x] **4.2.5** Sing-box Manager (singleton) ✅ (singbox_manager.rs)
+- [x] **4.2.6** Health checks для sing-box ✅
 
 ### 4.3 Hostlists
-- [ ] **4.3.1** Скопировать списки доменов из zapret-discord-youtube
-- [ ] **4.3.2** Механизм автообновления списков
-- [ ] **4.3.3** Пользовательские домены
+- [x] **4.3.1** Скопировать списки доменов из zapret-discord-youtube ✅
+- [x] **4.3.2** Механизм автообновления списков ✅
+- [x] **4.3.3** Пользовательские домены ✅
 
 ---
 
 ## Фаза 5: Polish & Release
 
 ### 5.1 Дополнительные функции
-- [ ] **5.1.1** Block QUIC (Windows Firewall rule)
-- [ ] **5.1.2** Panic Button (полный сброс сети)
-- [ ] **5.1.3** Dual-stack IPv4/IPv6 тестирование
-- [ ] **5.1.4** Portable mode (--portable flag)
-- [ ] **5.1.5** Silent mode (--silent flag)
+- [x] **5.1.1** Block QUIC (Windows Firewall rule) ✅
+- [x] **5.1.2** Panic Button (полный сброс сети) ✅
+- [x] **5.1.3** Dual-stack IPv4/IPv6 тестирование ✅ (diagnostics.rs)
+- [x] **5.1.4** Portable mode (--portable flag) ✅ (paths.rs)
+- [x] **5.1.5** Silent mode (--silent flag) ✅ (lib.rs)
 
 ### 5.2 Телеметрия (opt-in)
 - [x] **5.2.1** Создать `src-tauri/src/core/telemetry.rs` ✅
 - [x] **5.2.2** Анонимный payload (ASN, strategy_id, success_rate) ✅
 - [x] **5.2.3** HTTP endpoint для отправки ✅
-- [ ] **5.2.4** UI для включения/отключения
+- [x] **5.2.4** UI для включения/отключения ✅
 
 ### 5.3 Сборка и релиз
 - [x] **5.3.1** Настроить Tauri bundler для Windows ✅
@@ -224,6 +227,13 @@ Tauri Commands, Events, System Tray, SvelteKit UI
 
 ## Текущий статус
 
-**Фаза:** 1-3 — Core Backend, Tauri Integration, Frontend (завершены), 4-5 — в процессе
-**Прогресс:** ~90%
-**Следующая задача:** 4.1 — Интеграция реальных бинарников (winws, sing-box), 3.4.6-3.4.7 — Телеметрия и VLESS UI
+**Фаза:** 1-4 — Core Backend, Tauri Integration, Frontend, Binary Integration (завершены), 5 — в процессе
+**Прогресс:** ~98%
+**Следующая задача:** 4.1.1, 4.2.1 — Скачать бинарники (winws.exe, sing-box.exe) и 5.3.4 — NSIS installer
+
+### Что осталось:
+- Скачать реальные бинарники (winws.exe, WinDivert64.sys, sing-box.exe)
+- Тестирование на реальном DPI
+- NSIS/WiX installer (опционально)
+- Подписание бинарников (опционально)
+- Unit тесты (только по запросу)

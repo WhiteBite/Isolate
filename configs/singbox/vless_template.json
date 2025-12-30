@@ -1,0 +1,143 @@
+{
+    "log": {
+        "level": "warn",
+        "timestamp": true
+    },
+    "dns": {
+        "servers": [
+            {
+                "tag": "dns-remote",
+                "address": "https://1.1.1.1/dns-query",
+                "address_resolver": "dns-direct",
+                "detour": "vless-out"
+            },
+            {
+                "tag": "dns-direct",
+                "address": "https://8.8.8.8/dns-query",
+                "detour": "direct"
+            },
+            {
+                "tag": "dns-local",
+                "address": "local",
+                "detour": "direct"
+            },
+            {
+                "tag": "dns-block",
+                "address": "rcode://success"
+            }
+        ],
+        "rules": [
+            {
+                "outbound": "any",
+                "server": "dns-direct"
+            },
+            {
+                "clash_mode": "Direct",
+                "server": "dns-direct"
+            },
+            {
+                "clash_mode": "Global",
+                "server": "dns-remote"
+            }
+        ],
+        "strategy": "prefer_ipv4",
+        "disable_cache": false,
+        "disable_expire": false
+    },
+    "inbounds": [
+        {
+            "type": "socks",
+            "tag": "socks-in",
+            "listen": "127.0.0.1",
+            "listen_port": "{{port}}",
+            "sniff": true,
+            "sniff_override_destination": true,
+            "sniff_timeout": "300ms",
+            "domain_strategy": "prefer_ipv4"
+        }
+    ],
+    "outbounds": [
+        {
+            "type": "vless",
+            "tag": "vless-out",
+            "server": "{{server}}",
+            "server_port": "{{server_port}}",
+            "uuid": "{{uuid}}",
+            "flow": "{{flow}}",
+            "tls": {
+                "enabled": true,
+                "server_name": "{{sni}}",
+                "insecure": false,
+                "utls": {
+                    "enabled": true,
+                    "fingerprint": "{{fingerprint}}"
+                }
+            },
+            "packet_encoding": "xudp"
+        },
+        {
+            "type": "direct",
+            "tag": "direct"
+        },
+        {
+            "type": "block",
+            "tag": "block"
+        },
+        {
+            "type": "dns",
+            "tag": "dns-out"
+        }
+    ],
+    "route": {
+        "rules": [
+            {
+                "protocol": "dns",
+                "outbound": "dns-out"
+            },
+            {
+                "ip_is_private": true,
+                "outbound": "direct"
+            },
+            {
+                "domain_suffix": [
+                    ".local",
+                    ".localhost",
+                    ".lan"
+                ],
+                "outbound": "direct"
+            },
+            {
+                "domain": [
+                    "localhost"
+                ],
+                "outbound": "direct"
+            },
+            {
+                "source_ip_cidr": [
+                    "127.0.0.0/8",
+                    "::1/128"
+                ],
+                "outbound": "direct"
+            },
+            {
+                "ip_cidr": [
+                    "127.0.0.0/8",
+                    "::1/128",
+                    "10.0.0.0/8",
+                    "172.16.0.0/12",
+                    "192.168.0.0/16",
+                    "fc00::/7"
+                ],
+                "outbound": "direct"
+            }
+        ],
+        "final": "vless-out",
+        "auto_detect_interface": true,
+        "override_android_vpn": false
+    },
+    "experimental": {
+        "cache_file": {
+            "enabled": false
+        }
+    }
+}

@@ -1,0 +1,59 @@
+# YouTube Split Strategy - специализированная стратегия для YouTube
+# Использует multisplit фрагментацию для обхода DPI на YouTube/Google
+id: "zapret_youtube_split"
+name: "YouTube Split"
+description: "Стратегия с multisplit фрагментацией для YouTube и Google сервисов"
+family: sni_frag
+engine: zapret
+
+mode_capabilities:
+  supports_socks: false
+  supports_global: true
+
+global_template:
+  binary: "binaries/winws.exe"
+  args:
+    # Фильтры портов
+    - "--wf-tcp=80,443"
+    - "--wf-udp=443"
+    # QUIC fake для YouTube
+    - "--filter-udp=443"
+    - "--hostlist=hostlists/youtube.txt"
+    - "--dpi-desync=fake"
+    - "--dpi-desync-repeats=6"
+    - "--dpi-desync-fake-quic=binaries/quic_initial_www_google_com.bin"
+    - "--new"
+    # TCP multisplit для Google/YouTube с ip-id=zero
+    - "--filter-tcp=443"
+    - "--hostlist=hostlists/youtube.txt"
+    - "--ip-id=zero"
+    - "--dpi-desync=multisplit"
+    - "--dpi-desync-split-seqovl=681"
+    - "--dpi-desync-split-pos=1"
+    - "--dpi-desync-split-seqovl-pattern=binaries/tls_clienthello_www_google_com.bin"
+    - "--new"
+    # HTTP/HTTPS для YouTube (порт 80)
+    - "--filter-tcp=80"
+    - "--hostlist=hostlists/youtube.txt"
+    - "--dpi-desync=multisplit"
+    - "--dpi-desync-split-seqovl=568"
+    - "--dpi-desync-split-pos=1"
+    - "--dpi-desync-split-seqovl-pattern=binaries/tls_clienthello_4pda_to.bin"
+  env: {}
+  requires_admin: true
+
+requirements:
+  min_rights: "admin"
+  os:
+    - windows
+  binaries:
+    - "binaries/winws.exe"
+    - "binaries/WinDivert64.sys"
+    - "binaries/tls_clienthello_www_google_com.bin"
+    - "binaries/tls_clienthello_4pda_to.bin"
+    - "binaries/quic_initial_www_google_com.bin"
+
+weight_hint: 11
+services:
+  - youtube
+  - google

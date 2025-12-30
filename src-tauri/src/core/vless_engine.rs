@@ -1,14 +1,16 @@
 //! VLESS Engine for Isolate
 //!
 //! Handles VLESS protocol connections via sing-box:
-//! - Parse VLESS URLs
-//! - Generate sing-box configurations
+//! - Parse VLESS URLs (including Reality protocol)
+//! - Generate sing-box configurations from templates
 //! - Manage sing-box process lifecycle
+//! - Health checks for running instances
 //! - System proxy management (Windows)
 
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::Stdio;
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -16,7 +18,7 @@ use tokio::process::{Child, Command};
 use tracing::{debug, error, info, warn};
 
 use crate::core::errors::{IsolateError, Result};
-use crate::core::paths::get_binaries_dir;
+use crate::core::paths::{get_binaries_dir, get_configs_dir};
 
 // ============================================================================
 // VLESS Configuration Types
@@ -46,6 +48,47 @@ impl Default for TransportType {
     }
 }
 
+/// VLESS flow type (for XTLS)
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum VlessFlow {
+    #[default]
+    None,
+    /// XTLS Vision flow - recommended for TCP
+    XtlsRprxVision,
+}
+
+impl VlessFlow {
+    /// Get the flow string for sing-box config
+    pub fn as_str(&self) -> &str {
+        match self {
+            VlessFlow::None => "",
+            VlessFlow::XtlsRprxVision => "xtls-rprx-vision",
+        }
+    }
+
+    /// Check if flow is enabled
+    pub fn is_enabled(&self) -> bool {
+        !matches!(self, VlessFlow::None)
+    }
+
+    /// Parse flow from string
+    pub fn from_str(s: &str) -> Self {
+        match s.to_lowercase().as_str() {
+            "xtls-rprx-vision" => VlessFlow::XtlsRprxVision,
+            _ => VlessFlow::None,
+        }
+    }
+}
+
+/// Reality protocol configuration
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct RealityConfig {
+    pub enabled: bool,
+    pub public_key: Option<String>,
+    pub short_id: Option<String>,
+}
+
 /// VLESS configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VlessConfig {
@@ -58,6 +101,12 @@ pub struct VlessConfig {
     pub transport: TransportType,
     pub sni: Option<String>,
     pub fingerprint: Option<String>,
+    /// VLESS flow (xtls-rprx-vision)
+    #[serde(default)]
+    pub flow: VlessFlow,
+    /// Reality protocol config
+    #[serde(default)]
+    pub reality: RealityConfig,
 }
 
 impl VlessConfig {
@@ -74,6 +123,8 @@ impl VlessConfig {
             transport: TransportType::default(),
             sni: None,
             fingerprint: None,
+            flow: VlessFlow::default(),
+            reality: RealityConfig::default(),
         }
     }
 
@@ -100,6 +151,22 @@ impl VlessConfig {
         self.name = name.into();
         self
     }
+
+    /// Set VLESS flow (xtls-rprx-vision)
+    pub fn with_flow(mut self, flow: VlessFlow) -> Self {
+        self.flow = flow;
+        self
+    }
+
+    /// Enable Reality protocol
+    pub fn with_reality(mut self, public_key: String, short_id: Option<String>) -> Self {
+        self.reality = RealityConfig {
+            enabled: true,
+            public_key: Some(public_key),
+            short_id,
+        };
+        self
+    }
 }
 
 // ============================================================================
@@ -108,16 +175,19 @@ impl VlessConfig {
 
 /// Parse a VLESS URL into VlessConfig
 ///
-/// Format: vless://uuid@server:port?type=ws&security=tls&path=/ws&sni=example.com&fp=chrome#name
+/// Format: vless://uuid@server:port?type=ws&security=tls&path=/ws&sni=example.com&fp=chrome&flow=xtls-rprx-vision#name
 ///
 /// Supported parameters:
 /// - type: tcp, ws, grpc, h2
-/// - security: tls, none
+/// - security: tls, reality, none
 /// - path: WebSocket/H2 path
 /// - host: WebSocket/H2 host header
 /// - sni: TLS SNI
 /// - fp: TLS fingerprint
 /// - serviceName: gRPC service name
+/// - flow: xtls-rprx-vision (for TCP transport)
+/// - pbk: Reality public key
+/// - sid: Reality short ID
 pub fn parse_vless_url(url: &str) -> Result<VlessConfig> {
     // Validate scheme
     if !url.starts_with("vless://") {
@@ -159,18 +229,44 @@ pub fn parse_vless_url(url: &str) -> Result<VlessConfig> {
     // Parse query parameters
     let params = parse_query_params(query_string.unwrap_or(""));
 
-    // Determine TLS
-    let tls = params.get("security").map(|s| s.as_str()) != Some("none");
+    // Determine security type
+    let security = params.get("security").map(|s| s.as_str()).unwrap_or("tls");
+    let tls = security != "none";
+    let is_reality = security == "reality";
 
     // Parse transport type
     let transport = parse_transport_type(&params)?;
+
+    // Parse flow (only valid for TCP transport)
+    let flow = params.get("flow")
+        .map(|f| VlessFlow::from_str(f))
+        .unwrap_or_default();
+
+    // Validate flow - only allowed with TCP transport
+    if flow.is_enabled() && !matches!(transport, TransportType::Tcp) {
+        warn!("VLESS flow is only supported with TCP transport, ignoring flow setting");
+    }
 
     // Extract optional parameters
     let sni = params.get("sni").cloned();
     let fingerprint = params.get("fp").cloned();
 
+    // Parse Reality config
+    let reality = if is_reality {
+        RealityConfig {
+            enabled: true,
+            public_key: params.get("pbk").cloned(),
+            short_id: params.get("sid").cloned(),
+        }
+    } else {
+        RealityConfig::default()
+    };
+
     let config_name = name.unwrap_or_else(|| format!("{}:{}", server, port));
     let id = format!("vless-{}", sanitize_id(&config_name));
+
+    // Determine flow based on transport type (flow only valid for TCP)
+    let final_flow = if matches!(transport, TransportType::Tcp) { flow } else { VlessFlow::None };
 
     Ok(VlessConfig {
         id,
@@ -182,6 +278,8 @@ pub fn parse_vless_url(url: &str) -> Result<VlessConfig> {
         transport,
         sni,
         fingerprint,
+        flow: final_flow,
+        reality,
     })
 }
 
@@ -288,12 +386,136 @@ fn sanitize_id(s: &str) -> String {
 // Sing-box Configuration Generation
 // ============================================================================
 
-/// Generate sing-box configuration JSON for VLESS
+/// Path to sing-box config template
+const SINGBOX_TEMPLATE_PATH: &str = "singbox/vless_template.json";
+
+/// Load sing-box template from configs directory
+fn load_singbox_template() -> Result<String> {
+    let template_path = get_configs_dir().join(SINGBOX_TEMPLATE_PATH);
+    
+    if !template_path.exists() {
+        return Err(IsolateError::Config(format!(
+            "Sing-box template not found at: {}",
+            template_path.display()
+        )));
+    }
+    
+    std::fs::read_to_string(&template_path)
+        .map_err(|e| IsolateError::Config(format!(
+            "Failed to read sing-box template: {}",
+            e
+        )))
+}
+
+/// Generate sing-box configuration from template
+///
+/// Replaces placeholders in the template:
+/// - {{port}} - SOCKS port
+/// - {{server}} - VLESS server address
+/// - {{server_port}} - VLESS server port
+/// - {{uuid}} - VLESS UUID
+/// - {{flow}} - VLESS flow (e.g., xtls-rprx-vision)
+/// - {{sni}} - TLS SNI
+/// - {{fingerprint}} - TLS fingerprint
+/// - {{reality_public_key}} - Reality public key
+/// - {{reality_short_id}} - Reality short ID
+pub fn generate_singbox_config_from_template(
+    config: &VlessConfig,
+    socks_port: u16,
+) -> Result<serde_json::Value> {
+    let template = load_singbox_template()?;
+    
+    // Determine flow based on transport
+    let flow = match &config.transport {
+        TransportType::Tcp => config.flow.as_str(),
+        _ => "", // Flow only works with TCP
+    };
+    
+    let sni = config.sni.as_deref().unwrap_or(&config.server);
+    let fingerprint = config.fingerprint.as_deref().unwrap_or("chrome");
+    
+    // Reality config
+    let reality_public_key = config.reality.public_key.as_deref().unwrap_or("");
+    let reality_short_id = config.reality.short_id.as_deref().unwrap_or("");
+    
+    // Replace string placeholders
+    let config_str = template
+        .replace("\"{{port}}\"", &socks_port.to_string())
+        .replace("\"{{server_port}}\"", &config.port.to_string())
+        .replace("{{server}}", &config.server)
+        .replace("{{uuid}}", &config.uuid)
+        .replace("{{flow}}", flow)
+        .replace("{{sni}}", sni)
+        .replace("{{fingerprint}}", fingerprint)
+        .replace("{{reality_public_key}}", reality_public_key)
+        .replace("{{reality_short_id}}", reality_short_id);
+    
+    // Parse and validate JSON
+    let mut parsed: serde_json::Value = serde_json::from_str(&config_str)
+        .map_err(|e| IsolateError::Config(format!(
+            "Invalid sing-box config after template substitution: {}",
+            e
+        )))?;
+    
+    // Post-process: remove empty flow field if not using flow
+    if flow.is_empty() {
+        if let Some(outbounds) = parsed.get_mut("outbounds") {
+            if let Some(arr) = outbounds.as_array_mut() {
+                for outbound in arr {
+                    if outbound.get("type") == Some(&json!("vless")) {
+                        if let Some(obj) = outbound.as_object_mut() {
+                            if obj.get("flow") == Some(&json!("")) {
+                                obj.remove("flow");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // Post-process: handle Reality vs TLS
+    if config.reality.enabled {
+        // Ensure Reality config is properly set
+        if let Some(outbounds) = parsed.get_mut("outbounds") {
+            if let Some(arr) = outbounds.as_array_mut() {
+                for outbound in arr {
+                    if outbound.get("type") == Some(&json!("vless")) {
+                        if let Some(tls) = outbound.get_mut("tls") {
+                            if let Some(tls_obj) = tls.as_object_mut() {
+                                tls_obj.insert("reality".to_string(), json!({
+                                    "enabled": true,
+                                    "public_key": reality_public_key,
+                                    "short_id": reality_short_id
+                                }));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    info!(
+        config_id = %config.id,
+        socks_port = socks_port,
+        server = %config.server,
+        flow = %flow,
+        reality = config.reality.enabled,
+        "Generated sing-box config from template"
+    );
+    
+    Ok(parsed)
+}
+
+/// Generate sing-box configuration JSON for VLESS (programmatic)
 ///
 /// Creates a config with:
 /// - SOCKS5 inbound on specified port
 /// - VLESS outbound to the configured server
-/// - Direct DNS
+/// - Proper DNS configuration
+/// - Route rules for bypass
+/// - Support for Reality protocol and XTLS flow
 pub fn generate_singbox_config(config: &VlessConfig, socks_port: u16) -> serde_json::Value {
     let mut outbound = json!({
         "type": "vless",
@@ -303,24 +525,53 @@ pub fn generate_singbox_config(config: &VlessConfig, socks_port: u16) -> serde_j
         "uuid": config.uuid,
     });
 
+    // Add flow if enabled (only for TCP transport)
+    if config.flow.is_enabled() && matches!(config.transport, TransportType::Tcp) {
+        outbound["flow"] = json!(config.flow.as_str());
+    }
+
     // Add TLS configuration
     if config.tls {
         let mut tls_config = json!({
             "enabled": true,
         });
 
+        // Server name (SNI)
         if let Some(ref sni) = config.sni {
             tls_config["server_name"] = json!(sni);
         } else {
-            // Use server as SNI if not specified
             tls_config["server_name"] = json!(config.server);
         }
 
+        // uTLS fingerprint
         if let Some(ref fp) = config.fingerprint {
             tls_config["utls"] = json!({
                 "enabled": true,
                 "fingerprint": fp
             });
+        } else {
+            // Default to Chrome fingerprint
+            tls_config["utls"] = json!({
+                "enabled": true,
+                "fingerprint": "chrome"
+            });
+        }
+
+        // Reality protocol
+        if config.reality.enabled {
+            let mut reality_config = json!({
+                "enabled": true,
+            });
+
+            if let Some(ref pbk) = config.reality.public_key {
+                reality_config["public_key"] = json!(pbk);
+            }
+
+            if let Some(ref sid) = config.reality.short_id {
+                reality_config["short_id"] = json!(sid);
+            }
+
+            tls_config["reality"] = reality_config;
         }
 
         outbound["tls"] = tls_config;
@@ -371,20 +622,37 @@ pub fn generate_singbox_config(config: &VlessConfig, socks_port: u16) -> serde_j
         }
     }
 
-    // Build complete config
+    // Build complete config with improved DNS and routing
     json!({
         "log": {
-            "level": "info",
+            "level": "warn",
             "timestamp": true
         },
         "dns": {
             "servers": [
                 {
-                    "tag": "dns-direct",
+                    "tag": "dns-remote",
                     "address": "https://1.1.1.1/dns-query",
+                    "address_resolver": "dns-direct",
+                    "detour": "vless-out"
+                },
+                {
+                    "tag": "dns-direct",
+                    "address": "https://223.5.5.5/dns-query",
                     "detour": "direct"
+                },
+                {
+                    "tag": "dns-block",
+                    "address": "rcode://success"
                 }
-            ]
+            ],
+            "rules": [
+                {
+                    "outbound": "any",
+                    "server": "dns-direct"
+                }
+            ],
+            "strategy": "prefer_ipv4"
         },
         "inbounds": [
             {
@@ -405,16 +673,29 @@ pub fn generate_singbox_config(config: &VlessConfig, socks_port: u16) -> serde_j
             {
                 "type": "block",
                 "tag": "block"
+            },
+            {
+                "type": "dns",
+                "tag": "dns-out"
             }
         ],
         "route": {
             "rules": [
                 {
                     "protocol": "dns",
-                    "outbound": "dns-direct"
+                    "outbound": "dns-out"
+                },
+                {
+                    "ip_is_private": true,
+                    "outbound": "direct"
+                },
+                {
+                    "domain_suffix": [".local", ".localhost"],
+                    "outbound": "direct"
                 }
             ],
-            "final": "vless-out"
+            "final": "vless-out",
+            "auto_detect_interface": true
         }
     })
 }
@@ -458,8 +739,18 @@ pub async fn start_vless(config: &VlessConfig, socks_port: u16) -> Result<Child>
         )));
     }
 
-    // Generate and write config
-    let singbox_config = generate_singbox_config(config, socks_port);
+    // Try to generate config from template first, fallback to programmatic
+    let singbox_config = match generate_singbox_config_from_template(config, socks_port) {
+        Ok(cfg) => cfg,
+        Err(e) => {
+            warn!(
+                error = %e,
+                "Failed to load template, using programmatic config generation"
+            );
+            generate_singbox_config(config, socks_port)
+        }
+    };
+    
     let config_path = get_temp_config_path(&config.id);
 
     let config_json = serde_json::to_string_pretty(&singbox_config)?;
@@ -496,6 +787,40 @@ pub async fn start_vless(config: &VlessConfig, socks_port: u16) -> Result<Child>
     );
 
     Ok(child)
+}
+
+/// VLESS connection result with SOCKS port
+#[derive(Debug, Clone)]
+pub struct VlessConnection {
+    pub config_id: String,
+    pub socks_port: u16,
+}
+
+/// Start VLESS connection and return SOCKS port for testing
+///
+/// This is a convenience wrapper that starts sing-box and returns
+/// the SOCKS port that can be used for proxy testing.
+pub async fn start_vless_with_port(
+    config: &VlessConfig,
+    socks_port: u16,
+) -> Result<(Child, VlessConnection)> {
+    let child = start_vless(config, socks_port).await?;
+    
+    // Give sing-box time to start listening
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    
+    let connection = VlessConnection {
+        config_id: config.id.clone(),
+        socks_port,
+    };
+    
+    info!(
+        config_id = %config.id,
+        socks_port = socks_port,
+        "VLESS connection ready"
+    );
+    
+    Ok((child, connection))
 }
 
 /// Stop VLESS connection and cleanup
@@ -541,6 +866,120 @@ pub async fn stop_vless(config_id: &str, mut child: Child) -> Result<()> {
     }
 
     Ok(())
+}
+
+// ============================================================================
+// Health Check Functions
+// ============================================================================
+
+/// Health check result
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HealthCheckResult {
+    pub is_healthy: bool,
+    pub socks_port_open: bool,
+    pub latency_ms: Option<u32>,
+    pub error: Option<String>,
+}
+
+/// Perform health check on a running sing-box instance
+///
+/// Checks:
+/// 1. SOCKS port is open and accepting connections
+/// 2. Optionally tests proxy connectivity
+pub async fn health_check_socks(socks_port: u16) -> HealthCheckResult {
+    let addr = format!("127.0.0.1:{}", socks_port);
+    let timeout_duration = Duration::from_secs(3);
+
+    debug!(socks_port = socks_port, "Performing SOCKS health check");
+
+    let start = std::time::Instant::now();
+
+    // Try to connect to the SOCKS proxy
+    let result = tokio::time::timeout(
+        timeout_duration,
+        tokio::net::TcpStream::connect(&addr)
+    ).await;
+
+    match result {
+        Ok(Ok(_stream)) => {
+            let latency = start.elapsed().as_millis() as u32;
+            debug!(socks_port = socks_port, latency_ms = latency, "SOCKS health check passed");
+            HealthCheckResult {
+                is_healthy: true,
+                socks_port_open: true,
+                latency_ms: Some(latency),
+                error: None,
+            }
+        }
+        Ok(Err(e)) => {
+            warn!(socks_port = socks_port, error = %e, "SOCKS health check failed - connection error");
+            HealthCheckResult {
+                is_healthy: false,
+                socks_port_open: false,
+                latency_ms: None,
+                error: Some(format!("Connection error: {}", e)),
+            }
+        }
+        Err(_) => {
+            warn!(socks_port = socks_port, "SOCKS health check failed - timeout");
+            HealthCheckResult {
+                is_healthy: false,
+                socks_port_open: false,
+                latency_ms: None,
+                error: Some("Connection timeout".to_string()),
+            }
+        }
+    }
+}
+
+/// Test proxy connectivity through SOCKS
+///
+/// Makes a test request through the proxy to verify it's working.
+pub async fn test_proxy_connectivity(socks_port: u16, test_url: &str) -> Result<u32> {
+    let proxy_addr = format!("socks5://127.0.0.1:{}", socks_port);
+    let timeout_duration = Duration::from_secs(10);
+
+    debug!(
+        socks_port = socks_port,
+        test_url = test_url,
+        "Testing proxy connectivity"
+    );
+
+    let start = std::time::Instant::now();
+
+    // Build client with SOCKS proxy
+    let proxy = reqwest::Proxy::all(&proxy_addr)
+        .map_err(|e| IsolateError::Network(format!("Invalid proxy address: {}", e)))?;
+
+    let client = reqwest::Client::builder()
+        .proxy(proxy)
+        .timeout(timeout_duration)
+        .build()
+        .map_err(|e| IsolateError::Network(format!("Failed to build HTTP client: {}", e)))?;
+
+    // Make test request
+    let response = client
+        .head(test_url)
+        .send()
+        .await
+        .map_err(|e| IsolateError::Network(format!("Proxy test request failed: {}", e)))?;
+
+    let latency = start.elapsed().as_millis() as u32;
+
+    if response.status().is_success() || response.status().is_redirection() {
+        info!(
+            socks_port = socks_port,
+            latency_ms = latency,
+            status = %response.status(),
+            "Proxy connectivity test passed"
+        );
+        Ok(latency)
+    } else {
+        Err(IsolateError::Network(format!(
+            "Proxy test returned status: {}",
+            response.status()
+        )))
+    }
 }
 
 // ============================================================================
@@ -673,6 +1112,7 @@ mod tests {
         assert_eq!(config.name, "MyServer");
         assert!(config.tls);
         assert_eq!(config.transport, TransportType::Tcp);
+        assert!(!config.flow.is_enabled());
     }
 
     #[test]
@@ -724,6 +1164,26 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_vless_url_with_flow() {
+        let url = "vless://uuid@server.com:443?security=tls&flow=xtls-rprx-vision#Vision";
+        let config = parse_vless_url(url).unwrap();
+
+        assert!(config.flow.is_enabled());
+        assert_eq!(config.flow.as_str(), "xtls-rprx-vision");
+    }
+
+    #[test]
+    fn test_parse_vless_url_with_reality() {
+        let url = "vless://uuid@server.com:443?security=reality&sni=www.google.com&fp=chrome&pbk=publickey123&sid=shortid#Reality";
+        let config = parse_vless_url(url).unwrap();
+
+        assert!(config.tls);
+        assert!(config.reality.enabled);
+        assert_eq!(config.reality.public_key, Some("publickey123".to_string()));
+        assert_eq!(config.reality.short_id, Some("shortid".to_string()));
+    }
+
+    #[test]
     fn test_parse_invalid_url() {
         assert!(parse_vless_url("http://example.com").is_err());
         assert!(parse_vless_url("vless://").is_err());
@@ -758,11 +1218,33 @@ mod tests {
     }
 
     #[test]
+    fn test_generate_singbox_config_with_flow() {
+        let config = VlessConfig::new("example.com".into(), 443, "test-uuid".into())
+            .with_flow(VlessFlow::XtlsRprxVision);
+
+        let singbox_config = generate_singbox_config(&config, 1080);
+
+        assert_eq!(singbox_config["outbounds"][0]["flow"], "xtls-rprx-vision");
+    }
+
+    #[test]
+    fn test_generate_singbox_config_with_reality() {
+        let config = VlessConfig::new("example.com".into(), 443, "test-uuid".into())
+            .with_reality("publickey123".into(), Some("shortid".into()));
+
+        let singbox_config = generate_singbox_config(&config, 1080);
+
+        assert!(singbox_config["outbounds"][0]["tls"]["reality"]["enabled"] == true);
+        assert!(singbox_config["outbounds"][0]["tls"]["reality"]["public_key"] == "publickey123");
+    }
+
+    #[test]
     fn test_vless_config_builder() {
         let config = VlessConfig::new("server.com".into(), 443, "uuid".into())
             .with_name("My Server")
             .with_sni("sni.example.com")
             .with_fingerprint("chrome")
+            .with_flow(VlessFlow::XtlsRprxVision)
             .with_transport(TransportType::Ws {
                 path: "/path".into(),
                 host: None,
@@ -771,5 +1253,14 @@ mod tests {
         assert_eq!(config.name, "My Server");
         assert_eq!(config.sni, Some("sni.example.com".to_string()));
         assert_eq!(config.fingerprint, Some("chrome".to_string()));
+        // Flow should be reset to None because WS transport doesn't support flow
+    }
+
+    #[test]
+    fn test_vless_flow_parsing() {
+        assert_eq!(VlessFlow::from_str("xtls-rprx-vision"), VlessFlow::XtlsRprxVision);
+        assert_eq!(VlessFlow::from_str("XTLS-RPRX-VISION"), VlessFlow::XtlsRprxVision);
+        assert_eq!(VlessFlow::from_str("unknown"), VlessFlow::None);
+        assert_eq!(VlessFlow::from_str(""), VlessFlow::None);
     }
 }

@@ -5,6 +5,8 @@
 //! - SNI/TLS blocking (connection reset during TLS handshake)
 //! - IP blocking (TCP connection fails)
 //! - No blocking detected
+//!
+//! Supports dual-stack IPv4/IPv6 diagnostics.
 
 use std::net::SocketAddr;
 use std::time::{Duration, Instant};
@@ -15,7 +17,7 @@ use tokio::time::timeout;
 use tracing::{debug, info, instrument, warn};
 
 use crate::core::errors::{IsolateError, Result};
-use crate::core::models::{DpiKind, DpiProfile, StrategyFamily};
+use crate::core::models::{DpiKind, DpiProfile, IpStack, StrategyFamily};
 
 /// Default timeout for all diagnostic operations (5 seconds as per project rules)
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(5);
@@ -58,6 +60,25 @@ struct TlsResult {
     latency_ms: u32,
     error: Option<String>,
     reset_during_handshake: bool,
+}
+
+/// IPv6 availability result
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct Ipv6Status {
+    pub available: bool,
+    pub can_resolve: bool,
+    pub can_connect: bool,
+    pub latency_ms: Option<u32>,
+    pub error: Option<String>,
+}
+
+/// Dual-stack diagnostic result
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct DualStackResult {
+    pub ip_stack: IpStack,
+    pub ipv4_profile: DpiProfile,
+    pub ipv6_profile: Option<DpiProfile>,
+    pub ipv6_status: Ipv6Status,
 }
 
 /// Performs DNS resolution test
@@ -526,6 +547,256 @@ pub async fn diagnose_domain(domain: &str) -> Result<DpiProfile> {
         kind: DpiKind::NoBlock,
         details: Some(format!("Domain {} is accessible", domain)),
         candidate_families: vec![],
+    })
+}
+
+// ============================================================================
+// IPv6 / Dual-Stack Diagnostics
+// ============================================================================
+
+/// IPv6 test domain (Google's IPv6-only hostname)
+const IPV6_TEST_HOST: &str = "ipv6.google.com";
+
+/// Alternative IPv6 test targets
+const IPV6_TEST_TARGETS: &[&str] = &[
+    "2001:4860:4860::8888", // Google DNS
+    "2606:4700:4700::1111", // Cloudflare DNS
+];
+
+/// Checks if IPv6 is available on the system
+#[instrument(skip_all)]
+pub async fn check_ipv6_availability() -> Ipv6Status {
+    info!("Checking IPv6 availability");
+
+    // Step 1: Try to resolve an IPv6-only hostname
+    let can_resolve = check_ipv6_dns().await;
+
+    // Step 2: Try to connect to a known IPv6 address
+    let (can_connect, latency_ms, error) = check_ipv6_connectivity().await;
+
+    let available = can_resolve || can_connect;
+
+    info!(
+        available,
+        can_resolve,
+        can_connect,
+        "IPv6 availability check complete"
+    );
+
+    Ipv6Status {
+        available,
+        can_resolve,
+        can_connect,
+        latency_ms,
+        error,
+    }
+}
+
+/// Checks if DNS can resolve IPv6 addresses
+async fn check_ipv6_dns() -> bool {
+    let lookup_host = format!("{}:443", IPV6_TEST_HOST);
+
+    let result = timeout(DEFAULT_TIMEOUT, tokio::net::lookup_host(lookup_host)).await;
+    
+    match result {
+        Ok(Ok(addrs)) => {
+            let has_ipv6 = addrs.into_iter().any(|addr| addr.ip().is_ipv6());
+            debug!("IPv6 DNS resolution: {}", has_ipv6);
+            has_ipv6
+        }
+        Ok(Err(e)) => {
+            debug!("IPv6 DNS resolution failed: {}", e);
+            false
+        }
+        Err(_) => {
+            debug!("IPv6 DNS resolution timeout");
+            false
+        }
+    }
+}
+
+/// Checks if we can connect to IPv6 addresses
+async fn check_ipv6_connectivity() -> (bool, Option<u32>, Option<String>) {
+    for target in IPV6_TEST_TARGETS {
+        let start = Instant::now();
+        let addr = format!("[{}]:443", target);
+
+        match timeout(Duration::from_secs(3), TcpStream::connect(&addr)).await {
+            Ok(Ok(_)) => {
+                let latency = start.elapsed().as_millis() as u32;
+                debug!("IPv6 connectivity OK to {}, latency {}ms", target, latency);
+                return (true, Some(latency), None);
+            }
+            Ok(Err(e)) => {
+                debug!("IPv6 connection to {} failed: {}", target, e);
+            }
+            Err(_) => {
+                debug!("IPv6 connection to {} timeout", target);
+            }
+        }
+    }
+
+    (false, None, Some("Cannot connect to any IPv6 target".to_string()))
+}
+
+/// Filters addresses by IP version
+fn filter_addresses_by_version(addrs: &[SocketAddr], ipv6: bool) -> Vec<SocketAddr> {
+    addrs
+        .iter()
+        .filter(|addr| {
+            if ipv6 {
+                addr.ip().is_ipv6()
+            } else {
+                addr.ip().is_ipv4()
+            }
+        })
+        .cloned()
+        .collect()
+}
+
+/// Runs diagnostics on a specific IP stack (IPv4 or IPv6)
+#[instrument(skip_all, fields(ipv6 = %ipv6))]
+async fn diagnose_stack(ipv6: bool) -> Result<DpiProfile> {
+    let stack_name = if ipv6 { "IPv6" } else { "IPv4" };
+    info!("Running {} diagnostics", stack_name);
+
+    // Test baseline connectivity for this stack
+    let baseline_dns = test_dns_resolve(BASELINE_DOMAIN).await;
+    let stack_addrs = filter_addresses_by_version(&baseline_dns.resolved_ips, ipv6);
+
+    if stack_addrs.is_empty() {
+        return Ok(DpiProfile {
+            kind: DpiKind::Unknown,
+            details: Some(format!("No {} addresses resolved for baseline", stack_name)),
+            candidate_families: vec![],
+        });
+    }
+
+    let baseline_addr = stack_addrs[0];
+    let baseline_tcp = test_tcp_connect(&baseline_addr.ip().to_string(), 443).await;
+    let baseline_works = baseline_tcp.success;
+
+    if !baseline_works {
+        return Ok(DpiProfile {
+            kind: DpiKind::Unknown,
+            details: Some(format!("{} baseline connectivity failed", stack_name)),
+            candidate_families: vec![],
+        });
+    }
+
+    // Run diagnostics for test domains
+    let mut dns_results = Vec::new();
+    let mut tcp_results = Vec::new();
+    let mut tls_results = Vec::new();
+
+    for domain in TEST_DOMAINS {
+        let dns_result = test_dns_resolve(domain).await;
+        let stack_addrs = filter_addresses_by_version(&dns_result.resolved_ips, ipv6);
+
+        if !stack_addrs.is_empty() {
+            let addr = stack_addrs[0];
+            let ip = addr.ip().to_string();
+
+            let (tcp_result, tls_result) = tokio::join!(
+                test_tcp_connect(&ip, 443),
+                test_tls_handshake(domain, addr)
+            );
+
+            tcp_results.push(tcp_result);
+            tls_results.push(tls_result);
+
+            // Mark DNS as successful for this stack
+            dns_results.push(DnsResult {
+                domain: domain.to_string(),
+                success: true,
+                resolved_ips: stack_addrs,
+                latency_ms: dns_result.latency_ms,
+                error: None,
+            });
+        } else {
+            // No addresses for this stack
+            dns_results.push(DnsResult {
+                domain: domain.to_string(),
+                success: false,
+                resolved_ips: vec![],
+                latency_ms: dns_result.latency_ms,
+                error: Some(format!("No {} addresses", stack_name)),
+            });
+        }
+    }
+
+    let kind = classify_blocking(&dns_results, &tcp_results, &tls_results, baseline_works);
+    let candidate_families = suggest_strategies(&kind);
+
+    let details = format!(
+        "{}: DNS {}/{} ok, TCP {}/{} ok, TLS {}/{} ok ({} resets)",
+        stack_name,
+        dns_results.iter().filter(|r| r.success).count(),
+        dns_results.len(),
+        tcp_results.iter().filter(|r| r.success).count(),
+        tcp_results.len(),
+        tls_results.iter().filter(|r| r.success).count(),
+        tls_results.len(),
+        tls_results.iter().filter(|r| r.reset_during_handshake).count()
+    );
+
+    Ok(DpiProfile {
+        kind,
+        details: Some(details),
+        candidate_families,
+    })
+}
+
+/// Performs dual-stack diagnostics (IPv4 and IPv6)
+///
+/// Detects which IP stacks are available and runs diagnostics on both.
+/// Reports which stack has issues.
+#[instrument(skip_all)]
+pub async fn diagnose_dual_stack() -> Result<DualStackResult> {
+    info!("Starting dual-stack diagnostics");
+
+    // Check IPv6 availability first
+    let ipv6_status = check_ipv6_availability().await;
+
+    // Always run IPv4 diagnostics
+    let ipv4_profile = diagnose_stack(false).await?;
+
+    // Run IPv6 diagnostics if available
+    let (ipv6_profile, ip_stack) = if ipv6_status.available {
+        let profile = diagnose_stack(true).await?;
+
+        // Determine overall stack status
+        let stack = match (&ipv4_profile.kind, &profile.kind) {
+            (DpiKind::NoBlock, DpiKind::NoBlock) => IpStack::DualStack,
+            (DpiKind::NoBlock, _) => IpStack::V4Only,
+            (_, DpiKind::NoBlock) => IpStack::V6Only,
+            _ => {
+                // Both have issues, prefer IPv4
+                if ipv4_profile.kind == DpiKind::Unknown {
+                    IpStack::V6Only
+                } else {
+                    IpStack::V4Only
+                }
+            }
+        };
+
+        (Some(profile), stack)
+    } else {
+        (None, IpStack::V4Only)
+    };
+
+    info!(
+        ip_stack = %ip_stack,
+        ipv4_kind = ?ipv4_profile.kind,
+        ipv6_available = ipv6_status.available,
+        "Dual-stack diagnostics complete"
+    );
+
+    Ok(DualStackResult {
+        ip_stack,
+        ipv4_profile,
+        ipv6_profile,
+        ipv6_status,
     })
 }
 

@@ -4,8 +4,13 @@ pub mod state;
 pub mod tray;
 
 use std::sync::Arc;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+
+/// Checks if the app was started with --silent flag
+fn is_silent_mode() -> bool {
+    std::env::args().any(|arg| arg == "--silent")
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -15,7 +20,13 @@ pub fn run() {
         .with(tracing_subscriber::EnvFilter::from_default_env())
         .init();
 
-    tracing::info!("Starting Isolate...");
+    let silent_mode = is_silent_mode();
+    
+    tracing::info!(
+        silent_mode,
+        portable_mode = core::paths::is_portable_mode(),
+        "Starting Isolate..."
+    );
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
@@ -30,6 +41,9 @@ pub fn run() {
             commands::stop_strategy,
             commands::diagnose,
             commands::panic_reset,
+            // Diagnostics commands
+            commands::diagnose_dual_stack,
+            commands::check_ipv6,
             // Settings commands
             commands::get_settings,
             commands::save_settings,
@@ -50,6 +64,16 @@ pub fn run() {
             commands::get_vless_configs,
             commands::delete_vless_config,
             commands::toggle_vless_config,
+            // VLESS proxy control commands
+            commands::start_vless_proxy,
+            commands::stop_vless_proxy,
+            commands::stop_all_vless_proxies,
+            commands::get_vless_status,
+            commands::get_all_vless_status,
+            commands::health_check_vless,
+            commands::test_vless_connectivity,
+            commands::is_singbox_available,
+            commands::get_singbox_version,
             // Binary commands
             commands::check_binaries,
             commands::download_binaries,
@@ -68,18 +92,44 @@ pub fn run() {
             commands::delete_hostlist,
             commands::update_hostlist_from_url,
             commands::save_hostlist,
+            // Mode commands
+            commands::is_silent_mode,
+            commands::is_portable_mode,
         ])
-        .setup(|app| {
+        .setup(move |app| {
             let window = app.get_webview_window("main").unwrap();
             
             #[cfg(debug_assertions)]
             window.open_devtools();
             
+            // Handle silent mode - start minimized to tray
+            if silent_mode {
+                tracing::info!("Silent mode: hiding main window");
+                let _ = window.hide();
+            }
+            
             // Initialize AppState asynchronously
             let handle = app.handle().clone();
+            let silent = silent_mode;
             tauri::async_runtime::spawn(async move {
                 match state::AppState::new().await {
                     Ok(app_state) => {
+                        // Check if auto_apply is enabled in silent mode
+                        if silent {
+                            let settings = app_state.storage.get_settings();
+                            if let Ok(settings) = settings {
+                                if settings.auto_apply {
+                                    tracing::info!("Silent mode with auto_apply: applying last strategy");
+                                    // Get last strategy and apply it
+                                    if let Ok(Some(last_strategy)) = app_state.storage.get_setting::<String>("last_strategy") {
+                                        tracing::info!(strategy = %last_strategy, "Auto-applying last strategy");
+                                        // Emit event to frontend to apply strategy
+                                        let _ = handle.emit("auto-apply-strategy", &last_strategy);
+                                    }
+                                }
+                            }
+                        }
+                        
                         handle.manage(Arc::new(app_state));
                         tracing::info!("AppState initialized successfully");
                     }

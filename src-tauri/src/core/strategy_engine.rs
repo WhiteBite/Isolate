@@ -5,15 +5,24 @@
 //! - GLOBAL: глобальный перехват трафика через WinDivert
 //!
 //! КРИТИЧНО: Zapret стратегии запускаются ТОЛЬКО последовательно!
+//! Используется nodpi_engine для управления winws процессами.
 
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::process::{Child, Command};
 use tokio::sync::{Mutex, RwLock};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, warn};
+
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 
 use crate::core::errors::{IsolateError, Result};
 use crate::core::models::{LaunchTemplate, Strategy, StrategyEngine as EngineType};
+use crate::core::nodpi_engine::{
+    self, build_winws_args_from_template, get_binary_path_from_template,
+    is_windivert_active, reset_windivert_flag,
+    NoDpiHandle,
+};
 
 // ============================================================================
 // Constants
@@ -44,11 +53,18 @@ pub enum LaunchMode {
 /// Информация о запущенном процессе
 #[derive(Debug)]
 struct RunningProcess {
-    child: Child,
+    child: Option<Child>,
     strategy_id: String,
     mode: LaunchMode,
     port: Option<u16>,
     engine: EngineType,
+}
+
+/// Информация о запущенной Zapret стратегии (через nodpi_engine)
+struct RunningZapretStrategy {
+    handle: NoDpiHandle,
+    strategy_id: String,
+    mode: LaunchMode,
 }
 
 /// Менеджер портов для SOCKS-прокси
@@ -97,8 +113,10 @@ impl PortManager {
 
 /// Движок управления стратегиями
 pub struct StrategyEngine {
-    /// Запущенные процессы
+    /// Запущенные процессы (не-Zapret)
     processes: RwLock<HashMap<String, RunningProcess>>,
+    /// Запущенная Zapret стратегия (через nodpi_engine)
+    zapret_strategy: RwLock<Option<RunningZapretStrategy>>,
     /// Менеджер портов
     port_manager: Mutex<PortManager>,
     /// Блокировка для последовательного запуска Zapret
@@ -112,6 +130,7 @@ impl StrategyEngine {
     pub fn new() -> Self {
         Self {
             processes: RwLock::new(HashMap::new()),
+            zapret_strategy: RwLock::new(None),
             port_manager: Mutex::new(PortManager::default()),
             zapret_lock: Mutex::new(()),
             global_strategy: RwLock::new(None),
@@ -185,9 +204,9 @@ impl StrategyEngine {
         // Останавливаем текущую глобальную стратегию
         self.stop_global().await?;
 
-        // Для Zapret - последовательный запуск с блокировкой
+        // Для Zapret - используем nodpi_engine
         if strategy.engine == EngineType::Zapret {
-            self.start_zapret_global(strategy, template).await?;
+            self.start_zapret_global_via_nodpi(strategy).await?;
         } else {
             self.start_process(strategy, template, LaunchMode::Global, None)
                 .await?;
@@ -228,7 +247,18 @@ impl StrategyEngine {
         };
 
         if let Some(id) = strategy_id {
-            self.stop_process(&id).await?;
+            // Проверяем, это Zapret стратегия или обычная
+            let is_zapret = {
+                let zapret = self.zapret_strategy.read().await;
+                zapret.as_ref().map(|z| z.strategy_id == id).unwrap_or(false)
+            };
+
+            if is_zapret {
+                self.stop_zapret_strategy().await?;
+            } else {
+                self.stop_process(&id).await?;
+            }
+
             let mut global = self.global_strategy.write().await;
             *global = None;
             info!(strategy_id = %id, "Stopped global strategy");
@@ -240,6 +270,9 @@ impl StrategyEngine {
     /// Останавливает все запущенные процессы
     pub async fn shutdown_all(&self) -> Result<()> {
         info!("Shutting down all strategy processes");
+
+        // Останавливаем Zapret стратегию если запущена
+        self.stop_zapret_strategy().await.ok();
 
         let strategy_ids: Vec<String> = {
             let processes = self.processes.read().await;
@@ -264,13 +297,32 @@ impl StrategyEngine {
             *global = None;
         }
 
+        // Сбрасываем флаг WinDivert на всякий случай
+        reset_windivert_flag();
+
         Ok(())
     }
 
     /// Проверяет, запущена ли стратегия
     pub async fn is_running(&self, strategy_id: &str) -> bool {
+        // Проверяем Zapret стратегию
+        {
+            let zapret = self.zapret_strategy.read().await;
+            if let Some(ref z) = *zapret {
+                if z.strategy_id == strategy_id {
+                    return z.handle.is_running().await;
+                }
+            }
+        }
+
+        // Проверяем обычные процессы
         let processes = self.processes.read().await;
         processes.contains_key(strategy_id)
+    }
+
+    /// Проверяет, активен ли WinDivert (запущена ли Zapret стратегия)
+    pub fn is_windivert_active(&self) -> bool {
+        is_windivert_active()
     }
 
     /// Получает текущую глобальную стратегию
@@ -289,7 +341,68 @@ impl StrategyEngine {
     // Private Methods
     // ========================================================================
 
-    /// Запускает Zapret в SOCKS-режиме с блокировкой
+    /// Запускает Zapret стратегию через nodpi_engine
+    async fn start_zapret_global_via_nodpi(&self, strategy: &Strategy) -> Result<()> {
+        // Захватываем блокировку для последовательного запуска
+        let _guard = self.zapret_lock.lock().await;
+
+        debug!(
+            strategy_id = %strategy.id,
+            "Acquired Zapret lock for GLOBAL launch via nodpi_engine"
+        );
+
+        // Останавливаем предыдущую Zapret стратегию если есть
+        self.stop_zapret_strategy().await.ok();
+
+        // Запускаем через nodpi_engine
+        let handle = nodpi_engine::start_nodpi_from_strategy(strategy, true).await?;
+
+        // Сохраняем handle
+        {
+            let mut zapret = self.zapret_strategy.write().await;
+            *zapret = Some(RunningZapretStrategy {
+                handle,
+                strategy_id: strategy.id.clone(),
+                mode: LaunchMode::Global,
+            });
+        }
+
+        info!(
+            strategy_id = %strategy.id,
+            "Zapret strategy started via nodpi_engine"
+        );
+
+        Ok(())
+    }
+
+    /// Останавливает текущую Zapret стратегию
+    async fn stop_zapret_strategy(&self) -> Result<()> {
+        let mut zapret = self.zapret_strategy.write().await;
+
+        if let Some(mut running) = zapret.take() {
+            info!(
+                strategy_id = %running.strategy_id,
+                "Stopping Zapret strategy"
+            );
+
+            if let Err(e) = running.handle.stop().await {
+                warn!(
+                    strategy_id = %running.strategy_id,
+                    error = %e,
+                    "Error stopping Zapret strategy"
+                );
+            }
+
+            info!(
+                strategy_id = %running.strategy_id,
+                "Zapret strategy stopped"
+            );
+        }
+
+        Ok(())
+    }
+
+    /// Запускает Zapret в SOCKS-режиме с блокировкой (legacy, для совместимости)
     async fn start_zapret_socks(
         &self,
         strategy: &Strategy,
@@ -311,28 +424,7 @@ impl StrategyEngine {
             .await
     }
 
-    /// Запускает Zapret в глобальном режиме с блокировкой
-    async fn start_zapret_global(
-        &self,
-        strategy: &Strategy,
-        template: &LaunchTemplate,
-    ) -> Result<()> {
-        // Захватываем блокировку для последовательного запуска
-        let _guard = self.zapret_lock.lock().await;
-
-        debug!(
-            strategy_id = %strategy.id,
-            "Acquired Zapret lock for GLOBAL launch"
-        );
-
-        // Задержка перед запуском
-        tokio::time::sleep(tokio::time::Duration::from_millis(ZAPRET_LAUNCH_DELAY_MS)).await;
-
-        self.start_process(strategy, template, LaunchMode::Global, None)
-            .await
-    }
-
-    /// Запускает процесс стратегии
+    /// Запускает процесс стратегии (для не-Zapret стратегий или legacy)
     async fn start_process(
         &self,
         strategy: &Strategy,
@@ -351,19 +443,27 @@ impl StrategyEngine {
             }
         }
 
-        // Подготавливаем аргументы с подстановкой порта
-        let args = self.prepare_args(&template.args, port);
+        // Для Zapret используем nodpi_engine для разрешения путей
+        let (binary_path, args) = if strategy.engine == EngineType::Zapret {
+            let binary = get_binary_path_from_template(template);
+            let resolved_args = build_winws_args_from_template(template);
+            let args = self.prepare_args(&resolved_args, port);
+            (binary.display().to_string(), args)
+        } else {
+            let args = self.prepare_args(&template.args, port);
+            (template.binary.clone(), args)
+        };
 
         debug!(
             strategy_id = %strategy.id,
-            binary = %template.binary,
+            binary = %binary_path,
             args = ?args,
             mode = ?mode,
             "Starting strategy process"
         );
 
         // Запускаем процесс
-        let mut cmd = Command::new(&template.binary);
+        let mut cmd = Command::new(&binary_path);
         cmd.args(&args);
 
         // Добавляем переменные окружения
@@ -374,21 +474,18 @@ impl StrategyEngine {
 
         // Скрываем окно консоли на Windows
         #[cfg(windows)]
-        {
-            use std::os::windows::process::CommandExt;
-            cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
-        }
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
 
         let child = cmd.spawn().map_err(|e| {
             IsolateError::Process(format!(
                 "Failed to start '{}': {}",
-                template.binary, e
+                binary_path, e
             ))
         })?;
 
         // Сохраняем информацию о процессе
         let process = RunningProcess {
-            child,
+            child: Some(child),
             strategy_id: strategy.id.clone(),
             mode,
             port,
@@ -422,28 +519,30 @@ impl StrategyEngine {
 
         debug!(strategy_id, "Stopping strategy process");
 
-        // Пытаемся graceful shutdown через kill
-        // На Windows это отправит TerminateProcess
-        let _ = process.child.start_kill();
+        if let Some(ref mut child) = process.child {
+            // Пытаемся graceful shutdown через kill
+            // На Windows это отправит TerminateProcess
+            let _ = child.start_kill();
 
-        // Ждём завершения с таймаутом
-        let shutdown_result = tokio::time::timeout(
-            tokio::time::Duration::from_millis(SHUTDOWN_TIMEOUT_MS),
-            process.child.wait(),
-        )
-        .await;
+            // Ждём завершения с таймаутом
+            let shutdown_result = tokio::time::timeout(
+                tokio::time::Duration::from_millis(SHUTDOWN_TIMEOUT_MS),
+                child.wait(),
+            )
+            .await;
 
-        match shutdown_result {
-            Ok(Ok(status)) => {
-                debug!(strategy_id, ?status, "Process exited gracefully");
-            }
-            Ok(Err(e)) => {
-                warn!(strategy_id, error = %e, "Error waiting for process");
-            }
-            Err(_) => {
-                // Таймаут - принудительное завершение
-                warn!(strategy_id, "Process did not exit gracefully, killing");
-                let _ = process.child.kill().await;
+            match shutdown_result {
+                Ok(Ok(status)) => {
+                    debug!(strategy_id, ?status, "Process exited gracefully");
+                }
+                Ok(Err(e)) => {
+                    warn!(strategy_id, error = %e, "Error waiting for process");
+                }
+                Err(_) => {
+                    // Таймаут - принудительное завершение
+                    warn!(strategy_id, "Process did not exit gracefully, killing");
+                    let _ = child.kill().await;
+                }
             }
         }
 

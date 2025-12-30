@@ -9,6 +9,7 @@ use tracing::{error, info, warn};
 use crate::core::binaries::{self, BinaryCheckResult, DownloadProgress};
 use crate::core::hostlists::{self, Hostlist};
 use crate::core::models::{AppStatus, DiagnosticResult, LogEntry, Service, ServiceWithState, Settings, Strategy, UpdateInfo, VlessConfig};
+use crate::core::diagnostics::{DualStackResult, Ipv6Status};
 use crate::state::AppState;
 
 /// Get current application status
@@ -179,8 +180,33 @@ pub async fn stop_strategy(state: State<'_, Arc<AppState>>) -> Result<(), String
 pub async fn diagnose() -> Result<DiagnosticResult, String> {
     info!("Running DPI diagnostics");
     
-    // TODO: Implement full diagnostics
-    Ok(DiagnosticResult::default())
+    let profile = crate::core::diagnostics::diagnose()
+        .await
+        .map_err(|e| format!("Diagnostics failed: {}", e))?;
+    
+    Ok(DiagnosticResult {
+        profile,
+        tested_services: vec![],
+        blocked_services: vec![],
+    })
+}
+
+/// Run dual-stack (IPv4/IPv6) diagnostics
+#[tauri::command]
+pub async fn diagnose_dual_stack() -> Result<DualStackResult, String> {
+    info!("Running dual-stack diagnostics");
+    
+    crate::core::diagnostics::diagnose_dual_stack()
+        .await
+        .map_err(|e| format!("Dual-stack diagnostics failed: {}", e))
+}
+
+/// Check IPv6 availability
+#[tauri::command]
+pub async fn check_ipv6() -> Result<Ipv6Status, String> {
+    info!("Checking IPv6 availability");
+    
+    Ok(crate::core::diagnostics::check_ipv6_availability().await)
 }
 
 /// Emergency network reset
@@ -720,4 +746,180 @@ pub async fn save_hostlist(hostlist: Hostlist) -> Result<(), String> {
     hostlists::save_hostlist(&hostlist)
         .await
         .map_err(|e| format!("Failed to save hostlist: {}", e))
+}
+
+// ============================================================================
+// VLESS Proxy Control Commands
+// ============================================================================
+
+/// Start VLESS proxy for a specific config
+///
+/// Starts sing-box with the given VLESS configuration.
+/// Returns the SOCKS port for the proxy.
+#[tauri::command]
+pub async fn start_vless_proxy(
+    state: State<'_, Arc<AppState>>,
+    config_id: String,
+    socks_port: Option<u16>,
+) -> Result<crate::core::singbox_manager::SingboxInstance, String> {
+    info!(config_id = %config_id, "Starting VLESS proxy");
+
+    // Load the config
+    let configs: Vec<VlessConfig> = state
+        .storage
+        .get_setting(VLESS_CONFIGS_KEY)
+        .map_err(|e| format!("Failed to load configs: {}", e))?
+        .unwrap_or_default();
+
+    let config = configs
+        .iter()
+        .find(|c| c.id == config_id)
+        .ok_or_else(|| format!("Config '{}' not found", config_id))?;
+
+    // Convert to vless_engine config
+    let vless_config = crate::core::vless_engine::VlessConfig::new(
+        config.server.clone(),
+        config.port,
+        config.uuid.clone(),
+    )
+    .with_name(&config.name)
+    .with_sni(config.sni.clone().unwrap_or_else(|| config.server.clone()));
+
+    // Get manager and allocate port
+    let manager = crate::core::singbox_manager::get_manager();
+    let port = match socks_port {
+        Some(p) => p,
+        None => manager.allocate_port(1080).await,
+    };
+
+    // Start the proxy
+    let instance = manager
+        .start(&vless_config, port)
+        .await
+        .map_err(|e| format!("Failed to start VLESS proxy: {}", e))?;
+
+    info!(
+        config_id = %config_id,
+        socks_port = instance.socks_port,
+        "VLESS proxy started"
+    );
+
+    Ok(instance)
+}
+
+/// Stop VLESS proxy for a specific config
+#[tauri::command]
+pub async fn stop_vless_proxy(config_id: String) -> Result<(), String> {
+    info!(config_id = %config_id, "Stopping VLESS proxy");
+
+    let manager = crate::core::singbox_manager::get_manager();
+
+    manager
+        .stop(&config_id)
+        .await
+        .map_err(|e| format!("Failed to stop VLESS proxy: {}", e))?;
+
+    info!(config_id = %config_id, "VLESS proxy stopped");
+    Ok(())
+}
+
+/// Stop all running VLESS proxies
+#[tauri::command]
+pub async fn stop_all_vless_proxies() -> Result<(), String> {
+    info!("Stopping all VLESS proxies");
+
+    let manager = crate::core::singbox_manager::get_manager();
+
+    manager
+        .stop_all()
+        .await
+        .map_err(|e| format!("Failed to stop VLESS proxies: {}", e))?;
+
+    info!("All VLESS proxies stopped");
+    Ok(())
+}
+
+/// Get status of a specific VLESS proxy
+#[tauri::command]
+pub async fn get_vless_status(
+    config_id: String,
+) -> Result<Option<crate::core::singbox_manager::SingboxInstance>, String> {
+    let manager = crate::core::singbox_manager::get_manager();
+    Ok(manager.get_status(&config_id).await)
+}
+
+/// Get status of all running VLESS proxies
+#[tauri::command]
+pub async fn get_all_vless_status() -> Result<Vec<crate::core::singbox_manager::SingboxInstance>, String> {
+    let manager = crate::core::singbox_manager::get_manager();
+    Ok(manager.list_instances().await)
+}
+
+/// Perform health check on a running VLESS proxy
+#[tauri::command]
+pub async fn health_check_vless(config_id: String) -> Result<bool, String> {
+    info!(config_id = %config_id, "Performing VLESS health check");
+
+    let manager = crate::core::singbox_manager::get_manager();
+
+    manager
+        .health_check(&config_id)
+        .await
+        .map_err(|e| format!("Health check failed: {}", e))
+}
+
+/// Test VLESS proxy connectivity
+///
+/// Makes a test request through the proxy to verify it's working.
+#[tauri::command]
+pub async fn test_vless_connectivity(
+    config_id: String,
+    test_url: Option<String>,
+) -> Result<u32, String> {
+    info!(config_id = %config_id, "Testing VLESS connectivity");
+
+    let manager = crate::core::singbox_manager::get_manager();
+
+    // Get the SOCKS port for this config
+    let socks_port = manager
+        .get_socks_port(&config_id)
+        .await
+        .ok_or_else(|| format!("Config '{}' is not running", config_id))?;
+
+    let url = test_url.unwrap_or_else(|| "https://www.google.com".to_string());
+
+    crate::core::vless_engine::test_proxy_connectivity(socks_port, &url)
+        .await
+        .map_err(|e| format!("Connectivity test failed: {}", e))
+}
+
+/// Check if sing-box binary is available
+#[tauri::command]
+pub async fn is_singbox_available() -> Result<bool, String> {
+    Ok(crate::core::singbox_manager::is_singbox_available())
+}
+
+/// Get sing-box version
+#[tauri::command]
+pub async fn get_singbox_version() -> Result<String, String> {
+    crate::core::singbox_manager::get_singbox_version()
+        .await
+        .map_err(|e| format!("Failed to get sing-box version: {}", e))
+}
+
+
+// ============================================================================
+// Mode Detection Commands
+// ============================================================================
+
+/// Check if app is running in silent mode (--silent flag)
+#[tauri::command]
+pub async fn is_silent_mode() -> Result<bool, String> {
+    Ok(std::env::args().any(|arg| arg == "--silent"))
+}
+
+/// Check if app is running in portable mode
+#[tauri::command]
+pub async fn is_portable_mode() -> Result<bool, String> {
+    Ok(crate::core::paths::is_portable_mode())
 }

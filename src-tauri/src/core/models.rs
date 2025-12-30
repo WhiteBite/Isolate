@@ -234,6 +234,29 @@ pub struct AppStatus {
     pub services_status: std::collections::HashMap<String, bool>,
 }
 
+/// IP stack type for dual-stack support
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum IpStack {
+    /// IPv4 only
+    V4Only,
+    /// IPv6 only
+    V6Only,
+    /// Both IPv4 and IPv6
+    #[default]
+    DualStack,
+}
+
+impl std::fmt::Display for IpStack {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            IpStack::V4Only => write!(f, "IPv4"),
+            IpStack::V6Only => write!(f, "IPv6"),
+            IpStack::DualStack => write!(f, "Dual-Stack"),
+        }
+    }
+}
+
 /// User settings
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
@@ -242,6 +265,9 @@ pub struct Settings {
     pub minimize_to_tray: bool,
     pub block_quic: bool,
     pub default_mode: String, // "turbo" or "deep"
+    /// Portable mode - store data in app directory
+    #[serde(default)]
+    pub portable_mode: bool,
 }
 
 impl Default for Settings {
@@ -252,6 +278,7 @@ impl Default for Settings {
             minimize_to_tray: true,
             block_quic: true,
             default_mode: "turbo".to_string(),
+            portable_mode: false,
         }
     }
 }

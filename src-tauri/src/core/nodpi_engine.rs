@@ -4,20 +4,35 @@
 //! Handles engine detection, process lifecycle, and configuration management.
 //!
 //! CRITICAL: Only ONE winws/WinDivert process can run at a time to avoid BSOD!
+//!
+//! ## Usage
+//!
+//! ```rust,ignore
+//! use crate::core::nodpi_engine::{start_nodpi_from_strategy, stop_nodpi};
+//!
+//! // Start from Strategy YAML
+//! let handle = start_nodpi_from_strategy(&strategy).await?;
+//!
+//! // Stop when done
+//! stop_nodpi(&mut handle).await?;
+//! ```
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 use tokio::process::Child;
+use tokio::sync::Mutex;
 use tokio::time::timeout;
 use tracing::{debug, error, info, warn};
 
 use crate::core::errors::{IsolateError, Result};
+use crate::core::models::{LaunchTemplate, Strategy, StrategyEngine as ModelEngine};
 use crate::core::paths::{get_binaries_dir, get_hostlists_dir};
-use crate::core::process_runner::{ProcessConfig, ProcessRunner};
+use crate::core::process_runner::{ManagedProcess, ProcessConfig, ProcessRunner};
 
 /// Global flag to track if a WinDivert-based engine is running
 /// CRITICAL: Only one WinDivert process can run at a time!
@@ -25,6 +40,13 @@ static WINDIVERT_ACTIVE: AtomicBool = AtomicBool::new(false);
 
 /// Default graceful shutdown timeout in milliseconds
 const SHUTDOWN_TIMEOUT_MS: u64 = 3000;
+
+/// Delay between Zapret strategy launches (for WinDivert stability)
+const ZAPRET_LAUNCH_DELAY_MS: u64 = 2500;
+
+/// Global mutex for sequential Zapret launches
+static ZAPRET_LAUNCH_LOCK: once_cell::sync::Lazy<Arc<Mutex<()>>> =
+    once_cell::sync::Lazy::new(|| Arc::new(Mutex::new(())));
 
 /// NoDPI engine type
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -219,6 +241,118 @@ fn build_engine_args(config: &NoDpiConfig) -> Vec<String> {
     }
 }
 
+// ============================================================================
+// Strategy YAML Integration
+// ============================================================================
+
+/// Build winws command line from Strategy's LaunchTemplate
+///
+/// Converts template args with path resolution for hostlists and binaries.
+///
+/// # Arguments
+/// * `template` - LaunchTemplate from strategy YAML
+///
+/// # Returns
+/// * `Vec<String>` - Resolved command line arguments
+pub fn build_winws_args_from_template(template: &LaunchTemplate) -> Vec<String> {
+    let binaries_dir = get_binaries_dir();
+    let hostlists_dir = get_hostlists_dir();
+
+    template
+        .args
+        .iter()
+        .map(|arg| resolve_template_path(arg, &binaries_dir, &hostlists_dir))
+        .collect()
+}
+
+/// Resolve paths in template argument
+///
+/// Handles:
+/// - `hostlists/xxx.txt` -> full path to hostlists directory
+/// - `binaries/xxx` -> full path to binaries directory
+/// - Other args passed through unchanged
+fn resolve_template_path(arg: &str, binaries_dir: &PathBuf, hostlists_dir: &PathBuf) -> String {
+    // Handle --hostlist=path format
+    if arg.starts_with("--hostlist=") {
+        let path = &arg[11..]; // Remove "--hostlist="
+        let resolved = resolve_path_component(path, binaries_dir, hostlists_dir);
+        return format!("--hostlist={}", resolved);
+    }
+
+    // Handle standalone path arguments (for patterns like --dpi-desync-fake-quic=path)
+    if arg.contains('=') {
+        let parts: Vec<&str> = arg.splitn(2, '=').collect();
+        if parts.len() == 2 {
+            let key = parts[0];
+            let value = parts[1];
+            let resolved = resolve_path_component(value, binaries_dir, hostlists_dir);
+            return format!("{}={}", key, resolved);
+        }
+    }
+
+    // Pass through unchanged
+    arg.to_string()
+}
+
+/// Resolve a path component (hostlists/xxx or binaries/xxx)
+fn resolve_path_component(path: &str, binaries_dir: &PathBuf, hostlists_dir: &PathBuf) -> String {
+    if path.starts_with("hostlists/") {
+        let filename = &path[10..]; // Remove "hostlists/"
+        hostlists_dir.join(filename).display().to_string()
+    } else if path.starts_with("binaries/") {
+        let filename = &path[9..]; // Remove "binaries/"
+        binaries_dir.join(filename).display().to_string()
+    } else {
+        // Assume it's a relative path from binaries dir
+        path.to_string()
+    }
+}
+
+/// Get the binary path from LaunchTemplate
+///
+/// Resolves `binaries/winws.exe` to full path.
+pub fn get_binary_path_from_template(template: &LaunchTemplate) -> PathBuf {
+    let binaries_dir = get_binaries_dir();
+
+    if template.binary.starts_with("binaries/") {
+        let filename = &template.binary[9..];
+        binaries_dir.join(filename)
+    } else {
+        binaries_dir.join(&template.binary)
+    }
+}
+
+/// Verify all required binaries exist for a strategy
+///
+/// # Arguments
+/// * `strategy` - Strategy to verify
+///
+/// # Returns
+/// * `Ok(())` - All binaries exist
+/// * `Err(IsolateError)` - Missing binaries
+pub async fn verify_strategy_binaries(strategy: &Strategy) -> Result<()> {
+    let binaries_dir = get_binaries_dir();
+
+    for binary_path in &strategy.requirements.binaries {
+        let full_path = if binary_path.starts_with("binaries/") {
+            let filename = &binary_path[9..];
+            binaries_dir.join(filename)
+        } else {
+            binaries_dir.join(binary_path)
+        };
+
+        if !full_path.exists() {
+            return Err(IsolateError::Process(format!(
+                "Required binary not found: {} (expected at {})",
+                binary_path,
+                full_path.display()
+            )));
+        }
+    }
+
+    Ok(())
+}
+
 /// Handle for a running NoDPI process
 pub struct NoDpiHandle {
     /// Configuration used to start the process
@@ -227,6 +361,8 @@ pub struct NoDpiHandle {
     runner: ProcessRunner,
     /// Process ID in the runner
     process_id: String,
+    /// Strategy ID (if started from strategy)
+    pub strategy_id: Option<String>,
 }
 
 impl NoDpiHandle {
@@ -247,6 +383,11 @@ impl NoDpiHandle {
     /// Stop the NoDPI process gracefully
     pub async fn stop(&mut self) -> Result<()> {
         stop_nodpi_internal(&self.runner, &self.process_id, &self.config.engine).await
+    }
+
+    /// Get the managed process reference
+    pub async fn get_process(&self) -> Option<Arc<ManagedProcess>> {
+        self.runner.get(&self.process_id).await
     }
 }
 
@@ -314,6 +455,7 @@ pub async fn start_nodpi(config: &NoDpiConfig) -> Result<NoDpiHandle> {
                 config: config.clone(),
                 runner,
                 process_id,
+                strategy_id: None,
             })
         }
         Err(e) => {
@@ -325,6 +467,146 @@ pub async fn start_nodpi(config: &NoDpiConfig) -> Result<NoDpiHandle> {
             Err(e)
         }
     }
+}
+
+/// Start NoDPI engine from a Strategy definition
+///
+/// This is the main entry point for starting Zapret strategies from YAML configs.
+/// Handles path resolution, binary verification, and sequential launch locking.
+///
+/// CRITICAL: Zapret strategies MUST be launched sequentially with delay!
+///
+/// # Arguments
+/// * `strategy` - Strategy definition loaded from YAML
+/// * `use_global` - Whether to use global_template (true) or socks_template (false)
+///
+/// # Returns
+/// * `Ok(NoDpiHandle)` - Handle to the running process
+/// * `Err(IsolateError)` - Failed to start
+pub async fn start_nodpi_from_strategy(strategy: &Strategy, use_global: bool) -> Result<NoDpiHandle> {
+    // Verify this is a Zapret strategy
+    if strategy.engine != ModelEngine::Zapret {
+        return Err(IsolateError::Config(format!(
+            "Strategy '{}' is not a Zapret strategy (engine: {:?})",
+            strategy.id, strategy.engine
+        )));
+    }
+
+    // Get the appropriate template
+    let template = if use_global {
+        strategy.global_template.as_ref().ok_or_else(|| {
+            IsolateError::Config(format!(
+                "Strategy '{}' has no global_template",
+                strategy.id
+            ))
+        })?
+    } else {
+        strategy.socks_template.as_ref().ok_or_else(|| {
+            IsolateError::Config(format!(
+                "Strategy '{}' has no socks_template",
+                strategy.id
+            ))
+        })?
+    };
+
+    info!(
+        "Starting Zapret strategy: {} ({})",
+        strategy.name, strategy.id
+    );
+
+    // Acquire sequential launch lock
+    let _lock = ZAPRET_LAUNCH_LOCK.lock().await;
+    debug!("Acquired Zapret launch lock for strategy: {}", strategy.id);
+
+    // Add delay for WinDivert stability
+    tokio::time::sleep(Duration::from_millis(ZAPRET_LAUNCH_DELAY_MS)).await;
+
+    // Check WinDivert exclusivity
+    if WINDIVERT_ACTIVE.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).is_err() {
+        return Err(IsolateError::Process(
+            "Another WinDivert-based engine is already running. Stop it first!".to_string()
+        ));
+    }
+
+    // Verify required binaries
+    if let Err(e) = verify_strategy_binaries(strategy).await {
+        WINDIVERT_ACTIVE.store(false, Ordering::SeqCst);
+        return Err(e);
+    }
+
+    // Build command line
+    let binary_path = get_binary_path_from_template(template);
+    let args = build_winws_args_from_template(template);
+
+    debug!(
+        "Starting winws: {} with {} args",
+        binary_path.display(),
+        args.len()
+    );
+    debug!("Args: {:?}", args);
+
+    // Verify binary exists
+    if !binary_path.exists() {
+        WINDIVERT_ACTIVE.store(false, Ordering::SeqCst);
+        return Err(IsolateError::Process(format!(
+            "winws binary not found: {}",
+            binary_path.display()
+        )));
+    }
+
+    // Create process config
+    let process_config = ProcessConfig::new(binary_path.clone(), args)
+        .with_admin(template.requires_admin)
+        .with_working_dir(get_binaries_dir());
+
+    // Spawn process
+    let runner = ProcessRunner::new();
+    let process_id = format!("zapret-{}", strategy.id);
+
+    match runner.spawn(&process_id, process_config).await {
+        Ok(_) => {
+            info!(
+                "Zapret strategy started: {} (process_id: {})",
+                strategy.name, process_id
+            );
+
+            // Create NoDpiConfig for the handle
+            let config = NoDpiConfig {
+                id: strategy.id.clone(),
+                name: strategy.name.clone(),
+                engine: NoDpiEngine::Zapret,
+                params: template.args.clone(),
+                hostlist: None, // Already resolved in args
+            };
+
+            Ok(NoDpiHandle {
+                config,
+                runner,
+                process_id,
+                strategy_id: Some(strategy.id.clone()),
+            })
+        }
+        Err(e) => {
+            WINDIVERT_ACTIVE.store(false, Ordering::SeqCst);
+            error!("Failed to start Zapret strategy '{}': {}", strategy.id, e);
+            Err(e)
+        }
+    }
+}
+
+/// Stop a running Zapret strategy by strategy ID
+///
+/// # Arguments
+/// * `handle` - Handle to the running NoDPI process
+///
+/// # Returns
+/// * `Ok(())` - Strategy stopped successfully
+/// * `Err(IsolateError)` - Failed to stop
+pub async fn stop_nodpi_strategy(handle: &mut NoDpiHandle) -> Result<()> {
+    let strategy_id = handle.strategy_id.as_deref().unwrap_or(&handle.config.id);
+    info!("Stopping Zapret strategy: {}", strategy_id);
+
+    handle.stop().await
 }
 
 /// Internal function to stop a NoDPI process
@@ -573,6 +855,46 @@ mod tests {
             format!("{}", NoDpiEngine::Custom("test.exe".to_string())),
             "Custom(test.exe)"
         );
+    }
+
+    #[test]
+    fn test_resolve_template_path_hostlist() {
+        let binaries_dir = PathBuf::from("C:\\test\\binaries");
+        let hostlists_dir = PathBuf::from("C:\\test\\hostlists");
+
+        let result = resolve_template_path(
+            "--hostlist=hostlists/youtube.txt",
+            &binaries_dir,
+            &hostlists_dir,
+        );
+        assert!(result.contains("youtube.txt"));
+        assert!(result.starts_with("--hostlist="));
+    }
+
+    #[test]
+    fn test_resolve_template_path_binary() {
+        let binaries_dir = PathBuf::from("C:\\test\\binaries");
+        let hostlists_dir = PathBuf::from("C:\\test\\hostlists");
+
+        let result = resolve_template_path(
+            "--dpi-desync-fake-quic=binaries/quic_initial.bin",
+            &binaries_dir,
+            &hostlists_dir,
+        );
+        assert!(result.contains("quic_initial.bin"));
+    }
+
+    #[test]
+    fn test_resolve_template_path_passthrough() {
+        let binaries_dir = PathBuf::from("C:\\test\\binaries");
+        let hostlists_dir = PathBuf::from("C:\\test\\hostlists");
+
+        let result = resolve_template_path(
+            "--dpi-desync=fake",
+            &binaries_dir,
+            &hostlists_dir,
+        );
+        assert_eq!(result, "--dpi-desync=fake");
     }
 
     #[tokio::test]

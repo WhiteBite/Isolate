@@ -19,6 +19,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             commands::get_status,
             commands::get_strategies,
@@ -35,6 +36,15 @@ pub fn run() {
             commands::get_services_settings,
             commands::toggle_service,
             commands::get_app_version,
+            // Generic setting commands
+            commands::get_setting,
+            commands::set_setting,
+            // Update commands
+            commands::check_for_updates,
+            commands::install_update,
+            // Log commands
+            commands::get_logs,
+            commands::export_logs,
         ])
         .setup(|app| {
             let window = app.get_webview_window("main").unwrap();

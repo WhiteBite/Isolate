@@ -286,3 +286,28 @@ impl EnvInfo {
         )
     }
 }
+
+// ============================================================================
+// Update Models
+// ============================================================================
+
+/// Information about available update
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateInfo {
+    pub version: String,
+    pub notes: Option<String>,
+    pub date: Option<String>,
+}
+
+// ============================================================================
+// Log Models
+// ============================================================================
+
+/// Log entry for frontend display
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LogEntry {
+    pub timestamp: String,
+    pub level: String,
+    pub module: String,
+    pub message: String,
+}

@@ -79,15 +79,19 @@
   }
 
   async function toggleService(serviceId: string) {
+    const service = services.find(s => s.id === serviceId);
+    if (!service) return;
+    
+    const newEnabled = !service.enabled;
     services = services.map(s => 
-      s.id === serviceId ? { ...s, enabled: !s.enabled } : s
+      s.id === serviceId ? { ...s, enabled: newEnabled } : s
     );
 
     if (!browser) return;
 
     try {
       const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('toggle_service', { serviceId });
+      await invoke('toggle_service', { serviceId, enabled: newEnabled });
     } catch (e) {
       console.error('Failed to toggle service:', e);
     }

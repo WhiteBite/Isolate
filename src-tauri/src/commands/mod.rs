@@ -1,11 +1,13 @@
 //! Tauri commands — IPC interface between frontend and backend
 
 use std::sync::Arc;
-use tauri::{Emitter, State, Window};
+use tauri::{AppHandle, Emitter, State, Window};
+use tauri_plugin_updater::UpdaterExt;
 use tokio::process::Command;
 use tracing::{error, info, warn};
 
-use crate::core::models::{AppStatus, DiagnosticResult, Service, ServiceWithState, Settings, Strategy};
+use crate::core::binaries::{self, BinaryCheckResult, DownloadProgress};
+use crate::core::models::{AppStatus, DiagnosticResult, LogEntry, Service, ServiceWithState, Settings, Strategy, UpdateInfo};
 use crate::state::AppState;
 
 /// Get current application status
@@ -287,8 +289,163 @@ pub async fn toggle_service(
         .map_err(|e| format!("Failed to toggle service: {}", e))
 }
 
+// ============================================================================
+// Generic Setting Commands
+// ============================================================================
+
+/// Get a setting by key
+#[tauri::command]
+pub async fn get_setting(
+    state: State<'_, Arc<AppState>>,
+    key: String,
+) -> Result<serde_json::Value, String> {
+    info!(key = %key, "Getting setting");
+    
+    let value: Option<serde_json::Value> = state
+        .storage
+        .get_setting(&key)
+        .map_err(|e| format!("Failed to get setting: {}", e))?;
+    
+    Ok(value.unwrap_or(serde_json::Value::Null))
+}
+
+/// Set a setting by key
+#[tauri::command]
+pub async fn set_setting(
+    state: State<'_, Arc<AppState>>,
+    key: String,
+    value: serde_json::Value,
+) -> Result<(), String> {
+    info!(key = %key, "Setting setting");
+    
+    state
+        .storage
+        .set_setting(&key, &value)
+        .map_err(|e| format!("Failed to set setting: {}", e))
+}
+
 /// Get app version from Cargo.toml
 #[tauri::command]
 pub async fn get_app_version() -> Result<String, String> {
     Ok(env!("CARGO_PKG_VERSION").to_string())
+}
+
+// ============================================================================
+// Update Commands
+// ============================================================================
+
+/// Check for available updates
+#[tauri::command]
+pub async fn check_for_updates(app: AppHandle) -> Result<Option<UpdateInfo>, String> {
+    info!("Checking for updates");
+    
+    let updater = app.updater().map_err(|e| format!("Failed to get updater: {}", e))?;
+    
+    match updater.check().await {
+        Ok(Some(update)) => {
+            info!(version = %update.version, "Update available");
+            Ok(Some(UpdateInfo {
+                version: update.version.clone(),
+                notes: update.body.clone(),
+                date: update.date.map(|d| d.to_string()),
+            }))
+        }
+        Ok(None) => {
+            info!("No updates available");
+            Ok(None)
+        }
+        Err(e) => {
+            error!("Failed to check for updates: {}", e);
+            Err(format!("Failed to check for updates: {}", e))
+        }
+    }
+}
+
+/// Download and install available update
+#[tauri::command]
+pub async fn install_update(app: AppHandle) -> Result<(), String> {
+    info!("Installing update");
+    
+    let updater = app.updater().map_err(|e| format!("Failed to get updater: {}", e))?;
+    
+    let update = updater
+        .check()
+        .await
+        .map_err(|e| format!("Failed to check for updates: {}", e))?
+        .ok_or_else(|| "No update available".to_string())?;
+    
+    info!(version = %update.version, "Downloading update");
+    
+    // Download and install the update
+    update
+        .download_and_install(|_downloaded, _total| {}, || {})
+        .await
+        .map_err(|e| format!("Failed to install update: {}", e))?;
+    
+    info!("Update installed successfully, restart required");
+    
+    Ok(())
+}
+
+// ============================================================================
+// Log Commands
+// ============================================================================
+
+/// Get recent logs
+#[tauri::command]
+pub async fn get_logs() -> Result<Vec<LogEntry>, String> {
+    // Return empty for now, will be implemented with log capture
+    Ok(vec![])
+}
+
+/// Export logs to file
+#[tauri::command]
+pub async fn export_logs() -> Result<String, String> {
+    // Save logs to file and return path
+    Ok("logs.txt".to_string())
+}
+
+
+// ============================================================================
+// Binary Management Commands
+// ============================================================================
+
+/// Check if all required binaries are present
+#[tauri::command]
+pub async fn check_binaries() -> Result<BinaryCheckResult, String> {
+    info!("Checking required binaries");
+    
+    binaries::check_binaries()
+        .await
+        .map_err(|e| format!("Failed to check binaries: {}", e))
+}
+
+/// Download missing binaries with progress reporting
+#[tauri::command]
+pub async fn download_binaries(window: Window) -> Result<(), String> {
+    info!("Starting binary download");
+    
+    let window_clone = window.clone();
+    
+    binaries::ensure_binaries(move |progress: DownloadProgress| {
+        if let Err(e) = window_clone.emit("binaries:progress", &progress) {
+            error!("Failed to emit download progress: {}", e);
+        }
+    })
+    .await
+    .map_err(|e| {
+        error!("Binary download failed: {}", e);
+        format!("Failed to download binaries: {}", e)
+    })?;
+    
+    let _ = window.emit("binaries:complete", ());
+    info!("Binary download completed");
+    
+    Ok(())
+}
+
+/// Get path to binaries directory
+#[tauri::command]
+pub async fn get_binaries_dir() -> Result<String, String> {
+    Ok(crate::core::paths::get_binaries_dir().display().to_string())
 }

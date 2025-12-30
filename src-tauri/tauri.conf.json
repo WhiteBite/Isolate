@@ -3,6 +3,14 @@
     "productName": "Isolate",
     "version": "0.1.0",
     "identifier": "com.isolate.app",
+    "plugins": {
+        "updater": {
+            "pubkey": "",
+            "endpoints": [
+                "https://github.com/user/isolate/releases/latest/download/latest.json"
+            ]
+        }
+    },
     "build": {
         "beforeDevCommand": "pnpm dev",
         "devUrl": "http://localhost:1420",

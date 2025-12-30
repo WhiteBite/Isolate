@@ -1,5 +1,6 @@
 //! Core modules for Isolate
 
+pub mod binaries;
 pub mod config;
 pub mod diagnostics;
 pub mod env_info;

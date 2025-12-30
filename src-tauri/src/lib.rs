@@ -1,6 +1,9 @@
 mod commands;
 mod core;
+pub mod state;
+pub mod tray;
 
+use std::sync::Arc;
 use tauri::Manager;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -32,6 +35,25 @@ pub fn run() {
             
             #[cfg(debug_assertions)]
             window.open_devtools();
+            
+            // Initialize AppState asynchronously
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                match state::AppState::new().await {
+                    Ok(app_state) => {
+                        handle.manage(Arc::new(app_state));
+                        tracing::info!("AppState initialized successfully");
+                    }
+                    Err(e) => {
+                        tracing::error!("Failed to initialize AppState: {}", e);
+                    }
+                }
+            });
+            
+            // Create System Tray
+            if let Err(e) = tray::create_tray(app) {
+                tracing::error!("Failed to create system tray: {}", e);
+            }
             
             Ok(())
         })

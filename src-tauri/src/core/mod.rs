@@ -6,6 +6,7 @@ pub mod env_info;
 pub mod errors;
 pub mod models;
 pub mod orchestrator;
+pub mod paths;
 pub mod process_runner;
 pub mod scoring;
 pub mod storage;

@@ -146,14 +146,6 @@ impl Storage {
     // Strategy Cache
     // ========================================================================
 
-    /// Кэшированная стратегия
-    #[derive(Debug, Clone)]
-    pub struct CachedStrategy {
-        pub strategy_id: String,
-        pub score: f64,
-        pub timestamp: i64,
-    }
-
     /// Получает кэшированную стратегию для окружения
     pub fn get_cached_strategy(&self, env_key: &str) -> Result<Option<CachedStrategy>> {
         let conn = self.conn.lock().map_err(|e| {
@@ -369,6 +361,14 @@ impl Storage {
 // ============================================================================
 // Types
 // ============================================================================
+
+/// Кэшированная стратегия
+#[derive(Debug, Clone)]
+pub struct CachedStrategy {
+    pub strategy_id: String,
+    pub score: f64,
+    pub timestamp: i64,
+}
 
 /// Запись истории тестов
 #[derive(Debug, Clone)]

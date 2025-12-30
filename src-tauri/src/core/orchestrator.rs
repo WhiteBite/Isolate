@@ -41,9 +41,10 @@ const ZAPRET_TEST_DELAY_MS: u64 = 2500;
 // ============================================================================
 
 /// Этап оптимизации
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum OptimizationStage {
+    #[default]
     /// Инициализация
     Initializing,
     /// Проверка кэша
@@ -69,7 +70,7 @@ pub enum OptimizationStage {
 }
 
 /// Прогресс оптимизации
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct OptimizationProgress {
     /// Текущий этап
     pub stage: OptimizationStage,

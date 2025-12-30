@@ -4,7 +4,7 @@ use crate::core::{
     models::{AppStatus, DiagnosticResult, Service, Strategy},
     orchestrator::OptimizationProgress,
 };
-use tauri::Window;
+use tauri::{Emitter, Window};
 
 /// Get current application status
 #[tauri::command]

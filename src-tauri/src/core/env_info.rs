@@ -146,36 +146,14 @@ pub async fn get_wifi_ssid() -> Result<Option<String>> {
 /// Check if running with administrator privileges on Windows
 #[cfg(windows)]
 pub fn check_admin_privileges() -> bool {
-    use std::ptr;
-
-    // Use Windows API to check if running as admin
-    unsafe {
-        let mut token_handle: windows_sys::Win32::Foundation::HANDLE = ptr::null_mut();
-        let process = windows_sys::Win32::System::Threading::GetCurrentProcess();
-
-        if windows_sys::Win32::Security::OpenProcessToken(
-            process,
-            windows_sys::Win32::Security::TOKEN_QUERY,
-            &mut token_handle,
-        ) == 0
-        {
-            return false;
-        }
-
-        let mut elevation = windows_sys::Win32::Security::TOKEN_ELEVATION { TokenIsElevated: 0 };
-        let mut size = std::mem::size_of::<windows_sys::Win32::Security::TOKEN_ELEVATION>() as u32;
-
-        let result = windows_sys::Win32::Security::GetTokenInformation(
-            token_handle,
-            windows_sys::Win32::Security::TokenElevation,
-            &mut elevation as *mut _ as *mut _,
-            size,
-            &mut size,
-        );
-
-        windows_sys::Win32::Foundation::CloseHandle(token_handle);
-
-        result != 0 && elevation.TokenIsElevated != 0
+    // Simple admin check via shell command
+    // Returns true if running elevated
+    match std::process::Command::new("net")
+        .args(["session"])
+        .output()
+    {
+        Ok(output) => output.status.success(),
+        Err(_) => false,
     }
 }
 

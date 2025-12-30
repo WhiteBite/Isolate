@@ -1,0 +1,45 @@
+[package]
+name = "isolate"
+version = "0.1.0"
+description = "Automatic DPI bypass tool"
+authors = ["Isolate Team"]
+edition = "2021"
+
+[lib]
+name = "isolate_lib"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-shell = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+tokio = { version = "1", features = ["full"] }
+thiserror = "1"
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+reqwest = { version = "0.12", features = ["json", "socks"] }
+rusqlite = { version = "0.31", features = ["bundled"] }
+tokio-util = "0.7"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.52", features = ["Win32_Foundation", "Win32_Security", "Win32_System_Threading", "Win32_System_Console"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true

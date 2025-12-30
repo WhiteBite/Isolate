@@ -1,0 +1,52 @@
+{
+    "$schema": "https://schema.tauri.app/config/2",
+    "productName": "Isolate",
+    "version": "0.1.0",
+    "identifier": "com.isolate.app",
+    "build": {
+        "beforeDevCommand": "pnpm dev",
+        "devUrl": "http://localhost:1420",
+        "beforeBuildCommand": "pnpm build",
+        "frontendDist": "../build"
+    },
+    "app": {
+        "withGlobalTauri": true,
+        "windows": [
+            {
+                "title": "Isolate",
+                "width": 420,
+                "height": 700,
+                "resizable": true,
+                "fullscreen": false,
+                "decorations": true,
+                "transparent": false,
+                "center": true,
+                "minWidth": 380,
+                "minHeight": 600
+            }
+        ],
+        "trayIcon": {
+            "iconPath": "icons/icon.png",
+            "iconAsTemplate": true
+        },
+        "security": {
+            "csp": null
+        }
+    },
+    "bundle": {
+        "active": true,
+        "targets": "all",
+        "icon": [
+            "icons/32x32.png",
+            "icons/128x128.png",
+            "icons/128x128@2x.png",
+            "icons/icon.icns",
+            "icons/icon.ico"
+        ],
+        "windows": {
+            "certificateThumbprint": null,
+            "digestAlgorithm": "sha256",
+            "timestampUrl": ""
+        }
+    }
+}

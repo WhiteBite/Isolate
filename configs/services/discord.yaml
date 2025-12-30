@@ -1,0 +1,34 @@
+# Discord Service Definition
+id: "discord"
+name: "Discord"
+enabled_by_default: true
+critical: true
+
+tests:
+  - type: https_get
+    url: "https://discord.com/api/v10/gateway"
+    timeout_ms: 5000
+    expected_status: [200]
+    min_body_size: 10
+
+  - type: https_head
+    url: "https://cdn.discordapp.com"
+    timeout_ms: 5000
+
+  - type: tcp_connect
+    host: "discord.com"
+    port: 443
+    timeout_ms: 3000
+
+  - type: tcp_connect
+    host: "gateway.discord.gg"
+    port: 443
+    timeout_ms: 3000
+
+  - type: dns
+    domain: "discord.com"
+    timeout_ms: 3000
+
+  - type: dns
+    domain: "gateway.discord.gg"
+    timeout_ms: 3000

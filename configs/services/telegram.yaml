@@ -1,0 +1,24 @@
+# Telegram Service Definition
+id: "telegram"
+name: "Telegram"
+enabled_by_default: true
+critical: false
+
+tests:
+  - type: tcp_connect
+    host: "telegram.org"
+    port: 443
+    timeout_ms: 3000
+
+  - type: tcp_connect
+    host: "web.telegram.org"
+    port: 443
+    timeout_ms: 3000
+
+  - type: https_head
+    url: "https://telegram.org"
+    timeout_ms: 5000
+
+  - type: dns
+    domain: "telegram.org"
+    timeout_ms: 3000

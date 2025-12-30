@@ -1,0 +1,32 @@
+# YouTube Service Definition
+id: "youtube"
+name: "YouTube"
+enabled_by_default: true
+critical: true
+
+tests:
+  - type: https_head
+    url: "https://www.youtube.com"
+    timeout_ms: 5000
+
+  - type: https_head
+    url: "https://www.googleapis.com"
+    timeout_ms: 5000
+
+  - type: tcp_connect
+    host: "www.youtube.com"
+    port: 443
+    timeout_ms: 3000
+
+  - type: tcp_connect
+    host: "googlevideo.com"
+    port: 443
+    timeout_ms: 3000
+
+  - type: dns
+    domain: "www.youtube.com"
+    timeout_ms: 3000
+
+  - type: dns
+    domain: "googlevideo.com"
+    timeout_ms: 3000

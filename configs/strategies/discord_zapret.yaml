@@ -1,0 +1,49 @@
+# Discord Zapret Strategy - SNI Fragmentation
+id: "zapret_discord_disorder"
+name: "Discord Disorder"
+description: "Фрагментация SNI с перемешиванием пакетов для Discord"
+family: sni_frag
+engine: zapret
+
+mode_capabilities:
+  supports_socks: false
+  supports_global: true
+
+global_template:
+  binary: "binaries/winws.exe"
+  args:
+    - "--wf-tcp=443"
+    - "--wf-udp=443,50000-65535"
+    - "--filter-udp=443"
+    - "--hostlist=hostlists/discord.txt"
+    - "--dpi-desync=fake"
+    - "--dpi-desync-udplen-increment=10"
+    - "--dpi-desync-repeats=6"
+    - "--dpi-desync-udplen-pattern=0xDEADBEEF"
+    - "--dpi-desync-fake-quic=binaries/quic_initial_www_google_com.bin"
+    - "--new"
+    - "--filter-udp=50000-65535"
+    - "--dpi-desync=fake"
+    - "--dpi-desync-any-protocol"
+    - "--dpi-desync-cutoff=d3"
+    - "--dpi-desync-repeats=6"
+    - "--new"
+    - "--filter-tcp=443"
+    - "--hostlist=hostlists/discord.txt"
+    - "--dpi-desync=fake,disorder2"
+    - "--dpi-desync-autottl=2"
+    - "--dpi-desync-fooling=md5sig"
+  env: {}
+  requires_admin: true
+
+requirements:
+  min_rights: "admin"
+  os:
+    - windows
+  binaries:
+    - "binaries/winws.exe"
+    - "binaries/WinDivert64.sys"
+
+weight_hint: 10
+services:
+  - discord

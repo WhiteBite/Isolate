@@ -1,0 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+    font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+    @apply bg-gray-900 text-gray-100 min-h-screen;
+    user-select: none;
+    -webkit-user-select: none;
+}

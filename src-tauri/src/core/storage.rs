@@ -9,6 +9,7 @@ use std::sync::Mutex;
 use tracing::{debug, info};
 
 use crate::core::errors::{IsolateError, Result};
+use crate::core::models::Settings;
 
 // ============================================================================
 // Constants
@@ -140,6 +141,35 @@ impl Storage {
         }
 
         Ok(settings)
+    }
+
+    // ========================================================================
+    // App Settings (typed)
+    // ========================================================================
+
+    /// Получает настройки приложения
+    pub fn get_settings(&self) -> Result<Settings> {
+        let settings: Option<Settings> = self.get_setting(settings_keys::APP_SETTINGS)?;
+        Ok(settings.unwrap_or_default())
+    }
+
+    /// Сохраняет настройки приложения
+    pub fn save_settings(&self, settings: &Settings) -> Result<()> {
+        self.set_setting(settings_keys::APP_SETTINGS, settings)
+    }
+
+    /// Получает состояние включённости сервиса
+    pub fn get_service_enabled(&self, service_id: &str) -> Result<bool> {
+        let key = format!("{}{}", settings_keys::SERVICE_ENABLED_PREFIX, service_id);
+        let enabled: Option<bool> = self.get_setting(&key)?;
+        // По умолчанию сервисы включены
+        Ok(enabled.unwrap_or(true))
+    }
+
+    /// Устанавливает состояние включённости сервиса
+    pub fn set_service_enabled(&self, service_id: &str, enabled: bool) -> Result<()> {
+        let key = format!("{}{}", settings_keys::SERVICE_ENABLED_PREFIX, service_id);
+        self.set_setting(&key, &enabled)
     }
 
     // ========================================================================
@@ -402,6 +432,14 @@ pub mod settings_keys {
     pub const NOTIFICATIONS: &str = "notifications";
     /// Минимизировать в трей
     pub const MINIMIZE_TO_TRAY: &str = "minimize_to_tray";
+    /// Блокировать QUIC
+    pub const BLOCK_QUIC: &str = "block_quic";
+    /// Режим по умолчанию
+    pub const DEFAULT_MODE: &str = "default_mode";
+    /// Настройки приложения (объект)
+    pub const APP_SETTINGS: &str = "app_settings";
+    /// Префикс для состояния сервисов
+    pub const SERVICE_ENABLED_PREFIX: &str = "service_enabled:";
 }
 
 // ============================================================================

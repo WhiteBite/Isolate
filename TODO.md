@@ -1,149 +1,149 @@
 # Isolate — План разработки
 
 ## Фаза 0: Инициализация проекта
-- [ ] **0.1** Инициализировать Git репозиторий
-- [ ] **0.2** Создать `.gitignore` (node_modules, target, thirdparty, бинарники)
-- [ ] **0.3** Инициализировать Tauri 2.0 + SvelteKit проект
-- [ ] **0.4** Настроить TypeScript strict mode
-- [ ] **0.5** Настроить Tailwind CSS
-- [ ] **0.6** Настроить базовую структуру Rust backend
-- [ ] **0.7** Первый коммит с базовой структурой
+- [x] **0.1** Инициализировать Git репозиторий ✅
+- [x] **0.2** Создать `.gitignore` (node_modules, target, thirdparty, бинарники) ✅
+- [x] **0.3** Инициализировать Tauri 2.0 + SvelteKit проект ✅
+- [x] **0.4** Настроить TypeScript strict mode ✅
+- [x] **0.5** Настроить Tailwind CSS ✅
+- [x] **0.6** Настроить базовую структуру Rust backend ✅
+- [x] **0.7** Первый коммит с базовой структурой ✅
 
 ---
 
 ## Фаза 1: Core Backend (Rust) — без GUI
 
 ### 1.1 Модели данных
-- [ ] **1.1.1** Создать `src-tauri/src/core/models.rs` — Strategy, Service, Test, Result
-- [ ] **1.1.2** Создать `src-tauri/src/core/errors.rs` — IsolateError enum
-- [ ] **1.1.3** Создать YAML схемы для стратегий (`configs/strategies/schema.yaml`)
-- [ ] **1.1.4** Создать YAML схемы для сервисов (`configs/services/schema.yaml`)
+- [x] **1.1.1** Создать `src-tauri/src/core/models.rs` — Strategy, Service, Test, Result ✅
+- [x] **1.1.2** Создать `src-tauri/src/core/errors.rs` — IsolateError enum ✅
+- [x] **1.1.3** Создать YAML схемы для стратегий (`configs/strategies/schema.yaml`) ✅
+- [x] **1.1.4** Создать YAML схемы для сервисов (`configs/services/schema.yaml`) ✅
 
 ### 1.2 Config Manager
-- [ ] **1.2.1** Создать `src-tauri/src/core/config.rs` — загрузка YAML конфигов
-- [ ] **1.2.2** Парсинг стратегий из `configs/strategies/*.yaml`
-- [ ] **1.2.3** Парсинг сервисов из `configs/services/*.yaml`
-- [ ] **1.2.4** Валидация конфигов при загрузке
+- [x] **1.2.1** Создать `src-tauri/src/core/config.rs` — загрузка YAML конфигов ✅
+- [x] **1.2.2** Парсинг стратегий из `configs/strategies/*.yaml` ✅
+- [x] **1.2.3** Парсинг сервисов из `configs/services/*.yaml` ✅
+- [x] **1.2.4** Валидация конфигов при загрузке ✅
 
 ### 1.3 Process Runner
-- [ ] **1.3.1** Создать `src-tauri/src/core/process_runner.rs`
-- [ ] **1.3.2** Запуск внешнего процесса с аргументами
-- [ ] **1.3.3** Захват stdout/stderr
-- [ ] **1.3.4** Graceful shutdown (SIGTERM → SIGKILL)
-- [ ] **1.3.5** Таймауты запуска
+- [x] **1.3.1** Создать `src-tauri/src/core/process_runner.rs` ✅
+- [x] **1.3.2** Запуск внешнего процесса с аргументами ✅
+- [x] **1.3.3** Захват stdout/stderr ✅
+- [x] **1.3.4** Graceful shutdown (SIGTERM → SIGKILL) ✅
+- [x] **1.3.5** Таймауты запуска ✅
 
 ### 1.4 Environment Info
-- [ ] **1.4.1** Создать `src-tauri/src/core/env_info.rs`
-- [ ] **1.4.2** Определение ASN провайдера (через IP-API)
-- [ ] **1.4.3** Определение страны
-- [ ] **1.4.4** Получение Wi-Fi SSID (Windows API)
-- [ ] **1.4.5** Проверка прав администратора
+- [x] **1.4.1** Создать `src-tauri/src/core/env_info.rs` ✅
+- [x] **1.4.2** Определение ASN провайдера (через IP-API) ✅
+- [x] **1.4.3** Определение страны ✅
+- [x] **1.4.4** Получение Wi-Fi SSID (Windows API) ✅
+- [x] **1.4.5** Проверка прав администратора ✅
 
 ### 1.5 Diagnostics Module
-- [ ] **1.5.1** Создать `src-tauri/src/core/diagnostics.rs`
-- [ ] **1.5.2** DNS resolve тест
-- [ ] **1.5.3** TCP connect тест (порт 443)
-- [ ] **1.5.4** TLS handshake тест
-- [ ] **1.5.5** Классификация типа блокировки (DnsBlock, SniTlsBlock, IpBlock, NoBlock)
-- [ ] **1.5.6** Формирование DpiProfile
+- [x] **1.5.1** Создать `src-tauri/src/core/diagnostics.rs` ✅
+- [x] **1.5.2** DNS resolve тест ✅
+- [x] **1.5.3** TCP connect тест (порт 443) ✅
+- [x] **1.5.4** TLS handshake тест ✅
+- [x] **1.5.5** Классификация типа блокировки (DnsBlock, SniTlsBlock, IpBlock, NoBlock) ✅
+- [x] **1.5.6** Формирование DpiProfile ✅
 
 ### 1.6 Test Engine
-- [ ] **1.6.1** Создать `src-tauri/src/core/test_engine.rs`
-- [ ] **1.6.2** HTTP GET/HEAD тест (reqwest)
-- [ ] **1.6.3** WebSocket тест (tokio-tungstenite)
-- [ ] **1.6.4** TCP connect тест
-- [ ] **1.6.5** Поддержка SOCKS5 прокси для всех тестов
-- [ ] **1.6.6** Параллельное выполнение тестов (tokio::join)
-- [ ] **1.6.7** Агрегация результатов → ServiceTestSummary
+- [x] **1.6.1** Создать `src-tauri/src/core/test_engine.rs` ✅
+- [x] **1.6.2** HTTP GET/HEAD тест (reqwest) ✅
+- [x] **1.6.3** WebSocket тест (tokio-tungstenite) ✅
+- [x] **1.6.4** TCP connect тест ✅
+- [x] **1.6.5** Поддержка SOCKS5 прокси для всех тестов ✅
+- [x] **1.6.6** Параллельное выполнение тестов (tokio::join) ✅
+- [x] **1.6.7** Агрегация результатов → ServiceTestSummary ✅
 
 ### 1.7 Strategy Engine
-- [ ] **1.7.1** Создать `src-tauri/src/core/strategy_engine.rs`
-- [ ] **1.7.2** SOCKS-режим: запуск стратегии на локальном порту
-- [ ] **1.7.3** GLOBAL-режим: запуск стратегии глобально
-- [ ] **1.7.4** Управление портами (выделение, освобождение)
-- [ ] **1.7.5** Последовательный запуск driver_exclusive стратегий
-- [ ] **1.7.6** Параллельный запуск parallel_safe стратегий
+- [x] **1.7.1** Создать `src-tauri/src/core/strategy_engine.rs` ✅
+- [x] **1.7.2** SOCKS-режим: запуск стратегии на локальном порту ✅
+- [x] **1.7.3** GLOBAL-режим: запуск стратегии глобально ✅
+- [x] **1.7.4** Управление портами (выделение, освобождение) ✅
+- [x] **1.7.5** Последовательный запуск driver_exclusive стратегий ✅
+- [x] **1.7.6** Параллельный запуск parallel_safe стратегий ✅
 
 ### 1.8 Scoring System
-- [ ] **1.8.1** Создать `src-tauri/src/core/scoring.rs`
-- [ ] **1.8.2** Расчёт success_rate
-- [ ] **1.8.3** Расчёт latency_avg и jitter
-- [ ] **1.8.4** Формула итогового score
-- [ ] **1.8.5** Фильтрация по порогу (success_rate >= 0.8)
+- [x] **1.8.1** Создать `src-tauri/src/core/scoring.rs` ✅
+- [x] **1.8.2** Расчёт success_rate ✅
+- [x] **1.8.3** Расчёт latency_avg и jitter ✅
+- [x] **1.8.4** Формула итогового score ✅
+- [x] **1.8.5** Фильтрация по порогу (success_rate >= 0.8) ✅
 
 ### 1.9 Storage
-- [ ] **1.9.1** Создать `src-tauri/src/core/storage.rs`
-- [ ] **1.9.2** SQLite для настроек пользователя
-- [ ] **1.9.3** Кэш стратегий (env_key → strategy_id)
-- [ ] **1.9.4** CRUD операции для настроек
+- [x] **1.9.1** Создать `src-tauri/src/core/storage.rs` ✅
+- [x] **1.9.2** SQLite для настроек пользователя ✅
+- [x] **1.9.3** Кэш стратегий (env_key → strategy_id) ✅
+- [x] **1.9.4** CRUD операции для настроек ✅
 
 ### 1.10 Orchestrator
-- [ ] **1.10.1** Создать `src-tauri/src/core/orchestrator.rs`
-- [ ] **1.10.2** Шаг 1: Проверка кэша
-- [ ] **1.10.3** Шаг 2: DPI-диагностика
-- [ ] **1.10.4** Шаг 3: Выбор кандидатов
-- [ ] **1.10.5** Шаг 4: Параллельные SOCKS-тесты (VLESS)
-- [ ] **1.10.6** Шаг 4b: Последовательные driver-тесты (Zapret)
-- [ ] **1.10.7** Шаг 5: Выбор лучшей стратегии
-- [ ] **1.10.8** Шаг 6: Применение в GLOBAL-режиме
-- [ ] **1.10.9** Event-based progress reporting
+- [x] **1.10.1** Создать `src-tauri/src/core/orchestrator.rs` ✅
+- [x] **1.10.2** Шаг 1: Проверка кэша ✅
+- [x] **1.10.3** Шаг 2: DPI-диагностика ✅
+- [x] **1.10.4** Шаг 3: Выбор кандидатов ✅
+- [x] **1.10.5** Шаг 4: Параллельные SOCKS-тесты (VLESS) ✅
+- [x] **1.10.6** Шаг 4b: Последовательные driver-тесты (Zapret) ✅
+- [x] **1.10.7** Шаг 5: Выбор лучшей стратегии ✅
+- [x] **1.10.8** Шаг 6: Применение в GLOBAL-режиме ✅
+- [x] **1.10.9** Event-based progress reporting ✅
 
 ---
 
 ## Фаза 2: Tauri Integration
 
 ### 2.1 Tauri Commands
-- [ ] **2.1.1** Создать `src-tauri/src/commands/mod.rs`
-- [ ] **2.1.2** `get_strategies` — список стратегий
-- [ ] **2.1.3** `get_services` — список сервисов
-- [ ] **2.1.4** `run_optimization` — запуск оптимизации
-- [ ] **2.1.5** `cancel_optimization` — отмена
-- [ ] **2.1.6** `apply_strategy` — применить стратегию
-- [ ] **2.1.7** `stop_strategy` — остановить текущую
-- [ ] **2.1.8** `get_status` — текущий статус
-- [ ] **2.1.9** `diagnose` — запуск диагностики
-- [ ] **2.1.10** `panic_reset` — аварийный сброс
+- [x] **2.1.1** Создать `src-tauri/src/commands/mod.rs` ✅
+- [x] **2.1.2** `get_strategies` — список стратегий ✅
+- [x] **2.1.3** `get_services` — список сервисов ✅
+- [x] **2.1.4** `run_optimization` — запуск оптимизации ✅
+- [x] **2.1.5** `cancel_optimization` — отмена ✅
+- [x] **2.1.6** `apply_strategy` — применить стратегию ✅
+- [x] **2.1.7** `stop_strategy` — остановить текущую ✅
+- [x] **2.1.8** `get_status` — текущий статус ✅
+- [x] **2.1.9** `diagnose` — запуск диагностики ✅
+- [x] **2.1.10** `panic_reset` — аварийный сброс ✅
 
 ### 2.2 Tauri Events
-- [ ] **2.2.1** `optimization:progress` — прогресс оптимизации
-- [ ] **2.2.2** `optimization:complete` — завершение
-- [ ] **2.2.3** `strategy:status` — изменение статуса стратегии
-- [ ] **2.2.4** `error` — ошибки
+- [x] **2.2.1** `optimization:progress` — прогресс оптимизации ✅
+- [x] **2.2.2** `optimization:complete` — завершение ✅
+- [x] **2.2.3** `strategy:status` — изменение статуса стратегии ✅
+- [x] **2.2.4** `error` — ошибки ✅
 
 ### 2.3 System Tray
-- [ ] **2.3.1** Настроить system tray в Tauri
-- [ ] **2.3.2** Иконка статуса (вкл/выкл)
-- [ ] **2.3.3** Контекстное меню (Open, Optimize, Toggle, Exit)
+- [x] **2.3.1** Настроить system tray в Tauri ✅
+- [x] **2.3.2** Иконка статуса (вкл/выкл) ✅
+- [x] **2.3.3** Контекстное меню (Open, Optimize, Toggle, Exit) ✅
 
 ---
 
 ## Фаза 3: Frontend (SvelteKit)
 
 ### 3.1 Базовая структура
-- [ ] **3.1.1** Layout с навигацией
-- [ ] **3.1.2** Svelte stores для состояния
-- [ ] **3.1.3** Tauri API wrapper (`src/lib/tauri.ts`)
-- [ ] **3.1.4** Типы TypeScript (`src/lib/types.ts`)
+- [x] **3.1.1** Layout с навигацией ✅
+- [x] **3.1.2** Svelte stores для состояния ✅
+- [x] **3.1.3** Tauri API wrapper (`src/lib/api.ts`) ✅
+- [x] **3.1.4** Типы TypeScript (`src/lib/stores.ts`) ✅
 
 ### 3.2 Главный экран
-- [ ] **3.2.1** Компонент статуса (вкл/выкл, текущая стратегия)
-- [ ] **3.2.2** Кнопка "Оптимизировать"
-- [ ] **3.2.3** Список сервисов со статусами (зелёный/красный)
-- [ ] **3.2.4** Quick actions (Toggle, Panic Reset)
+- [x] **3.2.1** Компонент статуса (вкл/выкл, текущая стратегия) ✅
+- [x] **3.2.2** Кнопка "Оптимизировать" ✅
+- [x] **3.2.3** Список сервисов со статусами (зелёный/красный) ✅
+- [x] **3.2.4** Quick actions (Toggle, Panic Reset) ✅
 
 ### 3.3 Экран оптимизации
-- [ ] **3.3.1** Progress bar
-- [ ] **3.3.2** Шаги с анимацией (Диагностика → Тестирование → Применение)
-- [ ] **3.3.3** Лог текущих действий
-- [ ] **3.3.4** Кнопка отмены
-- [ ] **3.3.5** Результат (успех/ошибка)
+- [x] **3.3.1** Progress bar ✅
+- [x] **3.3.2** Шаги с анимацией (Диагностика → Тестирование → Применение) ✅
+- [x] **3.3.3** Лог текущих действий ✅
+- [x] **3.3.4** Кнопка отмены ✅
+- [x] **3.3.5** Результат (успех/ошибка) ✅
 
 ### 3.4 Настройки
-- [ ] **3.4.1** Страница настроек
-- [ ] **3.4.2** Автозапуск при старте Windows
-- [ ] **3.4.3** Автооптимизация при запуске
-- [ ] **3.4.4** Выбор сервисов (критичные/некритичные)
-- [ ] **3.4.5** Block QUIC toggle
+- [x] **3.4.1** Страница настроек ✅
+- [x] **3.4.2** Автозапуск при старте Windows ✅
+- [x] **3.4.3** Автооптимизация при запуске ✅
+- [x] **3.4.4** Выбор сервисов (критичные/некритичные) ✅
+- [x] **3.4.5** Block QUIC toggle ✅
 - [ ] **3.4.6** Телеметрия toggle
 - [ ] **3.4.7** VLESS конфигурация (импорт vless://)
 
@@ -186,15 +186,15 @@
 - [ ] **5.1.5** Silent mode (--silent flag)
 
 ### 5.2 Телеметрия (opt-in)
-- [ ] **5.2.1** Создать `src-tauri/src/core/telemetry.rs`
-- [ ] **5.2.2** Анонимный payload (ASN, strategy_id, success_rate)
-- [ ] **5.2.3** HTTP endpoint для отправки
+- [x] **5.2.1** Создать `src-tauri/src/core/telemetry.rs` ✅
+- [x] **5.2.2** Анонимный payload (ASN, strategy_id, success_rate) ✅
+- [x] **5.2.3** HTTP endpoint для отправки ✅
 - [ ] **5.2.4** UI для включения/отключения
 
 ### 5.3 Сборка и релиз
-- [ ] **5.3.1** Настроить Tauri bundler для Windows
+- [x] **5.3.1** Настроить Tauri bundler для Windows ✅
 - [ ] **5.3.2** Подписание бинарников (опционально)
-- [ ] **5.3.3** GitHub Actions для CI/CD
+- [x] **5.3.3** GitHub Actions для CI/CD ✅
 - [ ] **5.3.4** Создать installer (NSIS/WiX)
 - [ ] **5.3.5** Автообновление приложения
 
@@ -224,6 +224,6 @@ Tauri Commands, Events, System Tray, SvelteKit UI
 
 ## Текущий статус
 
-**Фаза:** 0 — Инициализация
-**Прогресс:** 0%
-**Следующая задача:** 0.1 — Инициализировать Git
+**Фаза:** 1-3 — Core Backend, Tauri Integration, Frontend (завершены), 4-5 — в процессе
+**Прогресс:** ~85%
+**Следующая задача:** 4.1 — Интеграция реальных бинарников (winws, sing-box)

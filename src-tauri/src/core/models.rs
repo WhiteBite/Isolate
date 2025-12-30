@@ -234,6 +234,37 @@ pub struct AppStatus {
     pub services_status: std::collections::HashMap<String, bool>,
 }
 
+/// User settings
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Settings {
+    pub auto_start: bool,
+    pub auto_apply: bool,
+    pub minimize_to_tray: bool,
+    pub block_quic: bool,
+    pub default_mode: String, // "turbo" or "deep"
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            auto_start: false,
+            auto_apply: false,
+            minimize_to_tray: true,
+            block_quic: true,
+            default_mode: "turbo".to_string(),
+        }
+    }
+}
+
+/// Service with enabled state for frontend
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServiceWithState {
+    pub id: String,
+    pub name: String,
+    pub enabled: bool,
+    pub critical: bool,
+}
+
 /// Environment information
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct EnvInfo {

@@ -29,6 +29,12 @@ pub fn run() {
             commands::stop_strategy,
             commands::diagnose,
             commands::panic_reset,
+            // Settings commands
+            commands::get_settings,
+            commands::save_settings,
+            commands::get_services_settings,
+            commands::toggle_service,
+            commands::get_app_version,
         ])
         .setup(|app| {
             let window = app.get_webview_window("main").unwrap();

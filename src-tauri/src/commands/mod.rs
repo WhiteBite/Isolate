@@ -5,7 +5,7 @@ use tauri::{Emitter, State, Window};
 use tokio::process::Command;
 use tracing::{error, info, warn};
 
-use crate::core::models::{AppStatus, DiagnosticResult, Service, Strategy};
+use crate::core::models::{AppStatus, DiagnosticResult, Service, ServiceWithState, Settings, Strategy};
 use crate::state::AppState;
 
 /// Get current application status
@@ -209,4 +209,86 @@ pub async fn panic_reset(state: State<'_, Arc<AppState>>) -> Result<(), String> 
     }
     
     Ok(())
+}
+
+// ============================================================================
+// Settings Commands
+// ============================================================================
+
+/// Get user settings
+#[tauri::command]
+pub async fn get_settings(state: State<'_, Arc<AppState>>) -> Result<Settings, String> {
+    info!("Getting user settings");
+    
+    state
+        .storage
+        .get_settings()
+        .map_err(|e| format!("Failed to get settings: {}", e))
+}
+
+/// Save user settings
+#[tauri::command]
+pub async fn save_settings(
+    state: State<'_, Arc<AppState>>,
+    settings: Settings,
+) -> Result<(), String> {
+    info!("Saving user settings");
+    
+    state
+        .storage
+        .save_settings(&settings)
+        .map_err(|e| format!("Failed to save settings: {}", e))
+}
+
+/// Get services with their enabled/disabled state
+#[tauri::command]
+pub async fn get_services_settings(
+    state: State<'_, Arc<AppState>>,
+) -> Result<Vec<ServiceWithState>, String> {
+    info!("Loading services with settings");
+    
+    let services_map = state
+        .config_manager
+        .load_services()
+        .await
+        .map_err(|e| format!("Failed to load services: {}", e))?;
+    
+    let mut services_with_state = Vec::new();
+    
+    for service in services_map.into_values() {
+        let enabled = state
+            .storage
+            .get_service_enabled(&service.id)
+            .unwrap_or(service.enabled_by_default);
+        
+        services_with_state.push(ServiceWithState {
+            id: service.id,
+            name: service.name,
+            enabled,
+            critical: service.critical,
+        });
+    }
+    
+    Ok(services_with_state)
+}
+
+/// Toggle a service's enabled state
+#[tauri::command]
+pub async fn toggle_service(
+    state: State<'_, Arc<AppState>>,
+    service_id: String,
+    enabled: bool,
+) -> Result<(), String> {
+    info!(service_id = %service_id, enabled, "Toggling service");
+    
+    state
+        .storage
+        .set_service_enabled(&service_id, enabled)
+        .map_err(|e| format!("Failed to toggle service: {}", e))
+}
+
+/// Get app version from Cargo.toml
+#[tauri::command]
+pub async fn get_app_version() -> Result<String, String> {
+    Ok(env!("CARGO_PKG_VERSION").to_string())
 }

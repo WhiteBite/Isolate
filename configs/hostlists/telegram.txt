@@ -1,0 +1,15 @@
+# Telegram domains
+
+t.me
+telegram.me
+telegram.org
+telegram.dog
+telegra.ph
+telesco.pe
+tdesktop.com
+tg.dev
+tx.me
+web.telegram.org
+desktop.telegram.org
+core.telegram.org
+my.telegram.org

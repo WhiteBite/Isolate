@@ -117,3 +117,71 @@ export function onStrategyDegraded(
         callback();
     });
 }
+
+// VLESS Types
+export interface VlessConfig {
+    id: string;
+    name: string;
+    server: string;
+    port: number;
+    uuid: string;
+    flow: string | null;
+    security: string;
+    sni: string | null;
+    active: boolean;
+}
+
+// VLESS API Functions
+export async function importVless(url: string): Promise<VlessConfig> {
+    return invoke('import_vless', { url });
+}
+
+export async function getVlessConfigs(): Promise<VlessConfig[]> {
+    return invoke('get_vless_configs');
+}
+
+export async function deleteVlessConfig(id: string): Promise<void> {
+    return invoke('delete_vless_config', { id });
+}
+
+export async function toggleVlessConfig(id: string, active: boolean): Promise<void> {
+    return invoke('toggle_vless_config', { id, active });
+}
+
+// ============================================================================
+// QUIC Blocking API
+// ============================================================================
+
+/**
+ * Enable QUIC blocking via Windows Firewall.
+ * Blocks UDP port 443 to force browsers to use TCP/TLS.
+ * Requires administrator privileges.
+ */
+export async function enableQuicBlock(): Promise<void> {
+    return invoke('enable_quic_block');
+}
+
+/**
+ * Disable QUIC blocking.
+ * Removes the firewall rule that blocks QUIC protocol.
+ * Requires administrator privileges.
+ */
+export async function disableQuicBlock(): Promise<void> {
+    return invoke('disable_quic_block');
+}
+
+/**
+ * Check if QUIC is currently blocked.
+ * @returns true if the QUIC blocking firewall rule exists
+ */
+export async function isQuicBlocked(): Promise<boolean> {
+    return invoke('is_quic_blocked');
+}
+
+/**
+ * Check if the application is running with administrator privileges.
+ * @returns true if running as admin
+ */
+export async function isAdmin(): Promise<boolean> {
+    return invoke('is_admin');
+}

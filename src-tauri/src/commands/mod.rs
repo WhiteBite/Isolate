@@ -7,7 +7,8 @@ use tokio::process::Command;
 use tracing::{error, info, warn};
 
 use crate::core::binaries::{self, BinaryCheckResult, DownloadProgress};
-use crate::core::models::{AppStatus, DiagnosticResult, LogEntry, Service, ServiceWithState, Settings, Strategy, UpdateInfo};
+use crate::core::hostlists::{self, Hostlist};
+use crate::core::models::{AppStatus, DiagnosticResult, LogEntry, Service, ServiceWithState, Settings, Strategy, UpdateInfo, VlessConfig};
 use crate::state::AppState;
 
 /// Get current application status
@@ -448,4 +449,275 @@ pub async fn download_binaries(window: Window) -> Result<(), String> {
 #[tauri::command]
 pub async fn get_binaries_dir() -> Result<String, String> {
     Ok(crate::core::paths::get_binaries_dir().display().to_string())
+}
+
+// ============================================================================
+// QUIC Blocking Commands
+// ============================================================================
+
+/// Enable QUIC blocking via Windows Firewall
+///
+/// Adds a firewall rule to block UDP port 443 (QUIC protocol),
+/// forcing browsers to fall back to TCP/TLS connections.
+/// Requires administrator privileges.
+#[tauri::command]
+pub async fn enable_quic_block() -> Result<(), String> {
+    info!("Command: enable_quic_block");
+    
+    crate::core::quic_blocker::enable_quic_block()
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Disable QUIC blocking
+///
+/// Removes the firewall rule that blocks QUIC protocol.
+/// Requires administrator privileges.
+#[tauri::command]
+pub async fn disable_quic_block() -> Result<(), String> {
+    info!("Command: disable_quic_block");
+    
+    crate::core::quic_blocker::disable_quic_block()
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Check if QUIC is currently blocked
+///
+/// Returns true if the QUIC blocking firewall rule exists.
+#[tauri::command]
+pub async fn is_quic_blocked() -> Result<bool, String> {
+    info!("Command: is_quic_blocked");
+    
+    crate::core::quic_blocker::is_quic_blocked()
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Check if running with administrator privileges
+#[tauri::command]
+pub async fn is_admin() -> Result<bool, String> {
+    Ok(crate::core::quic_blocker::is_admin())
+}
+
+// ============================================================================
+// VLESS Commands
+// ============================================================================
+
+/// Storage key for VLESS configs
+const VLESS_CONFIGS_KEY: &str = "vless_configs";
+
+/// Import VLESS config from vless:// URL
+#[tauri::command]
+pub async fn import_vless(
+    state: State<'_, Arc<AppState>>,
+    url: String,
+) -> Result<VlessConfig, String> {
+    info!("Importing VLESS config from URL");
+
+    // Parse the URL
+    let config = VlessConfig::from_url(&url)?;
+
+    // Load existing configs
+    let mut configs: Vec<VlessConfig> = state
+        .storage
+        .get_setting(VLESS_CONFIGS_KEY)
+        .map_err(|e| format!("Failed to load configs: {}", e))?
+        .unwrap_or_default();
+
+    // Check for duplicate UUID
+    if configs.iter().any(|c| c.uuid == config.uuid && c.server == config.server) {
+        return Err("Config with this UUID and server already exists".to_string());
+    }
+
+    // Add new config
+    configs.push(config.clone());
+
+    // Save
+    state
+        .storage
+        .set_setting(VLESS_CONFIGS_KEY, &configs)
+        .map_err(|e| format!("Failed to save config: {}", e))?;
+
+    info!(id = %config.id, name = %config.name, "VLESS config imported");
+    Ok(config)
+}
+
+/// Get all saved VLESS configs
+#[tauri::command]
+pub async fn get_vless_configs(
+    state: State<'_, Arc<AppState>>,
+) -> Result<Vec<VlessConfig>, String> {
+    info!("Loading VLESS configs");
+
+    let configs: Vec<VlessConfig> = state
+        .storage
+        .get_setting(VLESS_CONFIGS_KEY)
+        .map_err(|e| format!("Failed to load configs: {}", e))?
+        .unwrap_or_default();
+
+    Ok(configs)
+}
+
+/// Delete VLESS config by ID
+#[tauri::command]
+pub async fn delete_vless_config(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+) -> Result<(), String> {
+    info!(id = %id, "Deleting VLESS config");
+
+    // Load existing configs
+    let mut configs: Vec<VlessConfig> = state
+        .storage
+        .get_setting(VLESS_CONFIGS_KEY)
+        .map_err(|e| format!("Failed to load configs: {}", e))?
+        .unwrap_or_default();
+
+    // Find and remove
+    let initial_len = configs.len();
+    configs.retain(|c| c.id != id);
+
+    if configs.len() == initial_len {
+        return Err("Config not found".to_string());
+    }
+
+    // Save
+    state
+        .storage
+        .set_setting(VLESS_CONFIGS_KEY, &configs)
+        .map_err(|e| format!("Failed to save configs: {}", e))?;
+
+    info!(id = %id, "VLESS config deleted");
+    Ok(())
+}
+
+/// Toggle VLESS config active state
+#[tauri::command]
+pub async fn toggle_vless_config(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+    active: bool,
+) -> Result<(), String> {
+    info!(id = %id, active, "Toggling VLESS config");
+
+    // Load existing configs
+    let mut configs: Vec<VlessConfig> = state
+        .storage
+        .get_setting(VLESS_CONFIGS_KEY)
+        .map_err(|e| format!("Failed to load configs: {}", e))?
+        .unwrap_or_default();
+
+    // Find and update
+    let mut found = false;
+    for config in &mut configs {
+        if config.id == id {
+            config.active = active;
+            found = true;
+        } else if active {
+            // Deactivate other configs when activating one
+            config.active = false;
+        }
+    }
+
+    if !found {
+        return Err("Config not found".to_string());
+    }
+
+    // Save
+    state
+        .storage
+        .set_setting(VLESS_CONFIGS_KEY, &configs)
+        .map_err(|e| format!("Failed to save configs: {}", e))?;
+
+    Ok(())
+}
+
+// ============================================================================
+// Hostlist Management Commands
+// ============================================================================
+
+/// Get all available hostlists
+#[tauri::command]
+pub async fn get_hostlists() -> Result<Vec<Hostlist>, String> {
+    info!("Loading all hostlists");
+
+    hostlists::get_all_hostlists()
+        .await
+        .map_err(|e| format!("Failed to load hostlists: {}", e))
+}
+
+/// Get a specific hostlist by ID
+#[tauri::command]
+pub async fn get_hostlist(id: String) -> Result<Hostlist, String> {
+    info!(id = %id, "Loading hostlist");
+
+    hostlists::load_hostlist(&id)
+        .await
+        .map_err(|e| format!("Failed to load hostlist: {}", e))
+}
+
+/// Add domain to a hostlist
+#[tauri::command]
+pub async fn add_hostlist_domain(hostlist_id: String, domain: String) -> Result<(), String> {
+    info!(hostlist_id = %hostlist_id, domain = %domain, "Adding domain to hostlist");
+
+    hostlists::add_domain(&hostlist_id, &domain)
+        .await
+        .map_err(|e| format!("Failed to add domain: {}", e))
+}
+
+/// Remove domain from a hostlist
+#[tauri::command]
+pub async fn remove_hostlist_domain(hostlist_id: String, domain: String) -> Result<(), String> {
+    info!(hostlist_id = %hostlist_id, domain = %domain, "Removing domain from hostlist");
+
+    hostlists::remove_domain(&hostlist_id, &domain)
+        .await
+        .map_err(|e| format!("Failed to remove domain: {}", e))
+}
+
+/// Create a new hostlist
+#[tauri::command]
+pub async fn create_hostlist(id: String, name: String) -> Result<Hostlist, String> {
+    info!(id = %id, name = %name, "Creating new hostlist");
+
+    hostlists::create_hostlist(&id, &name)
+        .await
+        .map_err(|e| format!("Failed to create hostlist: {}", e))
+}
+
+/// Delete a hostlist
+#[tauri::command]
+pub async fn delete_hostlist(id: String) -> Result<(), String> {
+    info!(id = %id, "Deleting hostlist");
+
+    hostlists::delete_hostlist(&id)
+        .await
+        .map_err(|e| format!("Failed to delete hostlist: {}", e))
+}
+
+/// Update hostlist from remote URL
+#[tauri::command]
+pub async fn update_hostlist_from_url(id: String, url: String) -> Result<Hostlist, String> {
+    info!(id = %id, url = %url, "Updating hostlist from URL");
+
+    hostlists::update_hostlist(&id, &url)
+        .await
+        .map_err(|e| format!("Failed to update hostlist: {}", e))?;
+
+    // Return updated hostlist
+    hostlists::load_hostlist(&id)
+        .await
+        .map_err(|e| format!("Failed to load updated hostlist: {}", e))
+}
+
+/// Save hostlist with new domains
+#[tauri::command]
+pub async fn save_hostlist(hostlist: Hostlist) -> Result<(), String> {
+    info!(id = %hostlist.id, domain_count = hostlist.domains.len(), "Saving hostlist");
+
+    hostlists::save_hostlist(&hostlist)
+        .await
+        .map_err(|e| format!("Failed to save hostlist: {}", e))
 }

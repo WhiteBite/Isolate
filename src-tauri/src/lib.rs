@@ -45,6 +45,29 @@ pub fn run() {
             // Log commands
             commands::get_logs,
             commands::export_logs,
+            // VLESS commands
+            commands::import_vless,
+            commands::get_vless_configs,
+            commands::delete_vless_config,
+            commands::toggle_vless_config,
+            // Binary commands
+            commands::check_binaries,
+            commands::download_binaries,
+            commands::get_binaries_dir,
+            // QUIC blocking commands
+            commands::enable_quic_block,
+            commands::disable_quic_block,
+            commands::is_quic_blocked,
+            commands::is_admin,
+            // Hostlist commands
+            commands::get_hostlists,
+            commands::get_hostlist,
+            commands::add_hostlist_domain,
+            commands::remove_hostlist_domain,
+            commands::create_hostlist,
+            commands::delete_hostlist,
+            commands::update_hostlist_from_url,
+            commands::save_hostlist,
         ])
         .setup(|app| {
             let window = app.get_webview_window("main").unwrap();

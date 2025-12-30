@@ -31,6 +31,9 @@ futures = "0.3.31"
 sha2 = "0.10"
 zip = "2.1"
 tauri-plugin-updater = "2"
+urlencoding = "2"
+uuid = { version = "1", features = ["v4"] }
+chrono = { version = "0.4.42", features = ["serde"] }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.52", features = ["Win32_Foundation", "Win32_Security", "Win32_System_Threading", "Win32_System_Console"] }

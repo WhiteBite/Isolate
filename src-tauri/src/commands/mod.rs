@@ -1440,6 +1440,30 @@ pub async fn get_tray_state() -> Result<String, String> {
     Ok(state_str.to_string())
 }
 
+/// Update tray TUN mode status
+#[tauri::command]
+pub async fn update_tray_tun_status(app: AppHandle, is_tun: bool) -> Result<(), String> {
+    info!(is_tun, "Updating tray TUN status");
+    crate::tray::update_tray_tun_status(&app, is_tun);
+    Ok(())
+}
+
+/// Update tray System Proxy status
+#[tauri::command]
+pub async fn update_tray_proxy_status(app: AppHandle, is_proxy: bool) -> Result<(), String> {
+    info!(is_proxy, "Updating tray System Proxy status");
+    crate::tray::update_tray_proxy_status(&app, is_proxy);
+    Ok(())
+}
+
+/// Rebuild tray menu (force refresh)
+#[tauri::command]
+pub async fn rebuild_tray_menu(app: AppHandle) -> Result<(), String> {
+    info!("Rebuilding tray menu");
+    crate::tray::rebuild_tray_menu(&app);
+    Ok(())
+}
+
 /// Test progress event payload
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct TestProgress {
@@ -1913,4 +1937,194 @@ pub async fn is_system_proxy_set() -> Result<bool, String> {
     crate::core::system_proxy::is_system_proxy_set()
         .await
         .map_err(|e| format!("Failed to check system proxy: {}", e))
+}
+
+// ============================================================================
+// Monitor Commands
+// ============================================================================
+
+// Types HealthCheckResult, DegradationEvent, RecoveryEvent are used internally
+// by the monitor module for emitting events to frontend
+
+/// Start strategy health monitoring
+///
+/// Begins periodic health checks of the active strategy.
+/// Emits events: monitor:health_check, strategy:degraded, strategy:recovered
+#[tauri::command]
+pub async fn start_monitor(
+    app: AppHandle,
+    state: State<'_, Arc<AppState>>,
+) -> Result<(), String> {
+    info!("Starting strategy monitor");
+    
+    state.monitor
+        .start(app)
+        .await
+        .map_err(|e| format!("Failed to start monitor: {}", e))
+}
+
+/// Stop strategy health monitoring
+#[tauri::command]
+pub async fn stop_monitor(
+    state: State<'_, Arc<AppState>>,
+) -> Result<(), String> {
+    info!("Stopping strategy monitor");
+    state.monitor.stop();
+    Ok(())
+}
+
+/// Check if monitor is running
+#[tauri::command]
+pub async fn is_monitor_running(
+    state: State<'_, Arc<AppState>>,
+) -> Result<bool, String> {
+    Ok(state.monitor.is_running())
+}
+
+/// Check if strategy is degraded
+#[tauri::command]
+pub async fn is_strategy_degraded(
+    state: State<'_, Arc<AppState>>,
+) -> Result<bool, String> {
+    Ok(state.monitor.is_degraded())
+}
+
+/// Perform manual health check
+#[tauri::command]
+pub async fn check_strategy_health(
+    state: State<'_, Arc<AppState>>,
+) -> Result<bool, String> {
+    state.monitor
+        .check_strategy_health()
+        .await
+        .map_err(|e| format!("Health check failed: {}", e))
+}
+
+/// Set monitor test URLs
+#[tauri::command]
+pub async fn set_monitor_urls(
+    state: State<'_, Arc<AppState>>,
+    urls: Vec<String>,
+) -> Result<(), String> {
+    info!(count = urls.len(), "Setting monitor test URLs");
+    state.monitor.set_test_urls(urls).await;
+    Ok(())
+}
+
+/// Enable/disable auto-restart on degradation
+#[tauri::command]
+pub async fn set_monitor_auto_restart(
+    state: State<'_, Arc<AppState>>,
+    enabled: bool,
+) -> Result<(), String> {
+    info!(enabled, "Setting monitor auto-restart");
+    state.monitor.set_auto_restart(enabled);
+    Ok(())
+}
+
+// ============================================================================
+// Telemetry Commands
+// ============================================================================
+
+/// Enable or disable telemetry (opt-in)
+#[tauri::command]
+pub async fn set_telemetry_enabled(
+    state: State<'_, Arc<AppState>>,
+    enabled: bool,
+) -> Result<(), String> {
+    info!(enabled, "Setting telemetry enabled");
+    state.telemetry.set_enabled(enabled);
+    Ok(())
+}
+
+/// Check if telemetry is enabled
+#[tauri::command]
+pub async fn is_telemetry_enabled(
+    state: State<'_, Arc<AppState>>,
+) -> Result<bool, String> {
+    Ok(state.telemetry.is_enabled())
+}
+
+/// Get number of pending telemetry events
+#[tauri::command]
+pub async fn get_telemetry_pending_count(
+    state: State<'_, Arc<AppState>>,
+) -> Result<usize, String> {
+    Ok(state.telemetry.pending_events().await)
+}
+
+/// Manually flush telemetry events
+#[tauri::command]
+pub async fn flush_telemetry(
+    state: State<'_, Arc<AppState>>,
+) -> Result<(), String> {
+    info!("Manually flushing telemetry");
+    state.telemetry
+        .flush()
+        .await
+        .map_err(|e| format!("Failed to flush telemetry: {}", e))
+}
+
+/// Clear pending telemetry events without sending
+#[tauri::command]
+pub async fn clear_telemetry(
+    state: State<'_, Arc<AppState>>,
+) -> Result<(), String> {
+    info!("Clearing telemetry events");
+    state.telemetry.clear().await;
+    Ok(())
+}
+
+/// Report optimization result to telemetry
+#[tauri::command]
+pub async fn report_optimization_telemetry(
+    state: State<'_, Arc<AppState>>,
+    strategy_id: String,
+    score: f32,
+    success: bool,
+) -> Result<(), String> {
+    state.telemetry
+        .report_optimization(&strategy_id, score, success)
+        .await;
+    Ok(())
+}
+
+/// Report strategy usage to telemetry
+#[tauri::command]
+pub async fn report_strategy_usage_telemetry(
+    state: State<'_, Arc<AppState>>,
+    strategy_id: String,
+    duration_secs: u64,
+) -> Result<(), String> {
+    state.telemetry
+        .report_strategy_usage(&strategy_id, duration_secs)
+        .await;
+    Ok(())
+}
+
+
+// ============================================================================
+// Config Updater Commands
+// ============================================================================
+
+use crate::core::config_updater::{ConfigUpdate, UpdateResult};
+
+/// Check for config updates from remote repository
+#[tauri::command]
+pub async fn check_config_updates() -> Result<Vec<ConfigUpdate>, String> {
+    info!("Checking for config updates");
+    
+    crate::core::config_updater::check_config_updates()
+        .await
+        .map_err(|e| format!("Failed to check config updates: {}", e))
+}
+
+/// Download and apply config updates
+#[tauri::command]
+pub async fn download_config_updates() -> Result<UpdateResult, String> {
+    info!("Downloading config updates");
+    
+    crate::core::config_updater::download_config_updates()
+        .await
+        .map_err(|e| format!("Failed to download config updates: {}", e))
 }

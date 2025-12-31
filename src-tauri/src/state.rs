@@ -13,9 +13,11 @@ use crate::core::domain_routing::DomainRouter;
 use crate::core::env_info::collect_env_info;
 use crate::core::errors::{IsolateError, Result};
 use crate::core::models::EnvInfo;
+use crate::core::monitor::Monitor;
 use crate::core::orchestrator::{create_orchestrator, SharedOrchestrator};
 use crate::core::storage::Storage;
 use crate::core::strategy_engine::{create_engine, SharedStrategyEngine};
+use crate::core::telemetry::TelemetryService;
 
 // ============================================================================
 // Constants
@@ -50,6 +52,10 @@ pub struct AppState {
     pub domain_router: Arc<DomainRouter>,
     /// Application-based routing manager
     pub app_router: Arc<AppRouter>,
+    /// Strategy health monitor
+    pub monitor: Arc<Monitor>,
+    /// Telemetry service (opt-in)
+    pub telemetry: Arc<TelemetryService>,
 }
 
 impl AppState {
@@ -85,6 +91,14 @@ impl AppState {
         let strategy_engine = create_engine();
         debug!("Strategy engine created");
 
+        // 5.5. Создаём Monitor
+        let monitor = Arc::new(Monitor::new(strategy_engine.clone().into()));
+        debug!("Monitor created");
+
+        // 5.6. Создаём TelemetryService
+        let telemetry = Arc::new(TelemetryService::new());
+        debug!("Telemetry service created");
+
         // 6. Создаём Orchestrator
         let orchestrator = create_orchestrator(strategy_engine.clone(), storage.clone());
         debug!("Orchestrator created");
@@ -111,6 +125,8 @@ impl AppState {
             env_info: Arc::new(RwLock::new(env_info)),
             domain_router,
             app_router,
+            monitor,
+            telemetry,
         };
 
         info!("Application state initialized successfully");
@@ -170,6 +186,9 @@ impl AppState {
     /// Выполняет graceful shutdown всех компонентов
     pub async fn shutdown(&self) -> Result<()> {
         info!("Shutting down application state");
+
+        // Останавливаем monitor
+        self.monitor.stop();
 
         // Останавливаем все запущенные стратегии
         self.strategy_engine.shutdown_all().await?;

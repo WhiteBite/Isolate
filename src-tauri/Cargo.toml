@@ -23,6 +23,7 @@ thiserror = "1"
 anyhow = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-appender = "0.2"
 reqwest = { version = "0.12", features = ["json", "socks", "stream"] }
 rusqlite = { version = "0.31", features = ["bundled"] }
 tokio-util = "0.7"

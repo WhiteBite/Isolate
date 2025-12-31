@@ -22,7 +22,7 @@ use crate::core::errors::{IsolateError, Result};
 use crate::core::models::{AppRoute, DomainRoute, ProxyConfig};
 use crate::core::paths::get_binaries_dir;
 use crate::core::singbox_config::{
-    self, generate_dns_config_fakeip, generate_dns_config_with_mode, generate_outbound,
+    generate_dns_config_fakeip, generate_dns_config_with_mode, generate_outbound,
     generate_route_rules, DnsMode,
 };
 use crate::core::vless_engine::{self, VlessConfig};
@@ -833,6 +833,11 @@ pub fn get_singbox_path() -> PathBuf {
     {
         binaries_dir.join("sing-box")
     }
+}
+
+/// Get path for temporary config file
+fn get_temp_config_path(config_id: &str) -> PathBuf {
+    std::env::temp_dir().join(format!("isolate-singbox-{}.json", config_id))
 }
 
 /// Check if sing-box binary exists

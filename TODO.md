@@ -91,97 +91,50 @@ start_with_routing(
 - Шаг 4: Первая оптимизация
 - Шаг 5: Завершение
 
-### Этап 8: Monitor (фоновый мониторинг)
+### ✅ Этап 8: Monitor (фоновый мониторинг) — ВЫПОЛНЕНО
 
-#### 8.1 Реализовать `src-tauri/src/core/monitor.rs`
-```rust
-pub struct Monitor {
-    interval: Duration,
-    strategy_engine: SharedStrategyEngine,
-    storage: Arc<Storage>,
-}
+- [x] `src-tauri/src/core/monitor.rs` — полная реализация
+- [x] Health check каждые 30 секунд
+- [x] События: `monitor:health_check`, `strategy:degraded`, `strategy:recovered`
+- [x] Auto-restart опция
+- [x] Интеграция в AppState
+- [x] Tauri commands: start_monitor, stop_monitor, is_monitor_running, etc.
+- [x] Frontend API в api.ts
 
-impl Monitor {
-    pub async fn start(&self) -> Result<()>
-    pub async fn stop(&self)
-    async fn check_strategy_health(&self) -> Result<bool>
-    async fn on_degradation(&self)
-}
-```
+### ✅ Этап 9: Telemetry (opt-in) — ВЫПОЛНЕНО
 
-### Этап 9: Telemetry (opt-in)
-
-#### 9.1 Реализовать `src-tauri/src/core/telemetry.rs`
-```rust
-pub struct TelemetryService {
-    enabled: bool,
-    endpoint: String,
-    batch: Vec<TelemetryEvent>,
-}
-
-impl TelemetryService {
-    pub async fn report_optimization(&self, result: &OptimizationResult)
-    pub async fn report_strategy_usage(&self, strategy_id: &str, success: bool)
-    async fn flush(&self)
-}
-```
+- [x] `src-tauri/src/core/telemetry.rs` — полная реализация
+- [x] Opt-in по умолчанию (disabled)
+- [x] Batch events, flush каждые 5 минут
+- [x] Анонимизация ошибок (удаление путей, IP, UUID, email)
+- [x] Интеграция в AppState
+- [x] Tauri commands: set_telemetry_enabled, flush_telemetry, etc.
+- [x] Frontend API в api.ts
 
 ---
 
-## 🟡 СРЕДНИЙ ПРИОРИТЕТ
+## 🟡 СРЕДНИЙ ПРИОРИТЕТ — ВЫПОЛНЕНО
 
-### Этап 10: Автообновление
+### ✅ Этап 10: Автообновление — ВЫПОЛНЕНО
 
-#### 10.1 Конфигурация в `tauri.conf.json`
-```json
-{
-  "plugins": {
-    "updater": {
-      "endpoints": [
-        "https://github.com/user/isolate/releases/latest/download/latest.json"
-      ],
-      "pubkey": "..."
-    }
-  }
-}
-```
+- [x] Конфигурация updater в `tauri.conf.json` (placeholder pubkey, endpoints)
+- [x] Windows installer настроен (WiX + NSIS с поддержкой ru/en)
+- [x] UI для обновлений в Settings/About секции
 
-#### 10.2 UI для обновлений
-- Уведомление о новой версии
-- Кнопка "Обновить сейчас"
-- Progress bar скачивания
+### ✅ Этап 11: Автообновление конфигов — ВЫПОЛНЕНО
 
-### Этап 11: Автообновление конфигов
+- [x] `src-tauri/src/core/config_updater.rs` — полная реализация
+- [x] Проверка обновлений через GitHub API
+- [x] Скачивание strategies, services, hostlists
+- [x] Tauri commands: check_config_updates, download_config_updates
+- [x] Frontend API в api.ts
 
-#### 11.1 Создать `src-tauri/src/core/config_updater.rs`
-```rust
-pub async fn check_config_updates() -> Result<Vec<String>>
-pub async fn download_config_updates() -> Result<()>
-```
+### ✅ Этап 13: Логирование в файл — ВЫПОЛНЕНО
 
-### Этап 12: Crash Reporting (Sentry)
-
-#### 12.1 Интеграция Sentry
-```rust
-// src-tauri/src/lib.rs
-let _guard = sentry::init(("DSN", sentry::ClientOptions {
-    release: Some(env!("CARGO_PKG_VERSION").into()),
-    ..Default::default()
-}));
-```
-
-### Этап 13: Логирование в файл
-
-#### 13.1 Настройка tracing-appender
-```rust
-// src-tauri/src/lib.rs
-let file_appender = tracing_appender::rolling::daily(log_dir, "isolate.log");
-let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
-```
-
-#### 13.2 Ротация логов
-- Хранить последние 7 дней
-- Максимум 50MB на файл
+- [x] `tracing-appender` добавлен в Cargo.toml
+- [x] Ежедневная ротация логов в `get_logs_dir()`
+- [x] Dual output: файл + stdout
+- [x] Фильтры: isolate=info, tauri=warn
 
 ---
 

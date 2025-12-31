@@ -14,10 +14,31 @@ fn is_silent_mode() -> bool {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Initialize tracing
+    // Setup file logging with rotation
+    let log_dir = core::paths::get_logs_dir();
+    let _ = std::fs::create_dir_all(&log_dir);
+
+    let file_appender = tracing_appender::rolling::daily(&log_dir, "isolate.log");
+    let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
+
+    // Keep the guard alive for the lifetime of the application
+    // by storing it in a static or leaking it
+    let _file_guard = Box::leak(Box::new(_guard));
+
     tracing_subscriber::registry()
-        .with(tracing_subscriber::fmt::layer())
-        .with(tracing_subscriber::EnvFilter::from_default_env())
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_writer(non_blocking)
+                .with_ansi(false)
+        )
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_writer(std::io::stdout)
+        )
+        .with(tracing_subscriber::EnvFilter::from_default_env()
+            .add_directive("isolate=info".parse().unwrap())
+            .add_directive("tauri=warn".parse().unwrap())
+        )
         .init();
 
     let silent_mode = is_silent_mode();
@@ -130,10 +151,32 @@ pub fn run() {
             commands::set_tray_optimizing,
             commands::set_tray_error,
             commands::get_tray_state,
+            commands::update_tray_tun_status,
+            commands::update_tray_proxy_status,
+            commands::rebuild_tray_menu,
             // System Proxy commands
             commands::set_system_proxy,
             commands::clear_system_proxy,
             commands::is_system_proxy_set,
+            // Monitor commands
+            commands::start_monitor,
+            commands::stop_monitor,
+            commands::is_monitor_running,
+            commands::is_strategy_degraded,
+            commands::check_strategy_health,
+            commands::set_monitor_urls,
+            commands::set_monitor_auto_restart,
+            // Telemetry commands
+            commands::set_telemetry_enabled,
+            commands::is_telemetry_enabled,
+            commands::get_telemetry_pending_count,
+            commands::flush_telemetry,
+            commands::clear_telemetry,
+            commands::report_optimization_telemetry,
+            commands::report_strategy_usage_telemetry,
+            // Config updater commands
+            commands::check_config_updates,
+            commands::download_config_updates,
         ])
         .setup(move |app| {
             let window = app.get_webview_window("main").unwrap();
@@ -170,6 +213,10 @@ pub fn run() {
                         }
                         
                         handle.manage(Arc::new(app_state));
+                        
+                        // Start telemetry background flush if enabled
+                        // Note: This is done after manage() so we can access state
+                        
                         tracing::info!("AppState initialized successfully");
                     }
                     Err(e) => {

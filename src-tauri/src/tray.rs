@@ -7,7 +7,7 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 use tauri::{
     image::Image,
-    menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder},
+    menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent},
     AppHandle, Emitter, Manager, Runtime,
 };
@@ -23,7 +23,7 @@ static TRAY_STATE: once_cell::sync::Lazy<Arc<RwLock<TrayStateData>>> =
 
 /// Internal tray state data
 #[derive(Debug, Clone, Default)]
-struct TrayStateData {
+pub struct TrayStateData {
     pub is_active: bool,
     pub strategy_name: Option<String>,
     pub state: TrayState,
@@ -70,9 +70,9 @@ impl TrayState {
     pub fn emoji(&self) -> &'static str {
         match self {
             TrayState::Inactive => "⏸️",
-            TrayState::Active => "✅",
+            TrayState::Active => "🟢",
             TrayState::Optimizing => "🔄",
-            TrayState::Error => "❌",
+            TrayState::Error => "🔴",
         }
     }
     
@@ -95,92 +95,13 @@ impl TrayState {
 pub fn create_tray<R: Runtime>(app: &tauri::App<R>) -> Result<(), Box<dyn std::error::Error>> {
     info!("Creating system tray");
     
-    // Create menu items
-    let status_item = MenuItemBuilder::with_id("status", "Статус: Неактивен")
-        .enabled(false)
-        .build(app)?;
-    
-    let separator1 = PredefinedMenuItem::separator(app)?;
-    
-    let open_item = MenuItemBuilder::with_id("open", "Открыть Isolate")
-        .build(app)?;
-    
-    // Optimize submenu
-    let optimize_turbo = MenuItemBuilder::with_id("optimize_turbo", "⚡ Turbo (быстро)")
-        .build(app)?;
-    let optimize_deep = MenuItemBuilder::with_id("optimize_deep", "🔍 Deep (тщательно)")
-        .build(app)?;
-    
-    let optimize_submenu = SubmenuBuilder::with_id(app, "optimize", "🚀 Оптимизировать")
-        .items(&[&optimize_turbo, &optimize_deep])
-        .build()?;
-    
-    let separator2 = PredefinedMenuItem::separator(app)?;
-    
-    let toggle_item = MenuItemBuilder::with_id("toggle", "▶️ Включить обход")
-        .build(app)?;
-    
-    let stop_item = MenuItemBuilder::with_id("stop", "⏹️ Остановить")
-        .enabled(false)
-        .build(app)?;
-    
-    let separator3 = PredefinedMenuItem::separator(app)?;
-    
-    // Quick actions submenu
-    let quic_block = MenuItemBuilder::with_id("quic_block", "Блокировать QUIC")
-        .build(app)?;
-    let quic_unblock = MenuItemBuilder::with_id("quic_unblock", "Разблокировать QUIC")
-        .build(app)?;
-    
-    let quick_submenu = SubmenuBuilder::with_id(app, "quick", "⚙️ Быстрые действия")
-        .items(&[&quic_block, &quic_unblock])
-        .build()?;
-    
-    let separator4 = PredefinedMenuItem::separator(app)?;
-    
-    let panic_item = MenuItemBuilder::with_id("panic_reset", "⚠️ Сброс сети (Panic)")
-        .build(app)?;
-    
-    let separator5 = PredefinedMenuItem::separator(app)?;
-    
-    let settings_item = MenuItemBuilder::with_id("settings", "⚙️ Настройки")
-        .build(app)?;
-    
-    let logs_item = MenuItemBuilder::with_id("logs", "📋 Логи")
-        .build(app)?;
-    
-    let separator6 = PredefinedMenuItem::separator(app)?;
-    
-    let quit_item = MenuItemBuilder::with_id("quit", "❌ Выход")
-        .build(app)?;
-
-    // Build menu
-    let menu = MenuBuilder::new(app)
-        .items(&[
-            &status_item,
-            &separator1,
-            &open_item,
-            &optimize_submenu,
-            &separator2,
-            &toggle_item,
-            &stop_item,
-            &separator3,
-            &quick_submenu,
-            &separator4,
-            &panic_item,
-            &separator5,
-            &settings_item,
-            &logs_item,
-            &separator6,
-            &quit_item,
-        ])
-        .build()?;
+    let menu = build_tray_menu(app)?;
 
     // Create tray icon
     let tray = TrayIconBuilder::new()
         .icon(app.default_window_icon().unwrap().clone())
         .menu(&menu)
-        .tooltip("Isolate — DPI Bypass\nСтатус: Неактивен")
+        .tooltip("Isolate — DPI Bypass\n⏸️ Неактивен")
         .show_menu_on_left_click(false)
         .on_menu_event(move |app, event| {
             handle_menu_event(app, event.id.as_ref());
@@ -205,6 +126,107 @@ pub fn create_tray<R: Runtime>(app: &tauri::App<R>) -> Result<(), Box<dyn std::e
     Ok(())
 }
 
+/// Build tray menu based on current state
+fn build_tray_menu<R: Runtime>(app: &impl Manager<R>) -> Result<tauri::menu::Menu<R>, Box<dyn std::error::Error>> {
+    let state = TRAY_STATE.read();
+    
+    // Status line (dynamic)
+    let status_text = match state.state {
+        TrayState::Inactive => "⏸️ Неактивен".to_string(),
+        TrayState::Active => format!("🟢 Активен: {}", state.strategy_name.as_deref().unwrap_or("Unknown")),
+        TrayState::Optimizing => "🔄 Оптимизация...".to_string(),
+        TrayState::Error => "🔴 Ошибка".to_string(),
+    };
+    
+    let status_item = MenuItemBuilder::with_id("status", &status_text)
+        .enabled(false)
+        .build(app)?;
+    
+    let separator1 = PredefinedMenuItem::separator(app)?;
+    
+    // Open Isolate
+    let open_item = MenuItemBuilder::with_id("open", "📊 Открыть Isolate")
+        .build(app)?;
+    
+    let separator2 = PredefinedMenuItem::separator(app)?;
+    
+    // Optimization options
+    let optimize_turbo = MenuItemBuilder::with_id("optimize_turbo", "⚡ Turbo оптимизация")
+        .build(app)?;
+    let optimize_deep = MenuItemBuilder::with_id("optimize_deep", "🔍 Deep оптимизация")
+        .build(app)?;
+    
+    let separator3 = PredefinedMenuItem::separator(app)?;
+    
+    // Toggle bypass (dynamic text based on state)
+    let toggle_text = if state.is_active {
+        "❌ Отключить обход"
+    } else {
+        "✅ Включить обход"
+    };
+    let toggle_item = MenuItemBuilder::with_id("toggle_bypass", toggle_text)
+        .build(app)?;
+    
+    let separator4 = PredefinedMenuItem::separator(app)?;
+    
+    // TUN Mode toggle
+    let tun_text = if state.is_tun {
+        "🔧 TUN Mode: Вкл"
+    } else {
+        "🔧 TUN Mode: Выкл"
+    };
+    let tun_item = MenuItemBuilder::with_id("toggle_tun", tun_text)
+        .build(app)?;
+    
+    // System Proxy toggle
+    let proxy_text = if state.is_system_proxy {
+        "🌐 System Proxy: Вкл"
+    } else {
+        "🌐 System Proxy: Выкл"
+    };
+    let proxy_item = MenuItemBuilder::with_id("toggle_proxy", proxy_text)
+        .build(app)?;
+    
+    let separator5 = PredefinedMenuItem::separator(app)?;
+    
+    // Panic Reset (red/warning)
+    let panic_item = MenuItemBuilder::with_id("panic_reset", "🚨 Panic Reset")
+        .build(app)?;
+    
+    let separator6 = PredefinedMenuItem::separator(app)?;
+    
+    // Settings and Exit
+    let settings_item = MenuItemBuilder::with_id("settings", "⚙️ Настройки")
+        .build(app)?;
+    
+    let quit_item = MenuItemBuilder::with_id("quit", "🚪 Выход")
+        .build(app)?;
+
+    // Build menu
+    let menu = MenuBuilder::new(app)
+        .items(&[
+            &status_item,
+            &separator1,
+            &open_item,
+            &separator2,
+            &optimize_turbo,
+            &optimize_deep,
+            &separator3,
+            &toggle_item,
+            &separator4,
+            &tun_item,
+            &proxy_item,
+            &separator5,
+            &panic_item,
+            &separator6,
+            &settings_item,
+            &quit_item,
+        ])
+        .build()?;
+
+    Ok(menu)
+}
+
 /// Wrapper for tray handle to allow updates
 pub struct TrayHandle<R: Runtime>(Arc<RwLock<Option<TrayIcon<R>>>>);
 
@@ -219,65 +241,48 @@ fn handle_menu_event<R: Runtime>(app: &AppHandle<R>, id: &str) {
             show_main_window(app);
         }
         "optimize_turbo" => {
-            info!("Tray: Optimize Turbo");
-            emit_and_show(app, "tray:optimize", "turbo");
+            info!("Tray: Optimize Turbo requested");
+            emit_event(app, "tray:optimize_turbo", ());
+            show_main_window(app);
         }
         "optimize_deep" => {
-            info!("Tray: Optimize Deep");
-            emit_and_show(app, "tray:optimize", "deep");
+            info!("Tray: Optimize Deep requested");
+            emit_event(app, "tray:optimize_deep", ());
+            show_main_window(app);
         }
-        "toggle" => {
-            info!("Tray: Toggle bypass");
+        "toggle_bypass" => {
+            info!("Tray: Toggle bypass requested");
             let state = TRAY_STATE.read();
             if state.is_active {
-                if let Err(e) = app.emit("tray:stop", ()) {
-                    error!("Failed to emit stop event: {}", e);
-                }
+                emit_event(app, "tray:toggle_bypass", "off");
             } else {
-                // Show window to select strategy or run optimization
-                emit_and_show(app, "tray:toggle", ());
+                emit_event(app, "tray:toggle_bypass", "on");
+                show_main_window(app);
             }
         }
-        "stop" => {
-            info!("Tray: Stop bypass");
-            if let Err(e) = app.emit("tray:stop", ()) {
-                error!("Failed to emit stop event: {}", e);
-            }
+        "toggle_tun" => {
+            info!("Tray: Toggle TUN mode requested");
+            let state = TRAY_STATE.read();
+            emit_event(app, "tray:toggle_tun", !state.is_tun);
         }
-        "quic_block" => {
-            info!("Tray: Block QUIC");
-            if let Err(e) = app.emit("tray:quic_block", true) {
-                error!("Failed to emit quic_block event: {}", e);
-            }
-        }
-        "quic_unblock" => {
-            info!("Tray: Unblock QUIC");
-            if let Err(e) = app.emit("tray:quic_block", false) {
-                error!("Failed to emit quic_unblock event: {}", e);
-            }
+        "toggle_proxy" => {
+            info!("Tray: Toggle System Proxy requested");
+            let state = TRAY_STATE.read();
+            emit_event(app, "tray:toggle_proxy", !state.is_system_proxy);
         }
         "panic_reset" => {
-            info!("Tray: Panic reset");
-            emit_and_show(app, "tray:panic_reset", ());
+            info!("Tray: Panic reset requested");
+            emit_event(app, "tray:panic_reset", ());
+            show_main_window(app);
         }
         "settings" => {
             show_main_window(app);
-            if let Err(e) = app.emit("tray:navigate", "/settings") {
-                error!("Failed to emit navigate event: {}", e);
-            }
-        }
-        "logs" => {
-            show_main_window(app);
-            if let Err(e) = app.emit("tray:navigate", "/logs") {
-                error!("Failed to emit navigate event: {}", e);
-            }
+            emit_event(app, "tray:navigate", "/settings");
         }
         "quit" => {
             info!("Tray: Quit requested");
             // Emit event for graceful shutdown
-            if let Err(e) = app.emit("tray:quit", ()) {
-                error!("Failed to emit quit event: {}", e);
-            }
+            emit_event(app, "tray:quit", ());
             // Give time for cleanup
             std::thread::sleep(std::time::Duration::from_millis(500));
             app.exit(0);
@@ -288,12 +293,11 @@ fn handle_menu_event<R: Runtime>(app: &AppHandle<R>, id: &str) {
     }
 }
 
-/// Helper to emit event and show window
-fn emit_and_show<R: Runtime, S: serde::Serialize + Clone>(app: &AppHandle<R>, event: &str, payload: S) {
+/// Helper to emit event
+fn emit_event<R: Runtime, S: serde::Serialize + Clone>(app: &AppHandle<R>, event: &str, payload: S) {
     if let Err(e) = app.emit(event, payload) {
         error!("Failed to emit {} event: {}", event, e);
     }
-    show_main_window(app);
 }
 
 /// Show and focus main window
@@ -308,6 +312,28 @@ fn show_main_window<R: Runtime>(app: &AppHandle<R>) {
 // ============================================================================
 // Tray Updates
 // ============================================================================
+
+/// Rebuild tray menu with current state
+/// 
+/// Call this function whenever the state changes to update the menu dynamically.
+pub fn rebuild_tray_menu<R: Runtime>(app: &AppHandle<R>) {
+    if let Some(tray_handle) = app.try_state::<TrayHandle<R>>() {
+        if let Some(tray) = tray_handle.0.read().as_ref() {
+            match build_tray_menu(app) {
+                Ok(menu) => {
+                    if let Err(e) = tray.set_menu(Some(menu)) {
+                        error!("Failed to rebuild tray menu: {}", e);
+                    } else {
+                        info!("Tray menu rebuilt successfully");
+                    }
+                }
+                Err(e) => {
+                    error!("Failed to build tray menu: {}", e);
+                }
+            }
+        }
+    }
+}
 
 /// Update tray status and tooltip
 pub fn update_tray_status<R: Runtime>(
@@ -355,8 +381,8 @@ pub fn update_tray_state<R: Runtime>(
     // Update icon based on state
     update_tray_icon(app, state);
     
-    // Update menu items based on state
-    update_tray_menu_items(app, state, strategy_name.as_deref());
+    // Rebuild menu to reflect new state
+    rebuild_tray_menu(app);
     
     info!(
         state = ?state,
@@ -365,25 +391,26 @@ pub fn update_tray_state<R: Runtime>(
     );
 }
 
-/// Update menu items based on current state
-fn update_tray_menu_items<R: Runtime>(app: &AppHandle<R>, state: TrayState, strategy_name: Option<&str>) {
-    // Update status menu item text
-    let status_text = match state {
-        TrayState::Inactive => "Статус: Неактивен".to_string(),
-        TrayState::Active => format!("Статус: {} ✅", strategy_name.unwrap_or("Активен")),
-        TrayState::Optimizing => "Статус: Оптимизация... 🔄".to_string(),
-        TrayState::Error => "Статус: Ошибка ❌".to_string(),
-    };
-    
-    // Try to update menu items via tray
-    if let Some(tray_handle) = app.try_state::<TrayHandle<R>>() {
-        if let Some(tray) = tray_handle.0.read().as_ref() {
-            // Note: Tauri 2.0 doesn't have direct menu item update API
-            // Menu items are updated by rebuilding the menu or using menu item IDs
-            // For now, we rely on tooltip updates
-            let _ = tray.set_tooltip(Some(&format!("Isolate — DPI Bypass\n{}", status_text)));
-        }
+/// Update TUN mode status in tray
+pub fn update_tray_tun_status<R: Runtime>(app: &AppHandle<R>, is_tun: bool) {
+    {
+        let mut data = TRAY_STATE.write();
+        data.is_tun = is_tun;
     }
+    
+    rebuild_tray_menu(app);
+    info!(is_tun, "Tray TUN status updated");
+}
+
+/// Update System Proxy status in tray
+pub fn update_tray_proxy_status<R: Runtime>(app: &AppHandle<R>, is_proxy: bool) {
+    {
+        let mut data = TRAY_STATE.write();
+        data.is_system_proxy = is_proxy;
+    }
+    
+    rebuild_tray_menu(app);
+    info!(is_proxy, "Tray System Proxy status updated");
 }
 
 /// Update tray icon based on state
@@ -449,18 +476,7 @@ pub fn update_tray_icon<R: Runtime>(app: &AppHandle<R>, state: TrayState) {
 
 /// Set tray to optimizing state
 pub fn set_tray_optimizing<R: Runtime>(app: &AppHandle<R>) {
-    {
-        let mut state = TRAY_STATE.write();
-        state.state = TrayState::Optimizing;
-    }
-    
-    if let Some(tray_handle) = app.try_state::<TrayHandle<R>>() {
-        if let Some(tray) = tray_handle.0.read().as_ref() {
-            let _ = tray.set_tooltip(Some("Isolate — DPI Bypass\n🔄 Оптимизация..."));
-        }
-    }
-    
-    update_tray_icon(app, TrayState::Optimizing);
+    update_tray_state(app, TrayState::Optimizing, None);
 }
 
 /// Set tray to error state
@@ -470,7 +486,7 @@ pub fn set_tray_error<R: Runtime>(app: &AppHandle<R>, error_msg: &str) {
         state.state = TrayState::Error;
     }
     
-    let tooltip = format!("Isolate — DPI Bypass\n❌ Ошибка: {}", error_msg);
+    let tooltip = format!("Isolate — DPI Bypass\n🔴 Ошибка: {}", error_msg);
     
     if let Some(tray_handle) = app.try_state::<TrayHandle<R>>() {
         if let Some(tray) = tray_handle.0.read().as_ref() {
@@ -479,11 +495,17 @@ pub fn set_tray_error<R: Runtime>(app: &AppHandle<R>, error_msg: &str) {
     }
     
     update_tray_icon(app, TrayState::Error);
+    rebuild_tray_menu(app);
 }
 
 /// Get current tray state
 pub fn get_tray_state() -> TrayState {
     TRAY_STATE.read().state
+}
+
+/// Get full tray state data
+pub fn get_tray_state_data() -> TrayStateData {
+    TRAY_STATE.read().clone()
 }
 
 /// Check if bypass is currently active
@@ -499,4 +521,14 @@ pub fn get_active_strategy() -> Option<String> {
     } else {
         None
     }
+}
+
+/// Check if TUN mode is active
+pub fn is_tun_active() -> bool {
+    TRAY_STATE.read().is_tun
+}
+
+/// Check if System Proxy is active
+pub fn is_system_proxy_active() -> bool {
+    TRAY_STATE.read().is_system_proxy
 }

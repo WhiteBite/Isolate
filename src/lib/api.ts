@@ -983,3 +983,142 @@ export async function clearSystemProxy(): Promise<void> {
 export async function isSystemProxySet(): Promise<boolean> {
     return invoke('is_system_proxy_set');
 }
+
+// ============================================================================
+// Monitor API
+// ============================================================================
+
+/** Start strategy health monitoring */
+export async function startMonitor(): Promise<void> {
+    return invoke('start_monitor');
+}
+
+/** Stop strategy health monitoring */
+export async function stopMonitor(): Promise<void> {
+    return invoke('stop_monitor');
+}
+
+/** Check if monitor is running */
+export async function isMonitorRunning(): Promise<boolean> {
+    return invoke('is_monitor_running');
+}
+
+/** Check if strategy is degraded */
+export async function isStrategyDegraded(): Promise<boolean> {
+    return invoke('is_strategy_degraded');
+}
+
+/** Perform manual health check */
+export async function checkStrategyHealth(): Promise<boolean> {
+    return invoke('check_strategy_health');
+}
+
+/** Set monitor test URLs */
+export async function setMonitorUrls(urls: string[]): Promise<void> {
+    return invoke('set_monitor_urls', { urls });
+}
+
+/** Enable/disable auto-restart on degradation */
+export async function setMonitorAutoRestart(enabled: boolean): Promise<void> {
+    return invoke('set_monitor_auto_restart', { enabled });
+}
+
+// ============================================================================
+// Telemetry API
+// ============================================================================
+
+/** Enable or disable telemetry (opt-in) */
+export async function setTelemetryEnabled(enabled: boolean): Promise<void> {
+    return invoke('set_telemetry_enabled', { enabled });
+}
+
+/** Check if telemetry is enabled */
+export async function isTelemetryEnabled(): Promise<boolean> {
+    return invoke('is_telemetry_enabled');
+}
+
+/** Get number of pending telemetry events */
+export async function getTelemetryPendingCount(): Promise<number> {
+    return invoke('get_telemetry_pending_count');
+}
+
+/** Manually flush telemetry events */
+export async function flushTelemetry(): Promise<void> {
+    return invoke('flush_telemetry');
+}
+
+/** Clear pending telemetry events without sending */
+export async function clearTelemetry(): Promise<void> {
+    return invoke('clear_telemetry');
+}
+
+/** Report optimization result to telemetry */
+export async function reportOptimizationTelemetry(
+    strategyId: string,
+    score: number,
+    success: boolean
+): Promise<void> {
+    return invoke('report_optimization_telemetry', { strategyId, score, success });
+}
+
+/** Report strategy usage to telemetry */
+export async function reportStrategyUsageTelemetry(
+    strategyId: string,
+    durationSecs: number
+): Promise<void> {
+    return invoke('report_strategy_usage_telemetry', { strategyId, durationSecs });
+}
+
+// ============================================================================
+// Monitor Event Types
+// ============================================================================
+
+export interface HealthCheckResult {
+    strategy_id: string;
+    is_healthy: boolean;
+    success_rate: number;
+    consecutive_failures: number;
+    timestamp: string;
+}
+
+export interface DegradationEvent {
+    strategy_id: string;
+    consecutive_failures: number;
+    last_success_rate: number;
+    timestamp: string;
+}
+
+export interface RecoveryEvent {
+    strategy_id: string;
+    timestamp: string;
+}
+
+
+// ============================================================================
+// Config Updater API
+// ============================================================================
+
+/** Config update info */
+export interface ConfigUpdate {
+    name: string;
+    path: string;
+    sha: string;
+    is_new: boolean;
+}
+
+/** Config update result */
+export interface ConfigUpdateResult {
+    updated_count: number;
+    new_count: number;
+    files: string[];
+}
+
+/** Check for config updates from remote repository */
+export async function checkConfigUpdates(): Promise<ConfigUpdate[]> {
+    return invoke('check_config_updates');
+}
+
+/** Download and apply config updates */
+export async function downloadConfigUpdates(): Promise<ConfigUpdateResult> {
+    return invoke('download_config_updates');
+}

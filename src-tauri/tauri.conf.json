@@ -5,10 +5,13 @@
     "identifier": "com.isolate.app",
     "plugins": {
         "updater": {
-            "pubkey": "",
+            "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IFBMQUNFSE9MREVSCg==",
             "endpoints": [
-                "https://github.com/user/isolate/releases/latest/download/latest.json"
-            ]
+                "https://github.com/aspect-build/isolate/releases/latest/download/latest.json"
+            ],
+            "windows": {
+                "installMode": "passive"
+            }
         }
     },
     "build": {
@@ -57,7 +60,20 @@
         "windows": {
             "certificateThumbprint": null,
             "digestAlgorithm": "sha256",
-            "timestampUrl": ""
+            "timestampUrl": "",
+            "wix": {
+                "language": [
+                    "en-US",
+                    "ru-RU"
+                ]
+            },
+            "nsis": {
+                "languages": [
+                    "English",
+                    "Russian"
+                ],
+                "displayLanguageSelector": true
+            }
         }
     }
 }

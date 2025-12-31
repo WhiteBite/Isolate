@@ -3,6 +3,7 @@
 pub mod app_routing;
 pub mod binaries;
 pub mod config;
+pub mod config_updater;
 pub mod log_capture;
 pub mod diagnostics;
 pub mod domain_routing;

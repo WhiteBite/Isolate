@@ -46,32 +46,120 @@
   let optimizationMode = $state<'turbo' | 'deep'>('turbo');
   let uptimeInterval: ReturnType<typeof setInterval> | null = null;
 
+  // Local reactive copies of store values
+  let appStatusValue = $state<{isActive: boolean; currentStrategy: string | null; currentStrategyName: string | null}>({
+    isActive: false,
+    currentStrategy: null,
+    currentStrategyName: null
+  });
+  let isOptimizingValue = $state(false);
+  let optimizationProgressValue = $state<{step: string; progress: number; message: string; isComplete: boolean; error: string | null}>({
+    step: '',
+    progress: 0,
+    message: '',
+    isComplete: false,
+    error: null
+  });
+  let servicesValue = $state<{id: string; name: string; icon: string; enabled: boolean; status: 'unknown' | 'working' | 'blocked'}[]>([]);
+  let hasActiveStrategyValue = $state(false);
+
   // Derived state
-  let statusType = $derived(getStatus($appStatus.isActive, $isOptimizing, errorMessage));
+  let statusType = $derived(getStatus(appStatusValue.isActive, isOptimizingValue, errorMessage));
   let formattedUptime = $derived(formatUptime(uptime));
 
   onMount(async () => {
     if (!browser) return;
     
-    const { invoke } = await import('@tauri-apps/api/core');
-    const { listen } = await import('@tauri-apps/api/event');
+    // Force hot reload trigger - v2
+    console.log('[Dashboard] onMount started');
     
-    // Load initial state
+    // Check if we're in Tauri environment
+    const isTauri = '__TAURI__' in window || '__TAURI_INTERNALS__' in window;
+    console.log('[Dashboard] isTauri:', isTauri);
+    
+    // Subscribe to stores
+    const unsubAppStatus = appStatus.subscribe(v => { appStatusValue = v; });
+    const unsubIsOptimizing = isOptimizing.subscribe(v => { isOptimizingValue = v; });
+    const unsubProgress = optimizationProgress.subscribe(v => { optimizationProgressValue = v; });
+    const unsubServices = services.subscribe(v => { servicesValue = v; });
+    const unsubHasActive = hasActiveStrategy.subscribe(v => { hasActiveStrategyValue = v; });
+    
+    if (!isTauri) {
+      console.log('[Dashboard] Not in Tauri, using default state');
+      addActivity('info', 'Приложение запущено (режим браузера)');
+      return () => {
+        unsubAppStatus();
+        unsubIsOptimizing();
+        unsubProgress();
+        unsubServices();
+        unsubHasActive();
+        if (uptimeInterval) clearInterval(uptimeInterval);
+      };
+    }
+    
+    // Force timeout - GUARANTEED to fire regardless of Promise state (no clearTimeout!)
+    setTimeout(() => {
+      console.warn('[Dashboard] Force timeout triggered after 5s');
+      addActivity('warning', 'Таймаут загрузки данных');
+    }, 5000);
+    
+    let unlistenProgress: (() => void) | undefined;
+    let unlistenComplete: (() => void) | undefined;
+    let unlistenFailed: (() => void) | undefined;
+    let unlistenHealthCheck: (() => void) | undefined;
+    let unlistenApplied: (() => void) | undefined;
+    let unlistenStopped: (() => void) | undefined;
+    let refreshInterval: ReturnType<typeof setInterval> | undefined;
+    
     try {
-      const status = await invoke<{is_active: boolean; current_strategy: string | null; current_strategy_name: string | null}>('get_status');
-      appStatus.set({
-        isActive: status.is_active,
-        currentStrategy: status.current_strategy,
-        currentStrategyName: status.current_strategy_name ?? null
-      });
+      console.log('[Dashboard] Importing @tauri-apps/api/core...');
+      const { invoke } = await import('@tauri-apps/api/core');
+      const { listen } = await import('@tauri-apps/api/event');
+      console.log('[Dashboard] Tauri API imported');
       
-      if (status.is_active) {
-        startTime = new Date();
-        startUptimeCounter();
+      // Helper for invoke with timeout
+      async function invokeWithTimeout(cmd: string, args: Record<string, unknown> | undefined, fallback: unknown): Promise<unknown> {
+        const timeout = new Promise((resolve) => 
+          setTimeout(() => {
+            console.warn(`[Dashboard] ${cmd} timeout after 2s`);
+            resolve(fallback);
+          }, 2000)
+        );
+        return Promise.race([
+          invoke(cmd, args).then((r) => { console.log(`[Dashboard] ${cmd} returned`); return r; }).catch(() => fallback),
+          timeout
+        ]);
+      }
+    
+      // Load initial state
+      console.log('[Dashboard] Loading initial state...');
+      
+      // Load status without timeout - it's critical for correct display
+      let status: {is_active: boolean; current_strategy: string | null; current_strategy_name: string | null} | null = null;
+      try {
+        const rawStatus = await invoke('get_status') as {is_active: boolean; current_strategy: string | null; current_strategy_name: string | null};
+        status = rawStatus;
+        console.log('[Dashboard] get_status returned:', status);
+      } catch (e) {
+        console.error('[Dashboard] get_status failed:', e);
+        status = {is_active: false, current_strategy: null, current_strategy_name: null};
       }
       
-      const loadedServices = await invoke<{id: string; name: string; critical: boolean}[]>('get_services');
-      if (loadedServices.length > 0) {
+      if (status) {
+        appStatus.set({
+          isActive: status.is_active,
+          currentStrategy: status.current_strategy,
+          currentStrategyName: status.current_strategy_name ?? null
+        });
+        
+        if (status.is_active) {
+          startTime = new Date();
+          startUptimeCounter();
+        }
+      }
+      
+      const loadedServices = await invokeWithTimeout('get_services', undefined, []) as {id: string; name: string; critical: boolean}[];
+      if (loadedServices && loadedServices.length > 0) {
         services.set(loadedServices.map(s => ({
           id: s.id,
           name: s.name,
@@ -89,85 +177,120 @@
 
       // Add initial activity
       addActivity('info', 'Приложение запущено');
-      if (status.is_active && status.current_strategy_name) {
+      if (status?.is_active && status?.current_strategy_name) {
         addActivity('success', `Активна стратегия: ${status.current_strategy_name}`);
       }
+      
+      console.log('[Dashboard] Initial state loaded');
+
+      // Subscribe to optimization events
+      unlistenProgress = await listen('optimization:progress', (event) => {
+        const payload = event.payload as {
+          stage: string;
+          percent: number;
+          message: string;
+          current_strategy: string | null;
+          tested_count: number;
+          total_count: number;
+          best_score: number | null;
+        };
+        optimizationProgress.set({
+          step: payload.stage,
+          progress: payload.percent,
+          message: payload.message,
+          isComplete: false,
+          error: null
+        });
+      });
+      
+      unlistenComplete = await listen('optimization:complete', (event) => {
+        const result = event.payload as {strategy_id: string; strategy_name: string; score: number};
+        appStatus.set({
+          isActive: true,
+          currentStrategy: result.strategy_id,
+          currentStrategyName: result.strategy_name ?? null
+        });
+        isOptimizing.set(false);
+        optimizationProgress.set({
+          step: 'completed',
+          progress: 100,
+          message: 'Оптимизация завершена',
+          isComplete: true,
+          error: null
+        });
+        errorMessage = null;
+        startTime = new Date();
+        startUptimeCounter();
+        addActivity('success', `Оптимизация завершена: ${result.strategy_name}`);
+      });
+      
+      unlistenFailed = await listen('optimization:failed', (event) => {
+        isOptimizing.set(false);
+        errorMessage = event.payload as string;
+        optimizationProgress.set({
+          step: 'failed',
+          progress: 0,
+          message: '',
+          isComplete: false,
+          error: event.payload as string
+        });
+        addActivity('error', `Ошибка оптимизации: ${event.payload}`);
+      });
+
+      // Subscribe to strategy events (from other pages like Strategies)
+      unlistenApplied = await listen('strategy:applied', (event) => {
+        const payload = event.payload as {strategy_id: string; strategy_name: string};
+        appStatus.set({
+          isActive: true,
+          currentStrategy: payload.strategy_id,
+          currentStrategyName: payload.strategy_name ?? null
+        });
+        errorMessage = null;
+        startTime = new Date();
+        startUptimeCounter();
+        addActivity('success', `Стратегия применена: ${payload.strategy_name}`);
+      });
+
+      unlistenStopped = await listen('strategy:stopped', () => {
+        appStatus.set({
+          isActive: false,
+          currentStrategy: null,
+          currentStrategyName: null
+        });
+        stopUptimeCounter();
+        addActivity('info', 'Стратегия отключена');
+      });
+
+      // Subscribe to health check events
+      unlistenHealthCheck = await listen('monitor:health_check', async () => {
+        await refreshProxies();
+        await refreshSystemStatus();
+      });
+
+      // Periodic refresh
+      refreshInterval = setInterval(async () => {
+        await refreshProxies();
+        await refreshSystemStatus();
+      }, 10000);
     } catch (e) {
-      console.error('Failed to load initial state:', e);
+      console.error('[Dashboard] Failed to load initial state:', e);
     }
-
-    // Subscribe to optimization events
-    const unlistenProgress = await listen('optimization:progress', (event) => {
-      const payload = event.payload as {
-        stage: string;
-        percent: number;
-        message: string;
-        current_strategy: string | null;
-        tested_count: number;
-        total_count: number;
-        best_score: number | null;
-      };
-      optimizationProgress.set({
-        step: payload.stage,
-        progress: payload.percent,
-        message: payload.message,
-        isComplete: false,
-        error: null
-      });
-    });
-    
-    const unlistenComplete = await listen('optimization:complete', (event) => {
-      const result = event.payload as {strategy_id: string; strategy_name: string; score: number};
-      appStatus.set({
-        isActive: true,
-        currentStrategy: result.strategy_id,
-        currentStrategyName: result.strategy_name ?? null
-      });
-      isOptimizing.set(false);
-      optimizationProgress.set({
-        step: 'completed',
-        progress: 100,
-        message: 'Оптимизация завершена',
-        isComplete: true,
-        error: null
-      });
-      errorMessage = null;
-      startTime = new Date();
-      startUptimeCounter();
-      addActivity('success', `Оптимизация завершена: ${result.strategy_name}`);
-    });
-    
-    const unlistenFailed = await listen('optimization:failed', (event) => {
-      isOptimizing.set(false);
-      errorMessage = event.payload as string;
-      optimizationProgress.set({
-        step: 'failed',
-        progress: 0,
-        message: '',
-        isComplete: false,
-        error: event.payload as string
-      });
-      addActivity('error', `Ошибка оптимизации: ${event.payload}`);
-    });
-
-    // Subscribe to health check events
-    const unlistenHealthCheck = await listen('monitor:health_check', async () => {
-      await refreshProxies();
-      await refreshSystemStatus();
-    });
-
-    // Periodic refresh
-    const refreshInterval = setInterval(async () => {
-      await refreshProxies();
-      await refreshSystemStatus();
-    }, 10000);
     
     return () => {
-      unlistenProgress();
-      unlistenComplete();
-      unlistenFailed();
-      unlistenHealthCheck();
-      clearInterval(refreshInterval);
+      // Unsubscribe from stores
+      unsubAppStatus();
+      unsubIsOptimizing();
+      unsubProgress();
+      unsubServices();
+      unsubHasActive();
+      // Unlisten events
+      unlistenProgress?.();
+      unlistenComplete?.();
+      unlistenFailed?.();
+      unlistenHealthCheck?.();
+      unlistenApplied?.();
+      unlistenStopped?.();
+      if (refreshInterval) clearInterval(refreshInterval);
       if (uptimeInterval) clearInterval(uptimeInterval);
     };
   });
@@ -434,9 +557,9 @@
             {/if}
           </div>
           
-          {#if $appStatus.currentStrategy}
+          {#if appStatusValue.currentStrategy}
             <p class="text-[#a0a0a0] mt-2">
-              Стратегия: <span class="text-white font-medium">{$appStatus.currentStrategyName || $appStatus.currentStrategy}</span>
+              Стратегия: <span class="text-white font-medium">{appStatusValue.currentStrategyName || appStatusValue.currentStrategy}</span>
             </p>
           {:else if statusType === 'idle'}
             <p class="text-[#a0a0a0] mt-2">Выберите режим оптимизации для начала</p>
@@ -450,7 +573,7 @@
 
       <!-- Action Buttons -->
       <div class="flex gap-3">
-        {#if $hasActiveStrategy}
+        {#if hasActiveStrategyValue}
           <button
             onclick={handleStop}
             class="px-5 py-2.5 bg-[#2a2f4a] hover:bg-[#3a3f5a] text-white rounded-xl font-medium transition-all duration-200 flex items-center gap-2"
@@ -478,24 +601,24 @@
     </div>
 
     <!-- Progress Bar -->
-    {#if $isOptimizing && $optimizationProgress.step}
+    {#if isOptimizingValue && optimizationProgressValue.step}
       <div class="mt-6 pt-6 border-t border-[#2a2f4a]">
         <div class="flex items-center justify-between text-sm mb-3">
           <div class="flex items-center gap-2">
             <div class="w-2 h-2 rounded-full bg-[#ffaa00] animate-pulse"></div>
-            <span class="text-white font-medium">{getStageText($optimizationProgress.step)}</span>
+            <span class="text-white font-medium">{getStageText(optimizationProgressValue.step)}</span>
           </div>
-          <span class="text-[#00d4ff] font-mono">{$optimizationProgress.progress}%</span>
+          <span class="text-[#00d4ff] font-mono">{optimizationProgressValue.progress}%</span>
         </div>
         
         <div class="w-full bg-[#2a2f4a] rounded-full h-2 overflow-hidden">
           <div 
             class="bg-gradient-to-r from-[#00d4ff] to-[#00ff88] h-2 rounded-full transition-all duration-300"
-            style="width: {$optimizationProgress.progress}%"
+            style="width: {optimizationProgressValue.progress}%"
           ></div>
         </div>
         
-        <p class="text-sm text-[#a0a0a0] mt-3">{$optimizationProgress.message}</p>
+        <p class="text-sm text-[#a0a0a0] mt-3">{optimizationProgressValue.message}</p>
       </div>
     {/if}
   </div>
@@ -505,7 +628,7 @@
     <!-- Turbo Optimization -->
     <button
       onclick={() => handleOptimize('turbo')}
-      disabled={$isOptimizing}
+      disabled={isOptimizingValue}
       class="bg-[#1a1f3a] hover:bg-[#2a2f4a] disabled:opacity-50 disabled:cursor-not-allowed border border-[#2a2f4a] hover:border-[#00d4ff]/50 rounded-xl p-5 text-left transition-all duration-200 group"
     >
       <div class="w-12 h-12 rounded-lg bg-[#00d4ff]/20 flex items-center justify-center mb-3 group-hover:bg-[#00d4ff]/30 transition-all duration-200">
@@ -515,10 +638,10 @@
       </div>
       <h3 class="text-white font-semibold">Turbo</h3>
       <p class="text-[#a0a0a0] text-sm mt-1">Быстрая оптимизация</p>
-      {#if $isOptimizing && optimizationMode === 'turbo'}
+      {#if isOptimizingValue && optimizationMode === 'turbo'}
         <div class="mt-2 flex items-center gap-2">
           <div class="w-2 h-2 rounded-full bg-[#00d4ff] animate-pulse"></div>
-          <span class="text-[#00d4ff] text-xs">{$optimizationProgress.progress}%</span>
+          <span class="text-[#00d4ff] text-xs">{optimizationProgressValue.progress}%</span>
         </div>
       {/if}
     </button>
@@ -526,7 +649,7 @@
     <!-- Deep Optimization -->
     <button
       onclick={() => handleOptimize('deep')}
-      disabled={$isOptimizing}
+      disabled={isOptimizingValue}
       class="bg-[#1a1f3a] hover:bg-[#2a2f4a] disabled:opacity-50 disabled:cursor-not-allowed border border-[#2a2f4a] hover:border-[#00ff88]/50 rounded-xl p-5 text-left transition-all duration-200 group"
     >
       <div class="w-12 h-12 rounded-lg bg-[#00ff88]/20 flex items-center justify-center mb-3 group-hover:bg-[#00ff88]/30 transition-all duration-200">
@@ -536,10 +659,10 @@
       </div>
       <h3 class="text-white font-semibold">Deep</h3>
       <p class="text-[#a0a0a0] text-sm mt-1">Глубокий анализ</p>
-      {#if $isOptimizing && optimizationMode === 'deep'}
+      {#if isOptimizingValue && optimizationMode === 'deep'}
         <div class="mt-2 flex items-center gap-2">
           <div class="w-2 h-2 rounded-full bg-[#00ff88] animate-pulse"></div>
-          <span class="text-[#00ff88] text-xs">{$optimizationProgress.progress}%</span>
+          <span class="text-[#00ff88] text-xs">{optimizationProgressValue.progress}%</span>
         </div>
       {/if}
     </button>
@@ -728,7 +851,7 @@
     </div>
     
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-      {#each $services as service}
+      {#each servicesValue as service}
         <div class="bg-[#2a2f4a]/50 hover:bg-[#2a2f4a] rounded-xl p-4 transition-all duration-200">
           <div class="flex items-center gap-3">
             <div class="w-3 h-3 rounded-full {service.status === 'working' ? 'bg-[#00ff88]' : service.status === 'blocked' ? 'bg-[#ff3333]' : 'bg-[#a0a0a0]'}"></div>

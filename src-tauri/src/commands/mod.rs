@@ -144,6 +144,7 @@ pub async fn cancel_optimization(state: State<'_, Arc<AppState>>) -> Result<(), 
 /// Apply specific strategy
 #[tauri::command]
 pub async fn apply_strategy(
+    app: AppHandle,
     state: State<'_, Arc<AppState>>,
     strategy_id: String,
 ) -> Result<(), String> {
@@ -156,23 +157,41 @@ pub async fn apply_strategy(
         .await
         .map_err(|e| format!("Strategy not found: {}", e))?;
     
+    let strategy_name = strategy.name.clone();
+    
     state
         .strategy_engine
         .start_global(&strategy)
         .await
-        .map_err(|e| format!("Failed to apply strategy: {}", e))
+        .map_err(|e| format!("Failed to apply strategy: {}", e))?;
+    
+    // Emit event for frontend to update status
+    let _ = app.emit("strategy:applied", serde_json::json!({
+        "strategy_id": strategy_id,
+        "strategy_name": strategy_name,
+    }));
+    
+    Ok(())
 }
 
 /// Stop current strategy
 #[tauri::command]
-pub async fn stop_strategy(state: State<'_, Arc<AppState>>) -> Result<(), String> {
+pub async fn stop_strategy(
+    app: AppHandle,
+    state: State<'_, Arc<AppState>>,
+) -> Result<(), String> {
     info!("Stopping current strategy");
     
     state
         .strategy_engine
         .stop_global()
         .await
-        .map_err(|e| format!("Failed to stop strategy: {}", e))
+        .map_err(|e| format!("Failed to stop strategy: {}", e))?;
+    
+    // Emit event for frontend to update status
+    let _ = app.emit("strategy:stopped", ());
+    
+    Ok(())
 }
 
 /// Run DPI diagnostics
@@ -2127,4 +2146,112 @@ pub async fn download_config_updates() -> Result<UpdateResult, String> {
     crate::core::config_updater::download_config_updates()
         .await
         .map_err(|e| format!("Failed to download config updates: {}", e))
+}
+
+// ============================================================================
+// Single Strategy Testing Command
+// ============================================================================
+
+/// Test result for a single strategy
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct StrategyTestResult {
+    pub strategy_id: String,
+    pub score: f32,
+    pub success_rate: f32,
+    pub avg_latency_ms: u32,
+    pub services_passed: Vec<String>,
+    pub services_failed: Vec<String>,
+}
+
+/// Test a single strategy against all enabled services
+///
+/// Starts the strategy, runs tests, calculates score, then stops.
+/// ВАЖНО: Zapret стратегии тестируются последовательно!
+#[tauri::command]
+pub async fn test_strategy(
+    state: State<'_, Arc<AppState>>,
+    strategy_id: String,
+) -> Result<StrategyTestResult, String> {
+    info!(strategy_id = %strategy_id, "Testing single strategy");
+    
+    // Load strategy
+    let strategy = state
+        .config_manager
+        .load_strategy_by_id(&strategy_id)
+        .await
+        .map_err(|e| format!("Strategy not found: {}", e))?;
+    
+    // Load services
+    let services_map = state
+        .config_manager
+        .load_services()
+        .await
+        .map_err(|e| format!("Failed to load services: {}", e))?;
+    
+    let services: Vec<_> = services_map.values().cloned().collect();
+    
+    // Start strategy
+    state
+        .strategy_engine
+        .start_global(&strategy)
+        .await
+        .map_err(|e| format!("Failed to start strategy: {}", e))?;
+    
+    // Wait for strategy to initialize
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+    
+    // Test services
+    let mut services_passed = Vec::new();
+    let mut services_failed = Vec::new();
+    let mut total_latency = 0u32;
+    let mut test_count = 0u32;
+    
+    for service in &services {
+        match test_service_direct(service, 5).await {
+            Ok(latency) => {
+                services_passed.push(service.id.clone());
+                total_latency += latency;
+                test_count += 1;
+            }
+            Err(_) => {
+                services_failed.push(service.id.clone());
+            }
+        }
+    }
+    
+    // Stop strategy
+    let _ = state.strategy_engine.stop_global().await;
+    
+    // Calculate results
+    let success_rate = if services.is_empty() {
+        0.0
+    } else {
+        (services_passed.len() as f32 / services.len() as f32) * 100.0
+    };
+    
+    let avg_latency_ms = if test_count > 0 {
+        total_latency / test_count
+    } else {
+        9999
+    };
+    
+    // Score formula: success_rate * 10 - latency_penalty
+    let score = success_rate * 10.0 - (avg_latency_ms as f32 / 100.0);
+    
+    info!(
+        strategy_id = %strategy_id,
+        score,
+        success_rate,
+        avg_latency_ms,
+        "Strategy test completed"
+    );
+    
+    Ok(StrategyTestResult {
+        strategy_id,
+        score,
+        success_rate,
+        avg_latency_ms,
+        services_passed,
+        services_failed,
+    })
 }

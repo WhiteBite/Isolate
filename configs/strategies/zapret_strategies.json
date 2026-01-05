@@ -1,0 +1,476 @@
+{
+    "version": "1.0",
+    "strategies": [
+        {
+            "id": "general_multisplit",
+            "name": "General MultiSplit",
+            "description": "Базовая стратегия с multisplit для Discord и YouTube. Использует split-seqovl для обхода DPI.",
+            "category": "general",
+            "family": "zapret",
+            "author": "Flowseal",
+            "label": "recommended",
+            "ports": {
+                "tcp": "80,443,2053,2083,2087,2096,8443",
+                "udp": "443,19294-19344,50000-50100"
+            },
+            "profiles": [
+                {
+                    "filter": "udp=443",
+                    "hostlist": "general.txt",
+                    "hostlist_exclude": "exclude.txt",
+                    "ipset_exclude": "ipset-exclude.txt",
+                    "desync": "fake",
+                    "repeats": 6,
+                    "fake_quic": "quic_initial_www_google_com.bin"
+                },
+                {
+                    "filter": "udp=19294-19344,50000-50100",
+                    "l7": "discord,stun",
+                    "desync": "fake",
+                    "repeats": 6,
+                    "fake_discord": "quic_initial_www_google_com.bin",
+                    "fake_stun": "quic_initial_www_google_com.bin"
+                },
+                {
+                    "filter": "tcp=2053,2083,2087,2096,8443",
+                    "hostlist_domains": "discord.media",
+                    "desync": "multisplit",
+                    "split_seqovl": 568,
+                    "split_pos": 1,
+                    "split_seqovl_pattern": "tls_clienthello_4pda_to.bin"
+                },
+                {
+                    "filter": "tcp=443",
+                    "hostlist": "google.txt",
+                    "ip_id": "zero",
+                    "desync": "multisplit",
+                    "split_seqovl": 681,
+                    "split_pos": 1,
+                    "split_seqovl_pattern": "tls_clienthello_www_google_com.bin"
+                },
+                {
+                    "filter": "tcp=80,443",
+                    "hostlist": "general.txt",
+                    "hostlist_exclude": "exclude.txt",
+                    "ipset_exclude": "ipset-exclude.txt",
+                    "desync": "multisplit",
+                    "split_seqovl": 568,
+                    "split_pos": 1,
+                    "split_seqovl_pattern": "tls_clienthello_4pda_to.bin"
+                },
+                {
+                    "filter": "udp=443",
+                    "ipset": "ipset-all.txt",
+                    "hostlist_exclude": "exclude.txt",
+                    "ipset_exclude": "ipset-exclude.txt",
+                    "desync": "fake",
+                    "repeats": 6,
+                    "fake_quic": "quic_initial_www_google_com.bin"
+                },
+                {
+                    "filter": "tcp=80,443",
+                    "ipset": "ipset-all.txt",
+                    "hostlist_exclude": "exclude.txt",
+                    "ipset_exclude": "ipset-exclude.txt",
+                    "desync": "multisplit",
+                    "split_seqovl": 568,
+                    "split_pos": 1,
+                    "split_seqovl_pattern": "tls_clienthello_4pda_to.bin"
+                }
+            ]
+        },
+        {
+            "id": "general_fakedsplit",
+            "name": "General FakedSplit (ALT)",
+            "description": "Альтернативная стратегия с fake+fakedsplit. Использует fooling=ts и fakedsplit-pattern.",
+            "category": "general",
+            "family": "zapret",
+            "author": "Flowseal",
+            "label": "alternative",
+            "ports": {
+                "tcp": "80,443,2053,2083,2087,2096,8443",
+                "udp": "443,19294-19344,50000-50100"
+            },
+            "profiles": [
+                {
+                    "filter": "udp=443",
+                    "hostlist": "general.txt",
+                    "hostlist_exclude": "exclude.txt",
+                    "ipset_exclude": "ipset-exclude.txt",
+                    "desync": "fake",
+                    "repeats": 6,
+                    "fake_quic": "quic_initial_www_google_com.bin"
+                },
+                {
+                    "filter": "udp=19294-19344,50000-50100",
+                    "l7": "discord,stun",
+                    "desync": "fake",
+                    "repeats": 6,
+                    "fake_discord": "quic_initial_www_google_com.bin",
+                    "fake_stun": "quic_initial_www_google_com.bin"
+                },
+                {
+                    "filter": "tcp=2053,2083,2087,2096,8443",
+                    "hostlist_domains": "discord.media",
+                    "desync": "fake,fakedsplit",
+                    "repeats": 6,
+                    "fooling": "ts",
+                    "fakedsplit_pattern": "0x00",
+                    "fake_tls": "tls_clienthello_www_google_com.bin"
+                },
+                {
+                    "filter": "tcp=443",
+                    "hostlist": "google.txt",
+                    "ip_id": "zero",
+                    "desync": "fake,fakedsplit",
+                    "repeats": 6,
+                    "fooling": "ts",
+                    "fakedsplit_pattern": "0x00",
+                    "fake_tls": "tls_clienthello_www_google_com.bin"
+                },
+                {
+                    "filter": "tcp=80,443",
+                    "hostlist": "general.txt",
+                    "hostlist_exclude": "exclude.txt",
+                    "ipset_exclude": "ipset-exclude.txt",
+                    "desync": "fake,fakedsplit",
+                    "repeats": 6,
+                    "fooling": "ts",
+                    "fakedsplit_pattern": "0x00",
+                    "fake_tls": "tls_clienthello_www_google_com.bin"
+                },
+                {
+                    "filter": "udp=443",
+                    "ipset": "ipset-all.txt",
+                    "hostlist_exclude": "exclude.txt",
+                    "ipset_exclude": "ipset-exclude.txt",
+                    "desync": "fake",
+                    "repeats": 6,
+                    "fake_quic": "quic_initial_www_google_com.bin"
+                },
+                {
+                    "filter": "tcp=80,443",
+                    "ipset": "ipset-all.txt",
+                    "hostlist_exclude": "exclude.txt",
+                    "ipset_exclude": "ipset-exclude.txt",
+                    "desync": "fake,fakedsplit",
+                    "repeats": 6,
+                    "fooling": "ts",
+                    "fakedsplit_pattern": "0x00",
+                    "fake_tls": "tls_clienthello_www_google_com.bin"
+                }
+            ]
+        },
+        {
+            "id": "general_fake_tls_auto",
+            "name": "General Fake TLS Auto",
+            "description": "Продвинутая стратегия с fake+multidisorder и автоматической генерацией TLS. Использует badseq fooling и модификацию TLS.",
+            "category": "general",
+            "family": "zapret",
+            "author": "Flowseal",
+            "label": "experimental",
+            "ports": {
+                "tcp": "80,443,2053,2083,2087,2096,8443",
+                "udp": "443,19294-19344,50000-50100"
+            },
+            "profiles": [
+                {
+                    "filter": "udp=443",
+                    "hostlist": "general.txt",
+                    "hostlist_exclude": "exclude.txt",
+                    "ipset_exclude": "ipset-exclude.txt",
+                    "desync": "fake",
+                    "repeats": 11,
+                    "fake_quic": "quic_initial_www_google_com.bin"
+                },
+                {
+                    "filter": "udp=19294-19344,50000-50100",
+                    "l7": "discord,stun",
+                    "desync": "fake",
+                    "repeats": 6,
+                    "fake_discord": "quic_initial_www_google_com.bin",
+                    "fake_stun": "quic_initial_www_google_com.bin"
+                },
+                {
+                    "filter": "tcp=2053,2083,2087,2096,8443",
+                    "hostlist_domains": "discord.media",
+                    "desync": "fake,multidisorder",
+                    "split_pos": "1,midsld",
+                    "repeats": 11,
+                    "fooling": "badseq",
+                    "fake_tls": "0x00000000",
+                    "fake_tls_mod": "rnd,dupsid,sni=www.google.com"
+                },
+                {
+                    "filter": "tcp=443",
+                    "hostlist": "google.txt",
+                    "ip_id": "zero",
+                    "desync": "fake,multidisorder",
+                    "split_pos": "1,midsld",
+                    "repeats": 11,
+                    "fooling": "badseq",
+                    "fake_tls": "0x00000000",
+                    "fake_tls_mod": "rnd,dupsid,sni=www.google.com"
+                },
+                {
+                    "filter": "tcp=80,443",
+                    "hostlist": "general.txt",
+                    "hostlist_exclude": "exclude.txt",
+                    "ipset_exclude": "ipset-exclude.txt",
+                    "desync": "fake,multidisorder",
+                    "split_pos": "1,midsld",
+                    "repeats": 11,
+                    "fooling": "badseq",
+                    "fake_tls": "0x00000000",
+                    "fake_tls_mod": "rnd,dupsid,sni=www.google.com"
+                },
+                {
+                    "filter": "udp=443",
+                    "ipset": "ipset-all.txt",
+                    "hostlist_exclude": "exclude.txt",
+                    "ipset_exclude": "ipset-exclude.txt",
+                    "desync": "fake",
+                    "repeats": 11,
+                    "fake_quic": "quic_initial_www_google_com.bin"
+                },
+                {
+                    "filter": "tcp=80,443",
+                    "ipset": "ipset-all.txt",
+                    "hostlist_exclude": "exclude.txt",
+                    "ipset_exclude": "ipset-exclude.txt",
+                    "desync": "fake,multidisorder",
+                    "split_pos": "1,midsld",
+                    "repeats": 11,
+                    "fooling": "badseq",
+                    "fake_tls": "0x00000000",
+                    "fake_tls_mod": "rnd,dupsid,sni=www.google.com"
+                }
+            ]
+        },
+        {
+            "id": "general_hostfakesplit",
+            "name": "General HostFakeSplit (ALT3)",
+            "description": "Стратегия с подменой хоста в SNI на ya.ru",
+            "category": "general",
+            "family": "zapret",
+            "author": "Flowseal",
+            "label": "alternative",
+            "ports": {
+                "tcp": "80,443,2053,2083,2087,2096,8443",
+                "udp": "443,19294-19344,50000-50100"
+            },
+            "profiles": [
+                {
+                    "filter": "udp=443",
+                    "hostlist": "general.txt",
+                    "hostlist_exclude": "exclude.txt",
+                    "ipset_exclude": "ipset-exclude.txt",
+                    "desync": "fake",
+                    "repeats": 6,
+                    "fake_quic": "quic_initial_www_google_com.bin"
+                },
+                {
+                    "filter": "udp=19294-19344,50000-50100",
+                    "l7": "discord,stun",
+                    "desync": "fake",
+                    "repeats": 6,
+                    "fake_discord": "quic_initial_www_google_com.bin",
+                    "fake_stun": "quic_initial_www_google_com.bin"
+                },
+                {
+                    "filter": "tcp=2053,2083,2087,2096,8443",
+                    "hostlist_domains": "discord.media",
+                    "desync": "fake,hostfakesplit",
+                    "hostfakesplit_mod": "host=ya.ru,altorder=1"
+                },
+                {
+                    "filter": "tcp=443",
+                    "hostlist": "google.txt",
+                    "ip_id": "zero",
+                    "desync": "fake,hostfakesplit",
+                    "hostfakesplit_mod": "host=ya.ru,altorder=1"
+                },
+                {
+                    "filter": "tcp=80,443",
+                    "hostlist": "general.txt",
+                    "hostlist_exclude": "exclude.txt",
+                    "ipset_exclude": "ipset-exclude.txt",
+                    "desync": "fake,hostfakesplit",
+                    "hostfakesplit_mod": "host=ya.ru,altorder=1"
+                },
+                {
+                    "filter": "udp=443",
+                    "ipset": "ipset-all.txt",
+                    "hostlist_exclude": "exclude.txt",
+                    "ipset_exclude": "ipset-exclude.txt",
+                    "desync": "fake",
+                    "repeats": 6,
+                    "fake_quic": "quic_initial_www_google_com.bin"
+                },
+                {
+                    "filter": "tcp=80,443",
+                    "ipset": "ipset-all.txt",
+                    "hostlist_exclude": "exclude.txt",
+                    "ipset_exclude": "ipset-exclude.txt",
+                    "desync": "fake,hostfakesplit",
+                    "hostfakesplit_mod": "host=ya.ru,altorder=1"
+                }
+            ]
+        },
+        {
+            "id": "general_sniext_split",
+            "name": "General SNI Extension Split (ALT7)",
+            "description": "Разбиение после SNI extension для обхода продвинутого DPI. Использует split-pos=2,sniext+1 для точного разделения TLS ClientHello.",
+            "category": "general",
+            "family": "zapret",
+            "author": "Flowseal",
+            "label": "experimental",
+            "ports": {
+                "tcp": "80,443,2053,2083,2087,2096,8443",
+                "udp": "443,19294-19344,50000-50100"
+            },
+            "profiles": [
+                {
+                    "filter": "udp=443",
+                    "hostlist": "general.txt",
+                    "hostlist_exclude": "exclude.txt",
+                    "ipset_exclude": "ipset-exclude.txt",
+                    "desync": "fake",
+                    "repeats": 6,
+                    "fake_quic": "quic_initial_www_google_com.bin"
+                },
+                {
+                    "filter": "udp=19294-19344,50000-50100",
+                    "l7": "discord,stun",
+                    "desync": "fake",
+                    "repeats": 6,
+                    "fake_discord": "quic_initial_www_google_com.bin",
+                    "fake_stun": "quic_initial_www_google_com.bin"
+                },
+                {
+                    "filter": "tcp=2053,2083,2087,2096,8443",
+                    "hostlist_domains": "discord.media",
+                    "desync": "multisplit",
+                    "split_seqovl": 679,
+                    "split_pos": "2,sniext+1",
+                    "split_seqovl_pattern": "tls_clienthello_4pda_to.bin"
+                },
+                {
+                    "filter": "tcp=443",
+                    "hostlist": "google.txt",
+                    "ip_id": "zero",
+                    "desync": "multisplit",
+                    "split_seqovl": 679,
+                    "split_pos": "2,sniext+1",
+                    "split_seqovl_pattern": "tls_clienthello_www_google_com.bin"
+                },
+                {
+                    "filter": "tcp=80,443",
+                    "hostlist": "general.txt",
+                    "hostlist_exclude": "exclude.txt",
+                    "ipset_exclude": "ipset-exclude.txt",
+                    "desync": "multisplit",
+                    "split_seqovl": 679,
+                    "split_pos": "2,sniext+1",
+                    "split_seqovl_pattern": "tls_clienthello_4pda_to.bin"
+                },
+                {
+                    "filter": "udp=443",
+                    "ipset": "ipset-all.txt",
+                    "hostlist_exclude": "exclude.txt",
+                    "ipset_exclude": "ipset-exclude.txt",
+                    "desync": "fake",
+                    "repeats": 6,
+                    "fake_quic": "quic_initial_www_google_com.bin"
+                },
+                {
+                    "filter": "tcp=80,443",
+                    "ipset": "ipset-all.txt",
+                    "hostlist_exclude": "exclude.txt",
+                    "ipset_exclude": "ipset-exclude.txt",
+                    "desync": "multisplit",
+                    "split_seqovl": 679,
+                    "split_pos": "2,sniext+1",
+                    "split_seqovl_pattern": "tls_clienthello_4pda_to.bin"
+                }
+            ]
+        },
+        {
+            "id": "youtube_only",
+            "name": "YouTube Only",
+            "description": "Стратегия только для YouTube и Google сервисов. Минимальный набор правил для разблокировки видео.",
+            "category": "youtube",
+            "family": "zapret",
+            "author": "Flowseal",
+            "label": "specialized",
+            "ports": {
+                "tcp": "443",
+                "udp": "443"
+            },
+            "profiles": [
+                {
+                    "filter": "udp=443",
+                    "hostlist": "google.txt",
+                    "desync": "fake",
+                    "repeats": 6,
+                    "fake_quic": "quic_initial_www_google_com.bin"
+                },
+                {
+                    "filter": "tcp=443",
+                    "hostlist": "google.txt",
+                    "ip_id": "zero",
+                    "desync": "multisplit",
+                    "split_seqovl": 681,
+                    "split_pos": 1,
+                    "split_seqovl_pattern": "tls_clienthello_www_google_com.bin"
+                }
+            ]
+        },
+        {
+            "id": "discord_only",
+            "name": "Discord Only",
+            "description": "Стратегия только для Discord включая голосовые каналы. Поддержка UDP для voice и STUN.",
+            "category": "discord",
+            "family": "zapret",
+            "author": "Flowseal",
+            "label": "specialized",
+            "ports": {
+                "tcp": "443,2053,2083,2087,2096,8443",
+                "udp": "443,19294-19344,50000-50100"
+            },
+            "profiles": [
+                {
+                    "filter": "udp=443",
+                    "hostlist_domains": "discord.com,discord.gg,discord.media,discordapp.com,discordapp.net",
+                    "desync": "fake",
+                    "repeats": 6,
+                    "fake_quic": "quic_initial_www_google_com.bin"
+                },
+                {
+                    "filter": "udp=19294-19344,50000-50100",
+                    "l7": "discord,stun",
+                    "desync": "fake",
+                    "repeats": 6,
+                    "fake_discord": "quic_initial_www_google_com.bin",
+                    "fake_stun": "quic_initial_www_google_com.bin"
+                },
+                {
+                    "filter": "tcp=2053,2083,2087,2096,8443",
+                    "hostlist_domains": "discord.media",
+                    "desync": "multisplit",
+                    "split_seqovl": 568,
+                    "split_pos": 1,
+                    "split_seqovl_pattern": "tls_clienthello_4pda_to.bin"
+                },
+                {
+                    "filter": "tcp=443",
+                    "hostlist_domains": "discord.com,discord.gg,discord.media,discordapp.com,discordapp.net",
+                    "desync": "multisplit",
+                    "split_seqovl": 568,
+                    "split_pos": 1,
+                    "split_seqovl_pattern": "tls_clienthello_4pda_to.bin"
+                }
+            ]
+        }
+    ]
+}

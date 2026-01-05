@@ -20,7 +20,7 @@ use tracing::{debug, error, info, warn};
 
 use crate::core::errors::{IsolateError, Result};
 use crate::core::models::{AppRoute, DomainRoute, ProxyConfig};
-use crate::core::paths::get_binaries_dir;
+use crate::core::paths::get_singbox_path;
 use crate::core::singbox_config::{
     generate_dns_config_fakeip, generate_dns_config_with_mode, generate_outbound,
     generate_route_rules, DnsMode,
@@ -780,11 +780,11 @@ impl SingboxManager {
         let mut port = base_port;
 
         while used_ports.contains_key(&port) {
-            port += 1;
-            if port > 65535 {
+            if port == 65535 {
                 port = base_port; // Wrap around (shouldn't happen in practice)
                 break;
             }
+            port += 1;
         }
 
         port
@@ -820,20 +820,7 @@ impl SingboxManager {
 // Utility Functions
 // ============================================================================
 
-/// Get path to sing-box binary
-pub fn get_singbox_path() -> PathBuf {
-    let binaries_dir = get_binaries_dir();
-
-    #[cfg(windows)]
-    {
-        binaries_dir.join("sing-box.exe")
-    }
-
-    #[cfg(not(windows))]
-    {
-        binaries_dir.join("sing-box")
-    }
-}
+// NOTE: get_singbox_path moved to paths.rs - use crate::core::paths::get_singbox_path
 
 /// Get path for temporary config file
 fn get_temp_config_path(config_id: &str) -> PathBuf {
@@ -842,12 +829,12 @@ fn get_temp_config_path(config_id: &str) -> PathBuf {
 
 /// Check if sing-box binary exists
 pub fn is_singbox_available() -> bool {
-    get_singbox_path().exists()
+    crate::core::paths::get_singbox_path().exists()
 }
 
 /// Get sing-box version
 pub async fn get_singbox_version() -> Result<String> {
-    let singbox_path = get_singbox_path();
+    let singbox_path = crate::core::paths::get_singbox_path();
 
     if !singbox_path.exists() {
         return Err(IsolateError::Process("sing-box binary not found".into()));

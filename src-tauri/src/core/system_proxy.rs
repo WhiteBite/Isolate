@@ -287,9 +287,6 @@ mod windows_impl {
 }
 
 #[cfg(windows)]
-use windows_impl::*;
-
-#[cfg(windows)]
 fn set_windows_proxy(host: &str, port: u16, scheme: &str) -> Result<()> {
     windows_impl::set_windows_proxy(host, port, scheme)
 }

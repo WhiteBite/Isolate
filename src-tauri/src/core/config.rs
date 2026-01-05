@@ -262,3 +262,497 @@ pub async fn load_services_from_dir(dir: &Path) -> Result<HashMap<String, Servic
     let manager = ConfigManager::new(PathBuf::new(), dir.to_path_buf());
     manager.load_services().await
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::models::{
+        LaunchTemplate, ModeCapabilities, Service, Strategy, StrategyEngine, StrategyFamily,
+        StrategyRequirements, TestDefinition,
+    };
+    use std::collections::HashMap;
+
+    // ========================================================================
+    // Helper functions for creating test data
+    // ========================================================================
+
+    fn create_valid_strategy() -> Strategy {
+        Strategy {
+            id: "test-strategy".to_string(),
+            name: "Test Strategy".to_string(),
+            description: "A test strategy".to_string(),
+            family: StrategyFamily::DnsBypass,
+            engine: StrategyEngine::Zapret,
+            mode_capabilities: ModeCapabilities {
+                supports_socks: true,
+                supports_global: false,
+            },
+            socks_template: Some(LaunchTemplate {
+                binary: "winws.exe".to_string(),
+                args: vec!["--arg1".to_string()],
+                env: HashMap::new(),
+                log_file: None,
+                requires_admin: false,
+            }),
+            global_template: None,
+            requirements: StrategyRequirements::default(),
+            weight_hint: 100,
+            services: vec!["youtube".to_string()],
+        }
+    }
+
+    fn create_valid_service() -> Service {
+        Service {
+            id: "test-service".to_string(),
+            name: "Test Service".to_string(),
+            enabled_by_default: true,
+            critical: false,
+            tests: vec![TestDefinition::HttpsGet {
+                url: "https://example.com".to_string(),
+                timeout_ms: 5000,
+                expected_status: vec![200],
+                min_body_size: None,
+            }],
+            test_url: Some("https://example.com".to_string()),
+        }
+    }
+
+    // ========================================================================
+    // ConfigManager::new tests
+    // ========================================================================
+
+    #[test]
+    fn test_config_manager_new() {
+        let strategies_dir = PathBuf::from("/path/to/strategies");
+        let services_dir = PathBuf::from("/path/to/services");
+
+        let manager = ConfigManager::new(strategies_dir.clone(), services_dir.clone());
+
+        assert_eq!(manager.strategies_dir, strategies_dir);
+        assert_eq!(manager.services_dir, services_dir);
+    }
+
+    #[test]
+    fn test_config_manager_new_with_empty_paths() {
+        let manager = ConfigManager::new(PathBuf::new(), PathBuf::new());
+
+        assert_eq!(manager.strategies_dir, PathBuf::new());
+        assert_eq!(manager.services_dir, PathBuf::new());
+    }
+
+    // ========================================================================
+    // ConfigManager::with_default_paths tests
+    // ========================================================================
+
+    #[test]
+    fn test_config_manager_with_default_paths() {
+        let base_dir = Path::new("/app/data");
+        let manager = ConfigManager::with_default_paths(base_dir);
+
+        assert_eq!(
+            manager.strategies_dir,
+            PathBuf::from("/app/data/configs/strategies")
+        );
+        assert_eq!(
+            manager.services_dir,
+            PathBuf::from("/app/data/configs/services")
+        );
+    }
+
+    #[test]
+    fn test_config_manager_with_default_paths_relative() {
+        let base_dir = Path::new(".");
+        let manager = ConfigManager::with_default_paths(base_dir);
+
+        assert_eq!(
+            manager.strategies_dir,
+            PathBuf::from("./configs/strategies")
+        );
+        assert_eq!(manager.services_dir, PathBuf::from("./configs/services"));
+    }
+
+    // ========================================================================
+    // is_yaml_file tests
+    // ========================================================================
+
+    #[test]
+    fn test_is_yaml_file_with_yaml_extension() {
+        assert!(is_yaml_file(Path::new("config.yaml")));
+        assert!(is_yaml_file(Path::new("/path/to/strategy.yaml")));
+        assert!(is_yaml_file(Path::new("C:\\configs\\service.yaml")));
+    }
+
+    #[test]
+    fn test_is_yaml_file_with_yml_extension() {
+        assert!(is_yaml_file(Path::new("config.yml")));
+        assert!(is_yaml_file(Path::new("/path/to/strategy.yml")));
+        assert!(is_yaml_file(Path::new("C:\\configs\\service.yml")));
+    }
+
+    #[test]
+    fn test_is_yaml_file_with_non_yaml_extension() {
+        assert!(!is_yaml_file(Path::new("config.json")));
+        assert!(!is_yaml_file(Path::new("config.toml")));
+        assert!(!is_yaml_file(Path::new("config.txt")));
+        assert!(!is_yaml_file(Path::new("config.xml")));
+        assert!(!is_yaml_file(Path::new("README.md")));
+    }
+
+    #[test]
+    fn test_is_yaml_file_without_extension() {
+        assert!(!is_yaml_file(Path::new("config")));
+        assert!(!is_yaml_file(Path::new("/path/to/file")));
+    }
+
+    #[test]
+    fn test_is_yaml_file_with_hidden_file() {
+        assert!(!is_yaml_file(Path::new(".gitignore")));
+        assert!(is_yaml_file(Path::new(".config.yaml")));
+    }
+
+    #[test]
+    fn test_is_yaml_file_case_sensitivity() {
+        // Rust's OsStr comparison is case-sensitive on most platforms
+        // but we should test the actual behavior
+        assert!(!is_yaml_file(Path::new("config.YAML")));
+        assert!(!is_yaml_file(Path::new("config.YML")));
+        assert!(!is_yaml_file(Path::new("config.Yaml")));
+    }
+
+    // ========================================================================
+    // validate_strategy tests
+    // ========================================================================
+
+    #[test]
+    fn test_validate_strategy_valid() {
+        let manager = ConfigManager::new(PathBuf::new(), PathBuf::new());
+        let strategy = create_valid_strategy();
+
+        let result = manager.validate_strategy(&strategy);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_strategy_empty_id() {
+        let manager = ConfigManager::new(PathBuf::new(), PathBuf::new());
+        let mut strategy = create_valid_strategy();
+        strategy.id = String::new();
+
+        let result = manager.validate_strategy(&strategy);
+        assert!(result.is_err());
+
+        let err = result.unwrap_err();
+        assert!(matches!(err, IsolateError::Config(_)));
+        assert!(err.to_string().contains("ID cannot be empty"));
+    }
+
+    #[test]
+    fn test_validate_strategy_empty_name() {
+        let manager = ConfigManager::new(PathBuf::new(), PathBuf::new());
+        let mut strategy = create_valid_strategy();
+        strategy.name = String::new();
+
+        let result = manager.validate_strategy(&strategy);
+        assert!(result.is_err());
+
+        let err = result.unwrap_err();
+        assert!(matches!(err, IsolateError::Config(_)));
+        assert!(err.to_string().contains("empty name"));
+    }
+
+    #[test]
+    fn test_validate_strategy_no_templates() {
+        let manager = ConfigManager::new(PathBuf::new(), PathBuf::new());
+        let mut strategy = create_valid_strategy();
+        strategy.socks_template = None;
+        strategy.global_template = None;
+
+        let result = manager.validate_strategy(&strategy);
+        assert!(result.is_err());
+
+        let err = result.unwrap_err();
+        assert!(matches!(err, IsolateError::Config(_)));
+        assert!(err.to_string().contains("at least one launch template"));
+    }
+
+    #[test]
+    fn test_validate_strategy_with_global_template_only() {
+        let manager = ConfigManager::new(PathBuf::new(), PathBuf::new());
+        let mut strategy = create_valid_strategy();
+        strategy.socks_template = None;
+        strategy.global_template = Some(LaunchTemplate {
+            binary: "winws.exe".to_string(),
+            args: vec!["--global".to_string()],
+            env: HashMap::new(),
+            log_file: None,
+            requires_admin: true,
+        });
+
+        let result = manager.validate_strategy(&strategy);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_strategy_with_both_templates() {
+        let manager = ConfigManager::new(PathBuf::new(), PathBuf::new());
+        let mut strategy = create_valid_strategy();
+        strategy.global_template = Some(LaunchTemplate {
+            binary: "winws.exe".to_string(),
+            args: vec!["--global".to_string()],
+            env: HashMap::new(),
+            log_file: None,
+            requires_admin: true,
+        });
+
+        let result = manager.validate_strategy(&strategy);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_strategy_empty_binary_in_socks_template() {
+        let manager = ConfigManager::new(PathBuf::new(), PathBuf::new());
+        let mut strategy = create_valid_strategy();
+        if let Some(ref mut template) = strategy.socks_template {
+            template.binary = String::new();
+        }
+
+        let result = manager.validate_strategy(&strategy);
+        assert!(result.is_err());
+
+        let err = result.unwrap_err();
+        assert!(matches!(err, IsolateError::Config(_)));
+        assert!(err.to_string().contains("empty binary path"));
+    }
+
+    #[test]
+    fn test_validate_strategy_empty_binary_in_global_template() {
+        let manager = ConfigManager::new(PathBuf::new(), PathBuf::new());
+        let mut strategy = create_valid_strategy();
+        strategy.socks_template = None;
+        strategy.global_template = Some(LaunchTemplate {
+            binary: String::new(),
+            args: vec![],
+            env: HashMap::new(),
+            log_file: None,
+            requires_admin: false,
+        });
+
+        let result = manager.validate_strategy(&strategy);
+        assert!(result.is_err());
+
+        let err = result.unwrap_err();
+        assert!(matches!(err, IsolateError::Config(_)));
+        assert!(err.to_string().contains("empty binary path"));
+    }
+
+    // ========================================================================
+    // validate_service tests
+    // ========================================================================
+
+    #[test]
+    fn test_validate_service_valid() {
+        let manager = ConfigManager::new(PathBuf::new(), PathBuf::new());
+        let service = create_valid_service();
+
+        let result = manager.validate_service(&service);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_service_empty_id() {
+        let manager = ConfigManager::new(PathBuf::new(), PathBuf::new());
+        let mut service = create_valid_service();
+        service.id = String::new();
+
+        let result = manager.validate_service(&service);
+        assert!(result.is_err());
+
+        let err = result.unwrap_err();
+        assert!(matches!(err, IsolateError::Config(_)));
+        assert!(err.to_string().contains("ID cannot be empty"));
+    }
+
+    #[test]
+    fn test_validate_service_empty_name() {
+        let manager = ConfigManager::new(PathBuf::new(), PathBuf::new());
+        let mut service = create_valid_service();
+        service.name = String::new();
+
+        let result = manager.validate_service(&service);
+        assert!(result.is_err());
+
+        let err = result.unwrap_err();
+        assert!(matches!(err, IsolateError::Config(_)));
+        assert!(err.to_string().contains("empty name"));
+    }
+
+    #[test]
+    fn test_validate_service_empty_tests() {
+        let manager = ConfigManager::new(PathBuf::new(), PathBuf::new());
+        let mut service = create_valid_service();
+        service.tests = vec![];
+
+        let result = manager.validate_service(&service);
+        assert!(result.is_err());
+
+        let err = result.unwrap_err();
+        assert!(matches!(err, IsolateError::Config(_)));
+        assert!(err.to_string().contains("at least one test"));
+    }
+
+    #[test]
+    fn test_validate_service_with_multiple_tests() {
+        let manager = ConfigManager::new(PathBuf::new(), PathBuf::new());
+        let mut service = create_valid_service();
+        service.tests = vec![
+            TestDefinition::HttpsGet {
+                url: "https://example.com".to_string(),
+                timeout_ms: 5000,
+                expected_status: vec![200],
+                min_body_size: None,
+            },
+            TestDefinition::TcpConnect {
+                host: "example.com".to_string(),
+                port: 443,
+                timeout_ms: 3000,
+            },
+            TestDefinition::Dns {
+                domain: "example.com".to_string(),
+                timeout_ms: 2000,
+            },
+        ];
+
+        let result = manager.validate_service(&service);
+        assert!(result.is_ok());
+    }
+
+    // ========================================================================
+    // Async tests for load_strategies and load_services
+    // ========================================================================
+
+    #[tokio::test]
+    async fn test_load_strategies_nonexistent_directory() {
+        let manager = ConfigManager::new(
+            PathBuf::from("/nonexistent/path/to/strategies"),
+            PathBuf::new(),
+        );
+
+        let result = manager.load_strategies().await;
+        assert!(result.is_ok());
+
+        let strategies = result.unwrap();
+        assert!(strategies.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_load_services_nonexistent_directory() {
+        let manager = ConfigManager::new(
+            PathBuf::new(),
+            PathBuf::from("/nonexistent/path/to/services"),
+        );
+
+        let result = manager.load_services().await;
+        assert!(result.is_ok());
+
+        let services = result.unwrap();
+        assert!(services.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_load_strategy_by_id_not_found() {
+        let manager = ConfigManager::new(
+            PathBuf::from("/nonexistent/path"),
+            PathBuf::new(),
+        );
+
+        let result = manager.load_strategy_by_id("nonexistent").await;
+        assert!(result.is_err());
+
+        let err = result.unwrap_err();
+        assert!(matches!(err, IsolateError::StrategyNotFound(_)));
+    }
+
+    #[tokio::test]
+    async fn test_load_service_by_id_not_found() {
+        let manager = ConfigManager::new(
+            PathBuf::new(),
+            PathBuf::from("/nonexistent/path"),
+        );
+
+        let result = manager.load_service_by_id("nonexistent").await;
+        assert!(result.is_err());
+
+        let err = result.unwrap_err();
+        assert!(matches!(err, IsolateError::Config(_)));
+        assert!(err.to_string().contains("not found"));
+    }
+
+    #[tokio::test]
+    async fn test_reload_with_nonexistent_directories() {
+        let manager = ConfigManager::new(
+            PathBuf::from("/nonexistent/strategies"),
+            PathBuf::from("/nonexistent/services"),
+        );
+
+        let result = manager.reload().await;
+        assert!(result.is_ok());
+
+        let (strategies, services) = result.unwrap();
+        assert!(strategies.is_empty());
+        assert!(services.is_empty());
+    }
+
+    // ========================================================================
+    // Edge case tests
+    // ========================================================================
+
+    #[test]
+    fn test_validate_strategy_whitespace_id() {
+        let manager = ConfigManager::new(PathBuf::new(), PathBuf::new());
+        let mut strategy = create_valid_strategy();
+        strategy.id = "   ".to_string(); // whitespace only
+
+        // Current implementation doesn't trim, so this passes
+        // This test documents current behavior
+        let result = manager.validate_strategy(&strategy);
+        assert!(result.is_ok()); // whitespace-only ID is currently allowed
+    }
+
+    #[test]
+    fn test_validate_service_whitespace_id() {
+        let manager = ConfigManager::new(PathBuf::new(), PathBuf::new());
+        let mut service = create_valid_service();
+        service.id = "   ".to_string(); // whitespace only
+
+        // Current implementation doesn't trim, so this passes
+        // This test documents current behavior
+        let result = manager.validate_service(&service);
+        assert!(result.is_ok()); // whitespace-only ID is currently allowed
+    }
+
+    #[test]
+    fn test_config_manager_clone() {
+        let manager = ConfigManager::new(
+            PathBuf::from("/strategies"),
+            PathBuf::from("/services"),
+        );
+
+        let cloned = manager.clone();
+
+        assert_eq!(cloned.strategies_dir, manager.strategies_dir);
+        assert_eq!(cloned.services_dir, manager.services_dir);
+    }
+
+    #[test]
+    fn test_config_manager_debug() {
+        let manager = ConfigManager::new(
+            PathBuf::from("/strategies"),
+            PathBuf::from("/services"),
+        );
+
+        let debug_str = format!("{:?}", manager);
+        assert!(debug_str.contains("ConfigManager"));
+        assert!(debug_str.contains("strategies_dir"));
+        assert!(debug_str.contains("services_dir"));
+    }
+}

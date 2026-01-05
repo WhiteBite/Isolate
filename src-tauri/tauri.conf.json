@@ -25,15 +25,15 @@
         "windows": [
             {
                 "title": "Isolate",
-                "width": 420,
-                "height": 700,
+                "width": 1100,
+                "height": 800,
                 "resizable": true,
                 "fullscreen": false,
                 "decorations": true,
                 "transparent": false,
                 "center": true,
-                "minWidth": 380,
-                "minHeight": 600
+                "minWidth": 900,
+                "minHeight": 650
             }
         ],
         "trayIcon": {

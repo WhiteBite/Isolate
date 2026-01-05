@@ -1,0 +1,49 @@
+#cloud-config
+autoinstall:
+  version: 1
+  locale: en_US.UTF-8
+  keyboard:
+    layout: us
+  
+  identity:
+    hostname: dpi-simulator
+    username: dpi
+    password: "$6$rounds=4096$xyz$hashed"  # dpi
+  
+  ssh:
+    install-server: true
+    allow-pw: true
+    authorized-keys:
+      - ssh-rsa PLACEHOLDER_FOR_SSH_KEY
+  
+  network:
+    version: 2
+    ethernets:
+      eth0:
+        addresses:
+          - 192.168.100.10/24
+        routes:
+          - to: default
+            via: 192.168.100.1
+        nameservers:
+          addresses: [8.8.8.8, 8.8.4.4]
+      eth1:
+        dhcp4: true
+  
+  packages:
+    - python3
+    - python3-pip
+    - python3-venv
+    - iptables
+    - libnetfilter-queue-dev
+    - net-tools
+    - tcpdump
+    - curl
+  
+  late-commands:
+    - curtin in-target --target=/target -- mkdir -p /opt/dpi-simulator
+    - curtin in-target --target=/target -- systemctl enable ssh
+  
+  storage:
+    layout:
+      name: direct

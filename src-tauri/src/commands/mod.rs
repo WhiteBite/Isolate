@@ -1,16 +1,42 @@
 //! Tauri commands — IPC interface between frontend and backend
 
+pub mod diagnostics;
+pub mod hostlists;
+pub mod logs;
+pub mod proxies;
+pub mod quic;
+pub mod routing;
+pub mod settings;
+pub mod system;
+pub mod tray;
+pub mod updates;
+pub mod vless;
+
+pub use diagnostics::*;
+pub use hostlists::*;
+pub use logs::*;
+pub use proxies::*;
+pub use quic::*;
+pub use routing::*;
+pub use settings::*;
+pub use system::*;
+pub use tray::*;
+pub use updates::*;
+pub use vless::*;
+
 use std::sync::Arc;
-use tauri::{AppHandle, Emitter, State, Window};
-use tauri_plugin_updater::UpdaterExt;
-use tokio::process::Command;
+use tauri::{AppHandle, Emitter, Manager, State, Window};
 use tracing::{error, info, warn};
 
-use crate::core::binaries::{self, BinaryCheckResult, DownloadProgress};
-use crate::core::hostlists::{self, Hostlist};
-use crate::core::models::{AppStatus, DiagnosticResult, LogEntry, Service, ServiceWithState, Settings, Strategy, UpdateInfo, VlessConfig};
-use crate::core::diagnostics::{DualStackResult, Ipv6Status};
+use crate::core::models::{AppStatus, Service, Strategy};
 use crate::state::AppState;
+
+/// Check if backend is ready (AppState initialized)
+/// This command doesn't require State, so it works even before AppState is ready
+#[tauri::command]
+pub fn is_backend_ready(app: AppHandle) -> bool {
+    app.try_state::<Arc<AppState>>().is_some()
+}
 
 /// Get current application status
 #[tauri::command]
@@ -194,1294 +220,11 @@ pub async fn stop_strategy(
     Ok(())
 }
 
-/// Run DPI diagnostics
-#[tauri::command]
-pub async fn diagnose() -> Result<DiagnosticResult, String> {
-    info!("Running DPI diagnostics");
-    
-    let profile = crate::core::diagnostics::diagnose()
-        .await
-        .map_err(|e| format!("Diagnostics failed: {}", e))?;
-    
-    Ok(DiagnosticResult {
-        profile,
-        tested_services: vec![],
-        blocked_services: vec![],
-    })
-}
-
-/// Run dual-stack (IPv4/IPv6) diagnostics
-#[tauri::command]
-pub async fn diagnose_dual_stack() -> Result<DualStackResult, String> {
-    info!("Running dual-stack diagnostics");
-    
-    crate::core::diagnostics::diagnose_dual_stack()
-        .await
-        .map_err(|e| format!("Dual-stack diagnostics failed: {}", e))
-}
-
-/// Check IPv6 availability
-#[tauri::command]
-pub async fn check_ipv6() -> Result<Ipv6Status, String> {
-    info!("Checking IPv6 availability");
-    
-    Ok(crate::core::diagnostics::check_ipv6_availability().await)
-}
-
-/// Emergency network reset
-#[tauri::command]
-pub async fn panic_reset(state: State<'_, Arc<AppState>>) -> Result<(), String> {
-    warn!("Panic reset triggered!");
-    
-    // 1. Stop all running strategies
-    if let Err(e) = state.strategy_engine.shutdown_all().await {
-        error!("Failed to shutdown strategies: {}", e);
-    }
-    
-    // 2. Reset network (Windows specific)
-    #[cfg(windows)]
-    {
-        // Winsock reset
-        let _ = Command::new("netsh")
-            .args(["winsock", "reset"])
-            .output()
-            .await;
-        
-        // Flush DNS
-        let _ = Command::new("ipconfig")
-            .args(["/flushdns"])
-            .output()
-            .await;
-        
-        info!("Network reset commands executed");
-    }
-    
-    Ok(())
-}
-
-// ============================================================================
-// Settings Commands
-// ============================================================================
-
-/// Get user settings
-#[tauri::command]
-pub async fn get_settings(state: State<'_, Arc<AppState>>) -> Result<Settings, String> {
-    info!("Getting user settings");
-    
-    state
-        .storage
-        .get_settings()
-        .map_err(|e| format!("Failed to get settings: {}", e))
-}
-
-/// Save user settings
-#[tauri::command]
-pub async fn save_settings(
-    state: State<'_, Arc<AppState>>,
-    settings: Settings,
-) -> Result<(), String> {
-    info!("Saving user settings");
-    
-    state
-        .storage
-        .save_settings(&settings)
-        .map_err(|e| format!("Failed to save settings: {}", e))
-}
-
-/// Get services with their enabled/disabled state
-#[tauri::command]
-pub async fn get_services_settings(
-    state: State<'_, Arc<AppState>>,
-) -> Result<Vec<ServiceWithState>, String> {
-    info!("Loading services with settings");
-    
-    let services_map = state
-        .config_manager
-        .load_services()
-        .await
-        .map_err(|e| format!("Failed to load services: {}", e))?;
-    
-    let mut services_with_state = Vec::new();
-    
-    for service in services_map.into_values() {
-        let enabled = state
-            .storage
-            .get_service_enabled(&service.id)
-            .unwrap_or(service.enabled_by_default);
-        
-        services_with_state.push(ServiceWithState {
-            id: service.id,
-            name: service.name,
-            enabled,
-            critical: service.critical,
-        });
-    }
-    
-    Ok(services_with_state)
-}
-
-/// Toggle a service's enabled state
-#[tauri::command]
-pub async fn toggle_service(
-    state: State<'_, Arc<AppState>>,
-    service_id: String,
-    enabled: bool,
-) -> Result<(), String> {
-    info!(service_id = %service_id, enabled, "Toggling service");
-    
-    state
-        .storage
-        .set_service_enabled(&service_id, enabled)
-        .map_err(|e| format!("Failed to toggle service: {}", e))
-}
-
-// ============================================================================
-// Generic Setting Commands
-// ============================================================================
-
-/// Get a setting by key
-#[tauri::command]
-pub async fn get_setting(
-    state: State<'_, Arc<AppState>>,
-    key: String,
-) -> Result<serde_json::Value, String> {
-    info!(key = %key, "Getting setting");
-    
-    let value: Option<serde_json::Value> = state
-        .storage
-        .get_setting(&key)
-        .map_err(|e| format!("Failed to get setting: {}", e))?;
-    
-    Ok(value.unwrap_or(serde_json::Value::Null))
-}
-
-/// Set a setting by key
-#[tauri::command]
-pub async fn set_setting(
-    state: State<'_, Arc<AppState>>,
-    key: String,
-    value: serde_json::Value,
-) -> Result<(), String> {
-    info!(key = %key, "Setting setting");
-    
-    state
-        .storage
-        .set_setting(&key, &value)
-        .map_err(|e| format!("Failed to set setting: {}", e))
-}
-
-/// Get app version from Cargo.toml
-#[tauri::command]
-pub async fn get_app_version() -> Result<String, String> {
-    Ok(env!("CARGO_PKG_VERSION").to_string())
-}
-
-// ============================================================================
-// Update Commands
-// ============================================================================
-
-/// Check for available updates
-#[tauri::command]
-pub async fn check_for_updates(app: AppHandle) -> Result<Option<UpdateInfo>, String> {
-    info!("Checking for updates");
-    
-    let updater = app.updater().map_err(|e| format!("Failed to get updater: {}", e))?;
-    
-    match updater.check().await {
-        Ok(Some(update)) => {
-            info!(version = %update.version, "Update available");
-            Ok(Some(UpdateInfo {
-                version: update.version.clone(),
-                notes: update.body.clone(),
-                date: update.date.map(|d| d.to_string()),
-            }))
-        }
-        Ok(None) => {
-            info!("No updates available");
-            Ok(None)
-        }
-        Err(e) => {
-            error!("Failed to check for updates: {}", e);
-            Err(format!("Failed to check for updates: {}", e))
-        }
-    }
-}
-
-/// Download and install available update
-#[tauri::command]
-pub async fn install_update(app: AppHandle) -> Result<(), String> {
-    info!("Installing update");
-    
-    let updater = app.updater().map_err(|e| format!("Failed to get updater: {}", e))?;
-    
-    let update = updater
-        .check()
-        .await
-        .map_err(|e| format!("Failed to check for updates: {}", e))?
-        .ok_or_else(|| "No update available".to_string())?;
-    
-    info!(version = %update.version, "Downloading update");
-    
-    // Download and install the update
-    update
-        .download_and_install(|_downloaded, _total| {}, || {})
-        .await
-        .map_err(|e| format!("Failed to install update: {}", e))?;
-    
-    info!("Update installed successfully, restart required");
-    
-    Ok(())
-}
-
-// ============================================================================
-// Log Commands
-// ============================================================================
-
-/// Log filter parameters
-#[derive(Debug, Clone, serde::Deserialize)]
-pub struct LogFilter {
-    pub level: Option<String>,
-    pub module: Option<String>,
-    pub search: Option<String>,
-}
-
-/// Get recent logs with optional filtering
-#[tauri::command]
-pub async fn get_logs(filter: Option<LogFilter>) -> Result<Vec<LogEntry>, String> {
-    info!("Getting logs with filter: {:?}", filter);
-    
-    let logs = match filter {
-        Some(f) => crate::core::log_capture::get_filtered_logs(
-            f.level.as_deref(),
-            f.module.as_deref(),
-            f.search.as_deref(),
-        ),
-        None => crate::core::log_capture::get_all_logs(),
-    };
-    
-    Ok(logs)
-}
-
-/// Clear all logs
-#[tauri::command]
-pub async fn clear_logs() -> Result<(), String> {
-    info!("Clearing logs");
-    crate::core::log_capture::clear_logs();
-    Ok(())
-}
-
-/// Export logs to file
-#[tauri::command]
-pub async fn export_logs() -> Result<String, String> {
-    info!("Exporting logs");
-    
-    let logs_content = crate::core::log_capture::export_logs_to_string();
-    
-    // Get logs directory
-    let logs_dir = crate::core::paths::get_logs_dir();
-    std::fs::create_dir_all(&logs_dir)
-        .map_err(|e| format!("Failed to create logs directory: {}", e))?;
-    
-    // Create filename with timestamp
-    let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
-    let filename = format!("isolate_logs_{}.txt", timestamp);
-    let filepath = logs_dir.join(&filename);
-    
-    // Write logs
-    std::fs::write(&filepath, logs_content)
-        .map_err(|e| format!("Failed to write logs: {}", e))?;
-    
-    info!(path = %filepath.display(), "Logs exported");
-    Ok(filepath.display().to_string())
-}
-
-
-// ============================================================================
-// Binary Management Commands
-// ============================================================================
-
-/// Check if all required binaries are present
-#[tauri::command]
-pub async fn check_binaries() -> Result<BinaryCheckResult, String> {
-    info!("Checking required binaries");
-    
-    binaries::check_binaries()
-        .await
-        .map_err(|e| format!("Failed to check binaries: {}", e))
-}
-
-/// Download missing binaries with progress reporting
-#[tauri::command]
-pub async fn download_binaries(window: Window) -> Result<(), String> {
-    info!("Starting binary download");
-    
-    let window_clone = window.clone();
-    
-    binaries::ensure_binaries(move |progress: DownloadProgress| {
-        if let Err(e) = window_clone.emit("binaries:progress", &progress) {
-            error!("Failed to emit download progress: {}", e);
-        }
-    })
-    .await
-    .map_err(|e| {
-        error!("Binary download failed: {}", e);
-        format!("Failed to download binaries: {}", e)
-    })?;
-    
-    let _ = window.emit("binaries:complete", ());
-    info!("Binary download completed");
-    
-    Ok(())
-}
-
-/// Get path to binaries directory
-#[tauri::command]
-pub async fn get_binaries_dir() -> Result<String, String> {
-    Ok(crate::core::paths::get_binaries_dir().display().to_string())
-}
-
-// ============================================================================
-// QUIC Blocking Commands
-// ============================================================================
-
-/// Enable QUIC blocking via Windows Firewall
-///
-/// Adds a firewall rule to block UDP port 443 (QUIC protocol),
-/// forcing browsers to fall back to TCP/TLS connections.
-/// Requires administrator privileges.
-#[tauri::command]
-pub async fn enable_quic_block() -> Result<(), String> {
-    info!("Command: enable_quic_block");
-    
-    crate::core::quic_blocker::enable_quic_block()
-        .await
-        .map_err(|e| e.to_string())
-}
-
-/// Disable QUIC blocking
-///
-/// Removes the firewall rule that blocks QUIC protocol.
-/// Requires administrator privileges.
-#[tauri::command]
-pub async fn disable_quic_block() -> Result<(), String> {
-    info!("Command: disable_quic_block");
-    
-    crate::core::quic_blocker::disable_quic_block()
-        .await
-        .map_err(|e| e.to_string())
-}
-
-/// Check if QUIC is currently blocked
-///
-/// Returns true if the QUIC blocking firewall rule exists.
-#[tauri::command]
-pub async fn is_quic_blocked() -> Result<bool, String> {
-    info!("Command: is_quic_blocked");
-    
-    crate::core::quic_blocker::is_quic_blocked()
-        .await
-        .map_err(|e| e.to_string())
-}
-
-/// Check if running with administrator privileges
-#[tauri::command]
-pub async fn is_admin() -> Result<bool, String> {
-    Ok(crate::core::quic_blocker::is_admin())
-}
-
-// ============================================================================
-// VLESS Commands
-// ============================================================================
-
-/// Storage key for VLESS configs
-const VLESS_CONFIGS_KEY: &str = "vless_configs";
-
-/// Import VLESS config from vless:// URL
-#[tauri::command]
-pub async fn import_vless(
-    state: State<'_, Arc<AppState>>,
-    url: String,
-) -> Result<VlessConfig, String> {
-    info!("Importing VLESS config from URL");
-
-    // Parse the URL
-    let config = VlessConfig::from_url(&url)?;
-
-    // Load existing configs
-    let mut configs: Vec<VlessConfig> = state
-        .storage
-        .get_setting(VLESS_CONFIGS_KEY)
-        .map_err(|e| format!("Failed to load configs: {}", e))?
-        .unwrap_or_default();
-
-    // Check for duplicate UUID
-    if configs.iter().any(|c| c.uuid == config.uuid && c.server == config.server) {
-        return Err("Config with this UUID and server already exists".to_string());
-    }
-
-    // Add new config
-    configs.push(config.clone());
-
-    // Save
-    state
-        .storage
-        .set_setting(VLESS_CONFIGS_KEY, &configs)
-        .map_err(|e| format!("Failed to save config: {}", e))?;
-
-    info!(id = %config.id, name = %config.name, "VLESS config imported");
-    Ok(config)
-}
-
-/// Get all saved VLESS configs
-#[tauri::command]
-pub async fn get_vless_configs(
-    state: State<'_, Arc<AppState>>,
-) -> Result<Vec<VlessConfig>, String> {
-    info!("Loading VLESS configs");
-
-    let configs: Vec<VlessConfig> = state
-        .storage
-        .get_setting(VLESS_CONFIGS_KEY)
-        .map_err(|e| format!("Failed to load configs: {}", e))?
-        .unwrap_or_default();
-
-    Ok(configs)
-}
-
-/// Delete VLESS config by ID
-#[tauri::command]
-pub async fn delete_vless_config(
-    state: State<'_, Arc<AppState>>,
-    id: String,
-) -> Result<(), String> {
-    info!(id = %id, "Deleting VLESS config");
-
-    // Load existing configs
-    let mut configs: Vec<VlessConfig> = state
-        .storage
-        .get_setting(VLESS_CONFIGS_KEY)
-        .map_err(|e| format!("Failed to load configs: {}", e))?
-        .unwrap_or_default();
-
-    // Find and remove
-    let initial_len = configs.len();
-    configs.retain(|c| c.id != id);
-
-    if configs.len() == initial_len {
-        return Err("Config not found".to_string());
-    }
-
-    // Save
-    state
-        .storage
-        .set_setting(VLESS_CONFIGS_KEY, &configs)
-        .map_err(|e| format!("Failed to save configs: {}", e))?;
-
-    info!(id = %id, "VLESS config deleted");
-    Ok(())
-}
-
-/// Toggle VLESS config active state
-#[tauri::command]
-pub async fn toggle_vless_config(
-    state: State<'_, Arc<AppState>>,
-    id: String,
-    active: bool,
-) -> Result<(), String> {
-    info!(id = %id, active, "Toggling VLESS config");
-
-    // Load existing configs
-    let mut configs: Vec<VlessConfig> = state
-        .storage
-        .get_setting(VLESS_CONFIGS_KEY)
-        .map_err(|e| format!("Failed to load configs: {}", e))?
-        .unwrap_or_default();
-
-    // Find and update
-    let mut found = false;
-    for config in &mut configs {
-        if config.id == id {
-            config.active = active;
-            found = true;
-        } else if active {
-            // Deactivate other configs when activating one
-            config.active = false;
-        }
-    }
-
-    if !found {
-        return Err("Config not found".to_string());
-    }
-
-    // Save
-    state
-        .storage
-        .set_setting(VLESS_CONFIGS_KEY, &configs)
-        .map_err(|e| format!("Failed to save configs: {}", e))?;
-
-    Ok(())
-}
-
-// ============================================================================
-// Hostlist Management Commands
-// ============================================================================
-
-/// Get all available hostlists
-#[tauri::command]
-pub async fn get_hostlists() -> Result<Vec<Hostlist>, String> {
-    info!("Loading all hostlists");
-
-    hostlists::get_all_hostlists()
-        .await
-        .map_err(|e| format!("Failed to load hostlists: {}", e))
-}
-
-/// Get a specific hostlist by ID
-#[tauri::command]
-pub async fn get_hostlist(id: String) -> Result<Hostlist, String> {
-    info!(id = %id, "Loading hostlist");
-
-    hostlists::load_hostlist(&id)
-        .await
-        .map_err(|e| format!("Failed to load hostlist: {}", e))
-}
-
-/// Add domain to a hostlist
-#[tauri::command]
-pub async fn add_hostlist_domain(hostlist_id: String, domain: String) -> Result<(), String> {
-    info!(hostlist_id = %hostlist_id, domain = %domain, "Adding domain to hostlist");
-
-    hostlists::add_domain(&hostlist_id, &domain)
-        .await
-        .map_err(|e| format!("Failed to add domain: {}", e))
-}
-
-/// Remove domain from a hostlist
-#[tauri::command]
-pub async fn remove_hostlist_domain(hostlist_id: String, domain: String) -> Result<(), String> {
-    info!(hostlist_id = %hostlist_id, domain = %domain, "Removing domain from hostlist");
-
-    hostlists::remove_domain(&hostlist_id, &domain)
-        .await
-        .map_err(|e| format!("Failed to remove domain: {}", e))
-}
-
-/// Create a new hostlist
-#[tauri::command]
-pub async fn create_hostlist(id: String, name: String) -> Result<Hostlist, String> {
-    info!(id = %id, name = %name, "Creating new hostlist");
-
-    hostlists::create_hostlist(&id, &name)
-        .await
-        .map_err(|e| format!("Failed to create hostlist: {}", e))
-}
-
-/// Delete a hostlist
-#[tauri::command]
-pub async fn delete_hostlist(id: String) -> Result<(), String> {
-    info!(id = %id, "Deleting hostlist");
-
-    hostlists::delete_hostlist(&id)
-        .await
-        .map_err(|e| format!("Failed to delete hostlist: {}", e))
-}
-
-/// Update hostlist from remote URL
-#[tauri::command]
-pub async fn update_hostlist_from_url(id: String, url: String) -> Result<Hostlist, String> {
-    info!(id = %id, url = %url, "Updating hostlist from URL");
-
-    hostlists::update_hostlist(&id, &url)
-        .await
-        .map_err(|e| format!("Failed to update hostlist: {}", e))?;
-
-    // Return updated hostlist
-    hostlists::load_hostlist(&id)
-        .await
-        .map_err(|e| format!("Failed to load updated hostlist: {}", e))
-}
-
-/// Save hostlist with new domains
-#[tauri::command]
-pub async fn save_hostlist(hostlist: Hostlist) -> Result<(), String> {
-    info!(id = %hostlist.id, domain_count = hostlist.domains.len(), "Saving hostlist");
-
-    hostlists::save_hostlist(&hostlist)
-        .await
-        .map_err(|e| format!("Failed to save hostlist: {}", e))
-}
-
-// ============================================================================
-// VLESS Proxy Control Commands
-// ============================================================================
-
-/// Start VLESS proxy for a specific config
-///
-/// Starts sing-box with the given VLESS configuration.
-/// Returns the SOCKS port for the proxy.
-#[tauri::command]
-pub async fn start_vless_proxy(
-    state: State<'_, Arc<AppState>>,
-    config_id: String,
-    socks_port: Option<u16>,
-) -> Result<crate::core::singbox_manager::SingboxInstance, String> {
-    info!(config_id = %config_id, "Starting VLESS proxy");
-
-    // Load the config
-    let configs: Vec<VlessConfig> = state
-        .storage
-        .get_setting(VLESS_CONFIGS_KEY)
-        .map_err(|e| format!("Failed to load configs: {}", e))?
-        .unwrap_or_default();
-
-    let config = configs
-        .iter()
-        .find(|c| c.id == config_id)
-        .ok_or_else(|| format!("Config '{}' not found", config_id))?;
-
-    // Convert to vless_engine config
-    let vless_config = crate::core::vless_engine::VlessConfig::new(
-        config.server.clone(),
-        config.port,
-        config.uuid.clone(),
-    )
-    .with_name(&config.name)
-    .with_sni(config.sni.clone().unwrap_or_else(|| config.server.clone()));
-
-    // Get manager and allocate port
-    let manager = crate::core::singbox_manager::get_manager();
-    let port = match socks_port {
-        Some(p) => p,
-        None => manager.allocate_port(1080).await,
-    };
-
-    // Start the proxy
-    let instance = manager
-        .start(&vless_config, port)
-        .await
-        .map_err(|e| format!("Failed to start VLESS proxy: {}", e))?;
-
-    info!(
-        config_id = %config_id,
-        socks_port = instance.socks_port,
-        "VLESS proxy started"
-    );
-
-    Ok(instance)
-}
-
-/// Stop VLESS proxy for a specific config
-#[tauri::command]
-pub async fn stop_vless_proxy(config_id: String) -> Result<(), String> {
-    info!(config_id = %config_id, "Stopping VLESS proxy");
-
-    let manager = crate::core::singbox_manager::get_manager();
-
-    manager
-        .stop(&config_id)
-        .await
-        .map_err(|e| format!("Failed to stop VLESS proxy: {}", e))?;
-
-    info!(config_id = %config_id, "VLESS proxy stopped");
-    Ok(())
-}
-
-/// Stop all running VLESS proxies
-#[tauri::command]
-pub async fn stop_all_vless_proxies() -> Result<(), String> {
-    info!("Stopping all VLESS proxies");
-
-    let manager = crate::core::singbox_manager::get_manager();
-
-    manager
-        .stop_all()
-        .await
-        .map_err(|e| format!("Failed to stop VLESS proxies: {}", e))?;
-
-    info!("All VLESS proxies stopped");
-    Ok(())
-}
-
-/// Get status of a specific VLESS proxy
-#[tauri::command]
-pub async fn get_vless_status(
-    config_id: String,
-) -> Result<Option<crate::core::singbox_manager::SingboxInstance>, String> {
-    let manager = crate::core::singbox_manager::get_manager();
-    Ok(manager.get_status(&config_id).await)
-}
-
-/// Get status of all running VLESS proxies
-#[tauri::command]
-pub async fn get_all_vless_status() -> Result<Vec<crate::core::singbox_manager::SingboxInstance>, String> {
-    let manager = crate::core::singbox_manager::get_manager();
-    Ok(manager.list_instances().await)
-}
-
-/// Perform health check on a running VLESS proxy
-#[tauri::command]
-pub async fn health_check_vless(config_id: String) -> Result<bool, String> {
-    info!(config_id = %config_id, "Performing VLESS health check");
-
-    let manager = crate::core::singbox_manager::get_manager();
-
-    manager
-        .health_check(&config_id)
-        .await
-        .map_err(|e| format!("Health check failed: {}", e))
-}
-
-/// Test VLESS proxy connectivity
-///
-/// Makes a test request through the proxy to verify it's working.
-#[tauri::command]
-pub async fn test_vless_connectivity(
-    config_id: String,
-    test_url: Option<String>,
-) -> Result<u32, String> {
-    info!(config_id = %config_id, "Testing VLESS connectivity");
-
-    let manager = crate::core::singbox_manager::get_manager();
-
-    // Get the SOCKS port for this config
-    let socks_port = manager
-        .get_socks_port(&config_id)
-        .await
-        .ok_or_else(|| format!("Config '{}' is not running", config_id))?;
-
-    let url = test_url.unwrap_or_else(|| "https://www.google.com".to_string());
-
-    crate::core::vless_engine::test_proxy_connectivity(socks_port, &url)
-        .await
-        .map_err(|e| format!("Connectivity test failed: {}", e))
-}
-
-/// Check if sing-box binary is available
-#[tauri::command]
-pub async fn is_singbox_available() -> Result<bool, String> {
-    Ok(crate::core::singbox_manager::is_singbox_available())
-}
-
-/// Get sing-box version
-#[tauri::command]
-pub async fn get_singbox_version() -> Result<String, String> {
-    crate::core::singbox_manager::get_singbox_version()
-        .await
-        .map_err(|e| format!("Failed to get sing-box version: {}", e))
-}
-
-
-// ============================================================================
-// Mode Detection Commands
-// ============================================================================
-
-/// Check if app is running in silent mode (--silent flag)
-#[tauri::command]
-pub async fn is_silent_mode() -> Result<bool, String> {
-    Ok(std::env::args().any(|arg| arg == "--silent"))
-}
-
-/// Check if app is running in portable mode
-#[tauri::command]
-pub async fn is_portable_mode() -> Result<bool, String> {
-    Ok(crate::core::paths::is_portable_mode())
-}
-
-// ============================================================================
-// Proxy Management Commands
-// ============================================================================
-
-/// Get all saved proxies
-#[tauri::command]
-pub async fn get_proxies(state: State<'_, Arc<AppState>>) -> Result<Vec<crate::core::models::ProxyConfig>, String> {
-    info!("Loading all proxies");
-    
-    state
-        .storage
-        .get_all_proxies()
-        .map_err(|e| format!("Failed to get proxies: {}", e))
-}
-
-/// Add a new proxy
-#[tauri::command]
-pub async fn add_proxy(
-    state: State<'_, Arc<AppState>>,
-    proxy: crate::core::models::ProxyConfig,
-) -> Result<crate::core::models::ProxyConfig, String> {
-    info!(id = %proxy.id, name = %proxy.name, protocol = ?proxy.protocol, "Adding new proxy");
-    
-    // Generate ID if empty
-    let mut proxy = proxy;
-    if proxy.id.is_empty() {
-        proxy.id = format!(
-            "{}_{}", 
-            format!("{:?}", proxy.protocol).to_lowercase(),
-            uuid::Uuid::new_v4().to_string().split('-').next().unwrap_or("unknown")
-        );
-    }
-    
-    state
-        .storage
-        .save_proxy(&proxy)
-        .map_err(|e| format!("Failed to add proxy: {}", e))?;
-    
-    info!(id = %proxy.id, "Proxy added successfully");
-    Ok(proxy)
-}
-
-/// Update existing proxy
-#[tauri::command]
-pub async fn update_proxy(
-    state: State<'_, Arc<AppState>>,
-    proxy: crate::core::models::ProxyConfig,
-) -> Result<(), String> {
-    info!(id = %proxy.id, name = %proxy.name, "Updating proxy");
-    
-    state
-        .storage
-        .update_proxy(&proxy)
-        .map_err(|e| format!("Failed to update proxy: {}", e))
-}
-
-/// Delete proxy by ID
-#[tauri::command]
-pub async fn delete_proxy(
-    state: State<'_, Arc<AppState>>,
-    id: String,
-) -> Result<(), String> {
-    info!(id = %id, "Deleting proxy");
-    
-    // Stop proxy if running
-    let manager = crate::core::singbox_manager::get_manager();
-    if manager.is_running(&id).await {
-        let _ = manager.stop(&id).await;
-    }
-    
-    state
-        .storage
-        .delete_proxy(&id)
-        .map_err(|e| format!("Failed to delete proxy: {}", e))
-}
-
-/// Apply proxy (start sing-box with this proxy)
-#[tauri::command]
-pub async fn apply_proxy(
-    state: State<'_, Arc<AppState>>,
-    id: String,
-) -> Result<(), String> {
-    info!(id = %id, "Applying proxy");
-    
-    // Get proxy config
-    let proxy = state
-        .storage
-        .get_proxy(&id)
-        .map_err(|e| format!("Failed to get proxy: {}", e))?
-        .ok_or_else(|| format!("Proxy '{}' not found", id))?;
-    
-    // Check if protocol is supported for sing-box
-    match proxy.protocol {
-        crate::core::models::ProxyProtocol::Vless |
-        crate::core::models::ProxyProtocol::Vmess |
-        crate::core::models::ProxyProtocol::Shadowsocks |
-        crate::core::models::ProxyProtocol::Trojan |
-        crate::core::models::ProxyProtocol::Hysteria |
-        crate::core::models::ProxyProtocol::Hysteria2 |
-        crate::core::models::ProxyProtocol::Tuic => {
-            // Convert to VlessConfig for sing-box (generic proxy config)
-            let vless_config = crate::core::vless_engine::VlessConfig::new(
-                proxy.server.clone(),
-                proxy.port,
-                proxy.uuid.clone().unwrap_or_default(),
-            )
-            .with_name(&proxy.name)
-            .with_id(&proxy.id)
-            .with_sni(proxy.sni.clone().unwrap_or_else(|| proxy.server.clone()));
-            
-            let manager = crate::core::singbox_manager::get_manager();
-            let port = manager.allocate_port(1080).await;
-            
-            manager
-                .start(&vless_config, port)
-                .await
-                .map_err(|e| format!("Failed to start proxy: {}", e))?;
-            
-            // Mark as active in storage
-            state
-                .storage
-                .set_proxy_active(&id, true)
-                .map_err(|e| format!("Failed to set proxy active: {}", e))?;
-            
-            info!(id = %id, socks_port = port, "Proxy applied successfully");
-            Ok(())
-        }
-        crate::core::models::ProxyProtocol::Socks5 |
-        crate::core::models::ProxyProtocol::Http |
-        crate::core::models::ProxyProtocol::Https => {
-            // These protocols don't need sing-box, just mark as active
-            state
-                .storage
-                .set_proxy_active(&id, true)
-                .map_err(|e| format!("Failed to set proxy active: {}", e))?;
-            
-            info!(id = %id, "Direct proxy marked as active");
-            Ok(())
-        }
-        _ => Err(format!("Protocol {:?} is not supported for apply", proxy.protocol)),
-    }
-}
-
-/// Test proxy connectivity
-#[tauri::command]
-pub async fn test_proxy(
-    state: State<'_, Arc<AppState>>,
-    id: String,
-) -> Result<u32, String> {
-    info!(id = %id, "Testing proxy connectivity");
-    
-    // Get proxy config
-    let proxy = state
-        .storage
-        .get_proxy(&id)
-        .map_err(|e| format!("Failed to get proxy: {}", e))?
-        .ok_or_else(|| format!("Proxy '{}' not found", id))?;
-    
-    let manager = crate::core::singbox_manager::get_manager();
-    
-    // Check if already running
-    if let Some(socks_port) = manager.get_socks_port(&id).await {
-        // Test existing connection
-        return crate::core::vless_engine::test_proxy_connectivity(socks_port, "https://www.google.com")
-            .await
-            .map_err(|e| format!("Connectivity test failed: {}", e));
-    }
-    
-    // Start temporary proxy for testing
-    match proxy.protocol {
-        crate::core::models::ProxyProtocol::Vless |
-        crate::core::models::ProxyProtocol::Vmess |
-        crate::core::models::ProxyProtocol::Shadowsocks |
-        crate::core::models::ProxyProtocol::Trojan |
-        crate::core::models::ProxyProtocol::Hysteria |
-        crate::core::models::ProxyProtocol::Hysteria2 |
-        crate::core::models::ProxyProtocol::Tuic => {
-            let vless_config = crate::core::vless_engine::VlessConfig::new(
-                proxy.server.clone(),
-                proxy.port,
-                proxy.uuid.clone().unwrap_or_default(),
-            )
-            .with_name(&proxy.name)
-            .with_id(&format!("test_{}", proxy.id))
-            .with_sni(proxy.sni.clone().unwrap_or_else(|| proxy.server.clone()));
-            
-            let port = manager.allocate_port(10800).await;
-            
-            // Start proxy
-            manager
-                .start(&vless_config, port)
-                .await
-                .map_err(|e| format!("Failed to start proxy for testing: {}", e))?;
-            
-            // Wait for proxy to initialize
-            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
-            
-            // Test connectivity
-            let result = crate::core::vless_engine::test_proxy_connectivity(port, "https://www.google.com")
-                .await;
-            
-            // Stop test proxy
-            let _ = manager.stop(&format!("test_{}", proxy.id)).await;
-            
-            result.map_err(|e| format!("Connectivity test failed: {}", e))
-        }
-        crate::core::models::ProxyProtocol::Socks5 => {
-            // Test SOCKS5 directly
-            let start = std::time::Instant::now();
-            let addr = format!("{}:{}", proxy.server, proxy.port);
-            
-            match tokio::time::timeout(
-                std::time::Duration::from_secs(5),
-                tokio::net::TcpStream::connect(&addr)
-            ).await {
-                Ok(Ok(_)) => Ok(start.elapsed().as_millis() as u32),
-                Ok(Err(e)) => Err(format!("Connection failed: {}", e)),
-                Err(_) => Err("Connection timeout".to_string()),
-            }
-        }
-        crate::core::models::ProxyProtocol::Http |
-        crate::core::models::ProxyProtocol::Https => {
-            // Test HTTP proxy
-            let start = std::time::Instant::now();
-            let proxy_url = format!(
-                "{}://{}:{}",
-                if proxy.protocol == crate::core::models::ProxyProtocol::Https { "https" } else { "http" },
-                proxy.server,
-                proxy.port
-            );
-            
-            let client = reqwest::Client::builder()
-                .proxy(reqwest::Proxy::all(&proxy_url).map_err(|e| format!("Invalid proxy URL: {}", e))?)
-                .timeout(std::time::Duration::from_secs(5))
-                .build()
-                .map_err(|e| format!("Failed to create client: {}", e))?;
-            
-            client
-                .get("https://www.google.com")
-                .send()
-                .await
-                .map_err(|e| format!("Request failed: {}", e))?;
-            
-            Ok(start.elapsed().as_millis() as u32)
-        }
-        _ => Err(format!("Protocol {:?} is not supported for testing", proxy.protocol)),
-    }
-}
-
-/// Import proxy from URL (vless://, vmess://, ss://, etc.)
-#[tauri::command]
-pub async fn import_proxy_url(
-    state: State<'_, Arc<AppState>>,
-    url: String,
-) -> Result<crate::core::models::ProxyConfig, String> {
-    info!("Importing proxy from URL");
-    
-    let proxy = crate::core::proxy_parser::parse_proxy_url(&url)
-        .map_err(|e| format!("Failed to parse proxy URL: {}", e))?;
-    
-    // Save to storage
-    state
-        .storage
-        .save_proxy(&proxy)
-        .map_err(|e| format!("Failed to save proxy: {}", e))?;
-    
-    info!(id = %proxy.id, name = %proxy.name, protocol = ?proxy.protocol, "Proxy imported from URL");
-    Ok(proxy)
-}
-
-/// Import subscription (multiple proxies from URL)
-#[tauri::command]
-pub async fn import_subscription(
-    state: State<'_, Arc<AppState>>,
-    url: String,
-) -> Result<Vec<crate::core::models::ProxyConfig>, String> {
-    info!(url = %url, "Importing subscription");
-    
-    // Fetch subscription content
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(30))
-        .build()
-        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
-    
-    let response = client
-        .get(&url)
-        .send()
-        .await
-        .map_err(|e| format!("Failed to fetch subscription: {}", e))?;
-    
-    if !response.status().is_success() {
-        return Err(format!("Subscription request failed with status: {}", response.status()));
-    }
-    
-    let content = response
-        .text()
-        .await
-        .map_err(|e| format!("Failed to read subscription content: {}", e))?;
-    
-    // Parse subscription
-    let proxies = crate::core::proxy_parser::parse_subscription(&content)
-        .map_err(|e| format!("Failed to parse subscription: {}", e))?;
-    
-    // Save all proxies
-    let mut saved_proxies = Vec::new();
-    for proxy in proxies {
-        match state.storage.save_proxy(&proxy) {
-            Ok(_) => {
-                info!(id = %proxy.id, name = %proxy.name, "Proxy from subscription saved");
-                saved_proxies.push(proxy);
-            }
-            Err(e) => {
-                warn!(id = %proxy.id, error = %e, "Failed to save proxy from subscription");
-            }
-        }
-    }
-    
-    info!(count = saved_proxies.len(), "Subscription import completed");
-    Ok(saved_proxies)
-}
-
-// ============================================================================
-// Domain Routing Commands
-// ============================================================================
-
-use crate::core::models::{DomainRoute, AppRoute};
-use crate::core::app_routing::InstalledApp;
-
-/// Get all domain routes
-#[tauri::command]
-pub async fn get_domain_routes(state: State<'_, Arc<AppState>>) -> Result<Vec<DomainRoute>, String> {
-    info!("Getting domain routes");
-    state.domain_router
-        .get_routes()
-        .await
-        .map_err(|e| format!("Failed to get domain routes: {}", e))
-}
-
-/// Add a domain route
-#[tauri::command]
-pub async fn add_domain_route(
-    state: State<'_, Arc<AppState>>,
-    domain: String,
-    proxy_id: String,
-) -> Result<(), String> {
-    info!(domain = %domain, proxy_id = %proxy_id, "Adding domain route");
-    state.domain_router
-        .add_route(&domain, &proxy_id)
-        .await
-        .map_err(|e| format!("Failed to add domain route: {}", e))
-}
-
-/// Remove a domain route
-#[tauri::command]
-pub async fn remove_domain_route(
-    state: State<'_, Arc<AppState>>,
-    domain: String,
-) -> Result<(), String> {
-    info!(domain = %domain, "Removing domain route");
-    state.domain_router
-        .remove_route(&domain)
-        .await
-        .map_err(|e| format!("Failed to remove domain route: {}", e))
-}
-
-// ============================================================================
-// App Routing Commands
-// ============================================================================
-
-/// Get all app routes
-#[tauri::command]
-pub async fn get_app_routes(state: State<'_, Arc<AppState>>) -> Result<Vec<AppRoute>, String> {
-    info!("Getting app routes");
-    state.app_router
-        .get_routes()
-        .await
-        .map_err(|e| format!("Failed to get app routes: {}", e))
-}
-
-/// Add an app route
-#[tauri::command]
-pub async fn add_app_route(
-    state: State<'_, Arc<AppState>>,
-    app_name: String,
-    app_path: String,
-    proxy_id: String,
-) -> Result<(), String> {
-    info!(app_name = %app_name, proxy_id = %proxy_id, "Adding app route");
-    state.app_router
-        .add_route(&app_name, &app_path, &proxy_id)
-        .await
-        .map_err(|e| format!("Failed to add app route: {}", e))
-}
-
-/// Remove an app route
-#[tauri::command]
-pub async fn remove_app_route(
-    state: State<'_, Arc<AppState>>,
-    app_path: String,
-) -> Result<(), String> {
-    info!(app_path = %app_path, "Removing app route");
-    state.app_router
-        .remove_route(&app_path)
-        .await
-        .map_err(|e| format!("Failed to remove app route: {}", e))
-}
-
-/// Get list of installed applications (Windows)
-#[tauri::command]
-pub async fn get_installed_apps(state: State<'_, Arc<AppState>>) -> Result<Vec<InstalledApp>, String> {
-    info!("Getting installed apps");
-    state.app_router
-        .get_installed_apps()
-        .await
-        .map_err(|e| format!("Failed to get installed apps: {}", e))
-}
-
-
 // ============================================================================
 // Testing Commands
 // ============================================================================
 
 use std::sync::atomic::{AtomicBool, Ordering};
-
-// ============================================================================
-// Tray Commands
-// ============================================================================
-
-/// Update tray status from frontend
-#[tauri::command]
-pub async fn update_tray(
-    app: AppHandle,
-    state: String,
-    strategy_name: Option<String>,
-) -> Result<(), String> {
-    info!(state = %state, strategy = ?strategy_name, "Updating tray from frontend");
-    
-    let tray_state = crate::tray::TrayState::from_str(&state);
-    crate::tray::update_tray_state(&app, tray_state, strategy_name);
-    
-    Ok(())
-}
-
-/// Set tray to optimizing state
-#[tauri::command]
-pub async fn set_tray_optimizing(app: AppHandle) -> Result<(), String> {
-    info!("Setting tray to optimizing state");
-    crate::tray::set_tray_optimizing(&app);
-    Ok(())
-}
-
-/// Set tray to error state
-#[tauri::command]
-pub async fn set_tray_error(app: AppHandle, error_msg: String) -> Result<(), String> {
-    info!(error = %error_msg, "Setting tray to error state");
-    crate::tray::set_tray_error(&app, &error_msg);
-    Ok(())
-}
-
-/// Get current tray state
-#[tauri::command]
-pub async fn get_tray_state() -> Result<String, String> {
-    let state = crate::tray::get_tray_state();
-    let state_str = match state {
-        crate::tray::TrayState::Inactive => "inactive",
-        crate::tray::TrayState::Active => "active",
-        crate::tray::TrayState::Optimizing => "optimizing",
-        crate::tray::TrayState::Error => "error",
-    };
-    Ok(state_str.to_string())
-}
-
-/// Update tray TUN mode status
-#[tauri::command]
-pub async fn update_tray_tun_status(app: AppHandle, is_tun: bool) -> Result<(), String> {
-    info!(is_tun, "Updating tray TUN status");
-    crate::tray::update_tray_tun_status(&app, is_tun);
-    Ok(())
-}
-
-/// Update tray System Proxy status
-#[tauri::command]
-pub async fn update_tray_proxy_status(app: AppHandle, is_proxy: bool) -> Result<(), String> {
-    info!(is_proxy, "Updating tray System Proxy status");
-    crate::tray::update_tray_proxy_status(&app, is_proxy);
-    Ok(())
-}
-
-/// Rebuild tray menu (force refresh)
-#[tauri::command]
-pub async fn rebuild_tray_menu(app: AppHandle) -> Result<(), String> {
-    info!("Rebuilding tray menu");
-    crate::tray::rebuild_tray_menu(&app);
-    Ok(())
-}
 
 /// Test progress event payload
 #[derive(Debug, Clone, serde::Serialize)]
@@ -1560,7 +303,7 @@ pub async fn run_tests(
         }
         
         // Get proxy
-        let proxy = match state.storage.get_proxy(proxy_id) {
+        let proxy = match state.storage.get_proxy(proxy_id).await {
             Ok(Some(p)) => p,
             _ => continue,
         };
@@ -1732,7 +475,7 @@ pub async fn cancel_tests() -> Result<(), String> {
 
 // Helper: test proxy for a specific service
 async fn test_proxy_for_service(
-    state: &State<'_, Arc<AppState>>,
+    _state: &State<'_, Arc<AppState>>,
     proxy: &crate::core::models::ProxyConfig,
     service: &crate::core::models::Service,
     timeout_secs: u64,
@@ -1838,7 +581,7 @@ async fn test_service_direct(
 // TUN Mode Commands
 // ============================================================================
 
-use crate::core::tun_manager::{TunConfig, TunInstance, TunStatus};
+use crate::core::tun_manager::{TunConfig, TunInstance};
 
 /// Start TUN mode
 ///
@@ -2254,4 +997,572 @@ pub async fn test_strategy(
         services_passed,
         services_failed,
     })
+}
+
+// ============================================================================
+// Orchestra Commands
+// ============================================================================
+
+use crate::core::orchestra::{LockedStrategy, OrchestraConfig};
+use std::collections::HashMap;
+
+/// Orchestra state for frontend
+#[allow(dead_code)]
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct OrchestraState {
+    pub is_running: bool,
+    pub domains: HashMap<String, LockedStrategy>,
+    pub strategies_count: usize,
+}
+
+/// Start Orchestra auto-learning
+///
+/// Begins automatic strategy testing for specified domains.
+/// Emits events: orchestra:progress, orchestra:locked, orchestra:complete
+#[tauri::command]
+pub async fn start_orchestra(
+    window: Window,
+    _state: State<'_, Arc<AppState>>,
+    domains: Vec<String>,
+    config: Option<OrchestraConfig>,
+) -> Result<(), String> {
+    #![allow(unused_variables)]
+    info!(domains = ?domains, "Starting Orchestra");
+    
+    // Load strategies using StrategyLoader
+    let strategies_dir = crate::core::paths::get_configs_dir().join("strategies");
+    let loader = crate::core::strategy_loader::StrategyLoader::new(&strategies_dir);
+    let strategies = loader.load_all()
+        .map_err(|e| format!("Failed to load strategies: {}", e))?;
+    
+    if strategies.is_empty() {
+        return Err("No strategies available".to_string());
+    }
+    
+    let config = config.unwrap_or_default();
+    let orchestra = crate::core::orchestra::Orchestra::new(strategies, config);
+    
+    // Clone domains for the spawned task
+    let domains_owned = domains.clone();
+    
+    // Clone window for progress events
+    let window_clone = window.clone();
+    
+    // Spawn orchestra task
+    tokio::spawn(async move {
+        let domain_refs: Vec<&str> = domains_owned.iter().map(|s| s.as_str()).collect();
+        
+        if let Err(e) = orchestra.start(&domain_refs).await {
+            error!("Orchestra failed: {}", e);
+            let _ = window_clone.emit("orchestra:error", e.to_string());
+        }
+        
+        // Emit completion with locked strategies
+        let locked = orchestra.get_locked_strategies().await;
+        let _ = window_clone.emit("orchestra:complete", &locked);
+    });
+    
+    Ok(())
+}
+
+/// Stop Orchestra
+#[tauri::command]
+pub async fn stop_orchestra() -> Result<(), String> {
+    info!("Stopping Orchestra");
+    // Orchestra stops via its internal running flag
+    // In a real implementation, we'd store the Orchestra instance in AppState
+    Ok(())
+}
+
+/// Get Orchestra results (locked strategies)
+#[tauri::command]
+pub async fn get_orchestra_results() -> Result<HashMap<String, LockedStrategy>, String> {
+    info!("Getting Orchestra results");
+    // In a real implementation, we'd get this from stored Orchestra instance
+    Ok(HashMap::new())
+}
+
+/// Apply Orchestra results
+///
+/// Creates a combined strategy from locked domain strategies
+#[tauri::command]
+pub async fn apply_orchestra_results(
+    state: State<'_, Arc<AppState>>,
+    locked_strategies: HashMap<String, String>, // domain -> strategy_id
+) -> Result<(), String> {
+    info!(count = locked_strategies.len(), "Applying Orchestra results");
+    
+    if locked_strategies.is_empty() {
+        return Err("No strategies to apply".to_string());
+    }
+    
+    // Get the first strategy as base (in real impl, would combine them)
+    let first_strategy_id = locked_strategies.values().next()
+        .ok_or("No strategies found")?;
+    
+    // Load and apply the strategy
+    let strategy = state
+        .config_manager
+        .load_strategy_by_id(first_strategy_id)
+        .await
+        .map_err(|e| format!("Strategy not found: {}", e))?;
+    
+    state
+        .strategy_engine
+        .start_global(&strategy)
+        .await
+        .map_err(|e| format!("Failed to apply strategy: {}", e))?;
+    
+    info!(strategy_id = %first_strategy_id, "Orchestra results applied");
+    Ok(())
+}
+
+/// Save Orchestra learned strategies to storage
+#[tauri::command]
+pub async fn save_orchestra_results(
+    state: State<'_, Arc<AppState>>,
+    results: HashMap<String, LockedStrategy>,
+) -> Result<(), String> {
+    info!(count = results.len(), "Saving Orchestra results");
+    
+    state
+        .storage
+        .set_setting("orchestra_results", &results)
+        .await
+        .map_err(|e| format!("Failed to save Orchestra results: {}", e))?;
+    
+    Ok(())
+}
+
+/// Load saved Orchestra results
+#[tauri::command]
+pub async fn load_orchestra_results(
+    state: State<'_, Arc<AppState>>,
+) -> Result<HashMap<String, LockedStrategy>, String> {
+    info!("Loading saved Orchestra results");
+    
+    let results: Option<HashMap<String, LockedStrategy>> = state
+        .storage
+        .get_setting("orchestra_results")
+        .await
+        .map_err(|e| format!("Failed to load Orchestra results: {}", e))?;
+    
+    Ok(results.unwrap_or_default())
+}
+
+// ============================================================================
+// Engine Mode Commands
+// ============================================================================
+
+/// Get current engine mode (mock/real/dpi_test)
+#[tauri::command]
+pub async fn get_engine_mode(
+    state: State<'_, Arc<AppState>>,
+) -> Result<String, String> {
+    let mode = state.strategy_engine.get_mode().await;
+    Ok(format!("{:?}", mode))
+}
+
+/// Set engine mode (mock/real/dpi_test)
+///
+/// - mock: Simulates strategy execution without running real processes
+/// - real: Runs actual winws/sing-box processes
+/// - dpi_test: Special mode for DPI testing
+#[tauri::command]
+pub async fn set_engine_mode(
+    state: State<'_, Arc<AppState>>,
+    mode: String,
+) -> Result<(), String> {
+    use crate::core::strategy_engine::EngineMode;
+    
+    let engine_mode = match mode.to_lowercase().as_str() {
+        "mock" => EngineMode::Mock,
+        "real" => EngineMode::Real,
+        "dpi_test" | "dpitest" => EngineMode::DpiTest,
+        _ => return Err(format!("Unknown mode: {}. Valid modes: mock, real, dpi_test", mode)),
+    };
+    
+    info!(mode = %mode, "Setting engine mode");
+    state.strategy_engine.set_mode(engine_mode).await;
+    
+    Ok(())
+}
+
+// ============================================================================
+// AutoRun Commands
+// ============================================================================
+
+// ============================================================================
+// DPI Simulator Testing Commands
+// ============================================================================
+
+use crate::core::strategy_tester::{StrategyTester, StrategyTestResult as DpiTestResult};
+
+/// Test a strategy using the DPI simulator
+///
+/// This command:
+/// 1. Gets the strategy by ID from state
+/// 2. Creates a StrategyTester
+/// 3. Checks DPI simulator availability
+/// 4. Runs the test through test_strategy()
+/// 5. Returns the result
+///
+/// Requires DPI simulator VM to be running and accessible.
+#[allow(dead_code)]
+#[tauri::command]
+pub async fn test_strategy_with_dpi(
+    strategy_id: String,
+    state: State<'_, Arc<AppState>>,
+) -> Result<DpiTestResult, String> {
+    info!(strategy_id = %strategy_id, "Testing strategy with DPI simulator");
+
+    // 1. Get strategy by ID from state
+    let strategy = state
+        .config_manager
+        .load_strategy_by_id(&strategy_id)
+        .await
+        .map_err(|e| format!("Strategy not found: {}", e))?;
+
+    // 2. Create StrategyTester
+    let tester = StrategyTester::new();
+
+    // 3. Check DPI simulator availability
+    let available = tester
+        .check_availability()
+        .await
+        .map_err(|e| format!("Failed to check DPI simulator: {}", e))?;
+
+    if !available {
+        return Err("DPI simulator is not available. Make sure the VM is running.".to_string());
+    }
+
+    info!(strategy_id = %strategy_id, "DPI simulator available, starting test");
+
+    // 4. Run test through test_strategy()
+    let result = tester
+        .test_strategy(&strategy)
+        .await
+        .map_err(|e| format!("Strategy test failed: {}", e))?;
+
+    info!(
+        strategy_id = %strategy_id,
+        success = result.success,
+        blocked_before = result.blocked_before,
+        blocked_after = result.blocked_after,
+        "DPI strategy test completed"
+    );
+
+    // 5. Return result
+    Ok(result)
+}
+
+// ============================================================================
+// AutoRun Commands
+// ============================================================================
+
+/// Get current autorun status
+///
+/// Returns true if the app is configured to start with Windows.
+#[tauri::command]
+pub async fn get_autorun_status() -> Result<bool, String> {
+    info!("Checking autorun status");
+    
+    #[cfg(windows)]
+    {
+        use winreg::enums::*;
+        use winreg::RegKey;
+        
+        let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+        let run_key = hkcu
+            .open_subkey("Software\\Microsoft\\Windows\\CurrentVersion\\Run")
+            .map_err(|e| format!("Failed to open registry key: {}", e))?;
+        
+        let result: Result<String, _> = run_key.get_value("Isolate");
+        Ok(result.is_ok())
+    }
+    
+    #[cfg(not(windows))]
+    {
+        Ok(false)
+    }
+}
+
+/// Set autorun status
+///
+/// Enables or disables automatic startup with Windows.
+/// When enabled, the app will start in silent mode (minimized to tray).
+#[tauri::command]
+pub async fn set_autorun(enabled: bool) -> Result<(), String> {
+    info!(enabled, "Setting autorun status");
+    
+    #[cfg(windows)]
+    {
+        use winreg::enums::*;
+        use winreg::RegKey;
+        
+        let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+        let run_key = hkcu
+            .open_subkey_with_flags("Software\\Microsoft\\Windows\\CurrentVersion\\Run", KEY_WRITE)
+            .map_err(|e| format!("Failed to open registry key: {}", e))?;
+        
+        if enabled {
+            // Get current executable path
+            let exe_path = std::env::current_exe()
+                .map_err(|e| format!("Failed to get executable path: {}", e))?;
+            
+            // Add --silent flag for autorun
+            let value = format!("\"{}\" --silent", exe_path.display());
+            
+            run_key
+                .set_value("Isolate", &value)
+                .map_err(|e| format!("Failed to set registry value: {}", e))?;
+            
+            info!("Autorun enabled");
+        } else {
+            // Remove the registry value (ignore error if it doesn't exist)
+            let _ = run_key.delete_value("Isolate");
+            info!("Autorun disabled");
+        }
+        
+        Ok(())
+    }
+    
+    #[cfg(not(windows))]
+    {
+        Err("Autorun is only supported on Windows".to_string())
+    }
+}
+
+// ============================================================================
+// Plugin Commands (JS Plugins)
+// ============================================================================
+
+use crate::plugins::js_loader;
+use crate::plugins::manifest::{LoadedPluginInfo, PluginManifest, ServiceDefinition};
+use crate::plugins::checker::{check_service_endpoints, ServiceStatus as PluginServiceStatus};
+
+/// Get plugins directory path
+#[tauri::command]
+pub async fn get_plugins_dir(state: State<'_, Arc<AppState>>) -> Result<String, String> {
+    Ok(state.plugins_dir.display().to_string())
+}
+
+/// Scan for plugins and return their paths
+#[tauri::command]
+pub async fn scan_plugin_directories(state: State<'_, Arc<AppState>>) -> Result<Vec<String>, String> {
+    info!("Scanning for plugins");
+    
+    js_loader::scan_plugins(&state.plugins_dir)
+        .map(|paths| paths.iter().map(|p| p.display().to_string()).collect())
+        .map_err(|e| e.to_string())
+}
+
+/// Load plugin manifest (plugin.json)
+#[tauri::command]
+pub async fn load_plugin_manifest(path: String) -> Result<PluginManifest, String> {
+    info!(path = %path, "Loading plugin manifest");
+    let plugin_dir = std::path::PathBuf::from(&path);
+    
+    js_loader::load_manifest(&plugin_dir)
+        .map_err(|e| e.to_string())
+}
+
+/// Get all plugins with their info
+#[tauri::command]
+pub async fn get_all_plugins_cmd(state: State<'_, Arc<AppState>>) -> Result<Vec<LoadedPluginInfo>, String> {
+    info!("Getting all plugins");
+    Ok(js_loader::get_all_plugins(&state.plugins_dir))
+}
+
+/// Get all services from service-checker plugins
+#[tauri::command]
+pub async fn get_plugin_services(state: State<'_, Arc<AppState>>) -> Result<Vec<ServiceDefinition>, String> {
+    info!("Getting plugin services");
+    Ok(crate::plugins::get_all_services(&state.plugins_dir))
+}
+
+/// Check a specific service from plugins by ID
+#[tauri::command]
+pub async fn check_plugin_service(service_id: String, state: State<'_, Arc<AppState>>) -> Result<PluginServiceStatus, String> {
+    info!(service_id = %service_id, "Checking plugin service");
+    let services = crate::plugins::get_all_services(&state.plugins_dir);
+    
+    let service = services.iter()
+        .find(|s| s.id == service_id)
+        .ok_or_else(|| format!("Service not found: {}", service_id))?;
+    
+    let mut status = check_service_endpoints(&service.endpoints).await;
+    status.service_id = service.id.clone();
+    Ok(status)
+}
+
+/// Check all services from plugins
+#[tauri::command]
+pub async fn check_all_plugin_services(state: State<'_, Arc<AppState>>) -> Result<Vec<PluginServiceStatus>, String> {
+    info!("Checking all plugin services");
+    let services = crate::plugins::get_all_services(&state.plugins_dir);
+    
+    let mut results = Vec::new();
+    for service in services {
+        let mut status = check_service_endpoints(&service.endpoints).await;
+        status.service_id = service.id.clone();
+        results.push(status);
+    }
+    
+    Ok(results)
+}
+
+// ============================================================================
+// Service Registry Commands (New Services System)
+// ============================================================================
+
+use crate::services::{Service as RegistryService, ServiceStatus as NewServiceStatus};
+
+/// Get all registered services from the service registry
+#[tauri::command]
+pub async fn get_registry_services(
+    state: State<'_, Arc<AppState>>,
+) -> Result<Vec<RegistryService>, String> {
+    info!("Getting all registered services");
+    
+    let services = state.service_registry.get_all().await;
+    Ok(services)
+}
+
+/// Get service status by ID (with caching)
+#[tauri::command]
+pub async fn get_service_status(
+    state: State<'_, Arc<AppState>>,
+    service_id: String,
+) -> Result<NewServiceStatus, String> {
+    info!(service_id = %service_id, "Getting service status");
+    
+    state
+        .service_checker
+        .check_service(&service_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Check a specific service (fresh check, no cache)
+#[tauri::command]
+pub async fn check_single_service(
+    state: State<'_, Arc<AppState>>,
+    service_id: String,
+) -> Result<NewServiceStatus, String> {
+    info!(service_id = %service_id, "Checking service (fresh)");
+    
+    state
+        .service_checker
+        .check_service_fresh(&service_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Check all registered services
+#[tauri::command]
+pub async fn check_all_registry_services(
+    state: State<'_, Arc<AppState>>,
+) -> Result<Vec<NewServiceStatus>, String> {
+    info!("Checking all registered services");
+    
+    let results = state.service_checker.check_all_services().await;
+    Ok(results)
+}
+
+/// Get services by category
+#[tauri::command]
+pub async fn get_services_by_category(
+    state: State<'_, Arc<AppState>>,
+    category: String,
+) -> Result<Vec<RegistryService>, String> {
+    info!(category = %category, "Getting services by category");
+    
+    let category = match category.to_lowercase().as_str() {
+        "social" => crate::services::registry::ServiceCategory::Social,
+        "video" => crate::services::registry::ServiceCategory::Video,
+        "gaming" => crate::services::registry::ServiceCategory::Gaming,
+        "messaging" => crate::services::registry::ServiceCategory::Messaging,
+        "streaming" => crate::services::registry::ServiceCategory::Streaming,
+        _ => crate::services::registry::ServiceCategory::Other,
+    };
+    
+    let services = state.service_registry.get_by_category(category).await;
+    Ok(services)
+}
+
+/// Clear service checker cache
+#[tauri::command]
+pub async fn clear_service_cache(
+    state: State<'_, Arc<AppState>>,
+) -> Result<(), String> {
+    info!("Clearing service checker cache");
+    state.service_checker.clear_cache().await;
+    Ok(())
+}
+
+/// Register a custom service
+#[tauri::command]
+pub async fn register_custom_service(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+    name: String,
+    category: String,
+    endpoints: Vec<String>,
+) -> Result<(), String> {
+    info!(id = %id, name = %name, "Registering custom service");
+    
+    use crate::services::registry::{Service, ServiceCategory, ServiceEndpoint, HttpMethod};
+    
+    let category = match category.to_lowercase().as_str() {
+        "social" => ServiceCategory::Social,
+        "video" => ServiceCategory::Video,
+        "gaming" => ServiceCategory::Gaming,
+        "messaging" => ServiceCategory::Messaging,
+        "streaming" => ServiceCategory::Streaming,
+        _ => ServiceCategory::Other,
+    };
+    
+    let service_endpoints: Vec<ServiceEndpoint> = endpoints
+        .into_iter()
+        .enumerate()
+        .map(|(i, url)| ServiceEndpoint {
+            url,
+            name: format!("Endpoint {}", i + 1),
+            method: HttpMethod::GET,
+            expected_status: Vec::new(),
+            timeout_ms: 5000,
+        })
+        .collect();
+    
+    let service = Service {
+        id: id.clone(),
+        name,
+        icon: None,
+        category,
+        endpoints: service_endpoints,
+        description: None,
+        plugin_id: Some("user-custom".to_string()),
+    };
+    
+    state
+        .service_registry
+        .register(service)
+        .await
+        .map_err(|e| format!("Failed to register service: {}", e))
+}
+
+/// Unregister a custom service
+#[tauri::command]
+pub async fn unregister_custom_service(
+    state: State<'_, Arc<AppState>>,
+    service_id: String,
+) -> Result<(), String> {
+    info!(service_id = %service_id, "Unregistering custom service");
+    
+    state
+        .service_registry
+        .unregister(&service_id)
+        .await
+        .map_err(|e| format!("Failed to unregister service: {}", e))
 }

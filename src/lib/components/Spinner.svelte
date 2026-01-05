@@ -16,9 +16,9 @@
   };
 
   const colorClasses = {
-    cyan: 'text-cyan-500',
+    cyan: 'text-[#00d4ff]',
     white: 'text-white',
-    gray: 'text-gray-400'
+    gray: 'text-[#a0a0a0]'
   };
 </script>
 

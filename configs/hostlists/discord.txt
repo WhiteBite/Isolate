@@ -26,3 +26,10 @@ discordsays.com
 discordsez.com
 discordstatus.com
 stable.dl2.discordapp.net
+
+# Discord extensions (BetterDiscord, 7TV, FrankerFaceZ)
+frankerfacez.com
+ffzap.com
+betterttv.net
+7tv.app
+7tv.io

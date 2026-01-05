@@ -1,0 +1,38 @@
+{
+  "id": "youtube-checker",
+  "name": "YouTube Checker",
+  "version": "1.0.0",
+  "author": "Isolate Team",
+  "description": "Добавляет проверку доступности YouTube",
+  "type": "service-checker",
+  "service": {
+    "id": "youtube",
+    "name": "YouTube",
+    "icon": "▶️",
+    "category": "media",
+    "description": "Крупнейший видеохостинг и стриминговая платформа",
+    "endpoints": [
+      {
+        "id": "main",
+        "name": "YouTube Main",
+        "url": "https://www.youtube.com/",
+        "method": "HEAD"
+      },
+      {
+        "id": "images",
+        "name": "YouTube Images",
+        "url": "https://i.ytimg.com/",
+        "method": "HEAD"
+      },
+      {
+        "id": "api",
+        "name": "YouTube API",
+        "url": "https://www.googleapis.com/youtube/v3/",
+        "method": "HEAD"
+      }
+    ]
+  },
+  "permissions": {
+    "http": ["youtube.com", "ytimg.com", "googleapis.com"]
+  }
+}

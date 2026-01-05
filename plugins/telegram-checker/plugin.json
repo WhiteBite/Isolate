@@ -1,0 +1,38 @@
+{
+  "id": "telegram-checker",
+  "name": "Telegram Checker",
+  "version": "1.0.0",
+  "author": "Isolate Team",
+  "description": "Добавляет проверку доступности Telegram",
+  "type": "service-checker",
+  "service": {
+    "id": "telegram",
+    "name": "Telegram",
+    "icon": "✈️",
+    "category": "communication",
+    "description": "Быстрый и безопасный мессенджер",
+    "endpoints": [
+      {
+        "id": "main",
+        "name": "Telegram Main",
+        "url": "https://telegram.org/",
+        "method": "HEAD"
+      },
+      {
+        "id": "web",
+        "name": "Telegram Web",
+        "url": "https://t.me/",
+        "method": "HEAD"
+      },
+      {
+        "id": "api",
+        "name": "Telegram API",
+        "url": "https://api.telegram.org/",
+        "method": "HEAD"
+      }
+    ]
+  },
+  "permissions": {
+    "http": ["telegram.org", "t.me", "api.telegram.org"]
+  }
+}

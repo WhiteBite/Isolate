@@ -799,4 +799,659 @@ mod tests {
         let url = "unknown://server:1234";
         assert!(parse_proxy_url(url).is_err());
     }
+
+    // ========================================================================
+    // VMess Tests
+    // ========================================================================
+
+    #[test]
+    fn test_parse_vmess_url_basic() {
+        // VMess JSON: aid as number (not string)
+        let json = r#"{"add":"server.com","port":"443","id":"550e8400-e29b-41d4-a716-446655440000","aid":64,"net":"tcp","tls":"tls","ps":"Test VMess"}"#;
+        let encoded = general_purpose::STANDARD.encode(json);
+        let url = format!("vmess://{}", encoded);
+
+        let config = parse_proxy_url(&url).unwrap();
+
+        assert_eq!(config.protocol, ProxyProtocol::Vmess);
+        assert_eq!(config.server, "server.com");
+        assert_eq!(config.port, 443);
+        assert_eq!(config.uuid, Some("550e8400-e29b-41d4-a716-446655440000".to_string()));
+        assert!(config.tls);
+        assert_eq!(config.name, "Test VMess");
+        assert_eq!(config.custom_fields.get("alter_id"), Some(&"64".to_string()));
+        assert_eq!(config.custom_fields.get("network"), Some(&"tcp".to_string()));
+    }
+
+    #[test]
+    fn test_parse_vmess_url_websocket() {
+        let json = r#"{"add":"ws.example.com","port":"80","id":"test-uuid-1234","aid":"0","net":"ws","path":"/ws","host":"cdn.example.com","ps":"WS Server"}"#;
+        let encoded = general_purpose::STANDARD.encode(json);
+        let url = format!("vmess://{}", encoded);
+
+        let config = parse_proxy_url(&url).unwrap();
+
+        assert_eq!(config.protocol, ProxyProtocol::Vmess);
+        assert_eq!(config.server, "ws.example.com");
+        assert_eq!(config.port, 80);
+        assert!(!config.tls);
+        assert_eq!(config.transport, Some("ws".to_string()));
+        assert_eq!(config.custom_fields.get("path"), Some(&"/ws".to_string()));
+        assert_eq!(config.custom_fields.get("host"), Some(&"cdn.example.com".to_string()));
+    }
+
+    #[test]
+    fn test_parse_vmess_url_with_address_field() {
+        // Some VMess configs use "address" instead of "add"
+        let json = r#"{"address":"alt.server.com","port":8443,"id":"uuid-test","ps":"Alt Server"}"#;
+        let encoded = general_purpose::STANDARD.encode(json);
+        let url = format!("vmess://{}", encoded);
+
+        let config = parse_proxy_url(&url).unwrap();
+
+        assert_eq!(config.server, "alt.server.com");
+        assert_eq!(config.port, 8443);
+    }
+
+    #[test]
+    fn test_parse_vmess_url_port_as_number() {
+        let json = r#"{"add":"server.com","port":443,"id":"uuid-123"}"#;
+        let encoded = general_purpose::STANDARD.encode(json);
+        let url = format!("vmess://{}", encoded);
+
+        let config = parse_proxy_url(&url).unwrap();
+        assert_eq!(config.port, 443);
+    }
+
+    #[test]
+    fn test_parse_vmess_url_missing_uuid() {
+        let json = r#"{"add":"server.com","port":"443"}"#;
+        let encoded = general_purpose::STANDARD.encode(json);
+        let url = format!("vmess://{}", encoded);
+
+        assert!(parse_proxy_url(&url).is_err());
+    }
+
+    #[test]
+    fn test_parse_vmess_url_missing_server() {
+        let json = r#"{"port":"443","id":"uuid-123"}"#;
+        let encoded = general_purpose::STANDARD.encode(json);
+        let url = format!("vmess://{}", encoded);
+
+        assert!(parse_proxy_url(&url).is_err());
+    }
+
+    #[test]
+    fn test_parse_vmess_url_invalid_base64() {
+        let url = "vmess://not-valid-base64!!!";
+        assert!(parse_proxy_url(url).is_err());
+    }
+
+    #[test]
+    fn test_parse_vmess_url_invalid_json() {
+        let encoded = general_purpose::STANDARD.encode("not json");
+        let url = format!("vmess://{}", encoded);
+        assert!(parse_proxy_url(&url).is_err());
+    }
+
+    // ========================================================================
+    // Shadowsocks Tests
+    // ========================================================================
+
+    #[test]
+    fn test_parse_shadowsocks_sip002_format() {
+        // SIP002: ss://base64(method:password)@server:port#name
+        let method_pass = general_purpose::STANDARD.encode("aes-256-gcm:mypassword");
+        let url = format!("ss://{}@ss.example.com:8388#SS%20Server", method_pass);
+
+        let config = parse_proxy_url(&url).unwrap();
+
+        assert_eq!(config.protocol, ProxyProtocol::Shadowsocks);
+        assert_eq!(config.server, "ss.example.com");
+        assert_eq!(config.port, 8388);
+        assert_eq!(config.password, Some("mypassword".to_string()));
+        assert_eq!(config.custom_fields.get("method"), Some(&"aes-256-gcm".to_string()));
+        assert_eq!(config.name, "SS Server");
+    }
+
+    #[test]
+    fn test_parse_shadowsocks_legacy_format() {
+        // Legacy: ss://base64(method:password@server:port)#name
+        let full = general_purpose::STANDARD.encode("chacha20-ietf-poly1305:secretpass@legacy.server.com:1234");
+        let url = format!("ss://{}#Legacy%20SS", full);
+
+        let config = parse_proxy_url(&url).unwrap();
+
+        assert_eq!(config.protocol, ProxyProtocol::Shadowsocks);
+        assert_eq!(config.server, "legacy.server.com");
+        assert_eq!(config.port, 1234);
+        assert_eq!(config.password, Some("secretpass".to_string()));
+        assert_eq!(config.custom_fields.get("method"), Some(&"chacha20-ietf-poly1305".to_string()));
+    }
+
+    #[test]
+    fn test_parse_shadowsocks_url_safe_base64() {
+        // URL-safe base64 variant
+        let method_pass = general_purpose::URL_SAFE.encode("aes-128-gcm:pass123");
+        let url = format!("ss://{}@urlsafe.server.com:9999", method_pass);
+
+        let config = parse_proxy_url(&url).unwrap();
+
+        assert_eq!(config.server, "urlsafe.server.com");
+        assert_eq!(config.port, 9999);
+    }
+
+    #[test]
+    fn test_parse_shadowsocks_no_name() {
+        let method_pass = general_purpose::STANDARD.encode("aes-256-gcm:pass");
+        let url = format!("ss://{}@noname.com:8388", method_pass);
+
+        let config = parse_proxy_url(&url).unwrap();
+
+        // Name should be generated from server:port
+        assert_eq!(config.name, "noname.com:8388");
+    }
+
+    #[test]
+    fn test_parse_shadowsocks_ipv6() {
+        let full = general_purpose::STANDARD.encode("aes-256-gcm:pass@[::1]:8388");
+        let url = format!("ss://{}", full);
+
+        let config = parse_proxy_url(&url).unwrap();
+
+        assert_eq!(config.server, "::1");
+        assert_eq!(config.port, 8388);
+    }
+
+    #[test]
+    fn test_parse_shadowsocks_invalid_format() {
+        // Missing method:password separator
+        let encoded = general_purpose::STANDARD.encode("invalidformat");
+        let url = format!("ss://{}@server.com:8388", encoded);
+
+        assert!(parse_proxy_url(&url).is_err());
+    }
+
+    // ========================================================================
+    // TUIC Tests
+    // ========================================================================
+
+    #[test]
+    fn test_parse_tuic_url_basic() {
+        let url = "tuic://550e8400-e29b-41d4-a716-446655440000:password123@tuic.server.com:443#TUIC%20Server";
+
+        let config = parse_proxy_url(url).unwrap();
+
+        assert_eq!(config.protocol, ProxyProtocol::Tuic);
+        assert_eq!(config.server, "tuic.server.com");
+        assert_eq!(config.port, 443);
+        assert_eq!(config.uuid, Some("550e8400-e29b-41d4-a716-446655440000".to_string()));
+        assert_eq!(config.password, Some("password123".to_string()));
+        assert!(config.tls); // TUIC always uses TLS
+        assert_eq!(config.transport, Some("quic".to_string()));
+        assert_eq!(config.name, "TUIC Server");
+    }
+
+    #[test]
+    fn test_parse_tuic_url_with_params() {
+        let url = "tuic://uuid-test:pass@server.com:443?congestion_control=bbr&udp_relay_mode=native&alpn=h3&sni=custom.sni.com#TUIC";
+
+        let config = parse_proxy_url(url).unwrap();
+
+        assert_eq!(config.custom_fields.get("congestion_control"), Some(&"bbr".to_string()));
+        assert_eq!(config.custom_fields.get("udp_relay_mode"), Some(&"native".to_string()));
+        assert_eq!(config.custom_fields.get("alpn"), Some(&"h3".to_string()));
+        assert_eq!(config.sni, Some("custom.sni.com".to_string()));
+    }
+
+    #[test]
+    fn test_parse_tuic_url_cc_shorthand() {
+        let url = "tuic://uuid:pass@server.com:443?cc=cubic";
+
+        let config = parse_proxy_url(url).unwrap();
+
+        assert_eq!(config.custom_fields.get("congestion_control"), Some(&"cubic".to_string()));
+    }
+
+    #[test]
+    fn test_parse_tuic_url_no_password() {
+        let url = "tuic://uuid-only@server.com:443";
+
+        let config = parse_proxy_url(url).unwrap();
+
+        assert_eq!(config.uuid, Some("uuid-only".to_string()));
+        assert_eq!(config.password, None);
+    }
+
+    #[test]
+    fn test_parse_tuic_url_default_port() {
+        let url = "tuic://uuid:pass@server.com";
+
+        let config = parse_proxy_url(url).unwrap();
+
+        assert_eq!(config.port, 443); // Default TUIC port
+    }
+
+    #[test]
+    fn test_parse_tuic_url_missing_uuid() {
+        let url = "tuic://:password@server.com:443";
+
+        assert!(parse_proxy_url(url).is_err());
+    }
+
+    // ========================================================================
+    // Hysteria/Hysteria2 Tests
+    // ========================================================================
+
+    #[test]
+    fn test_parse_hysteria2_url_basic() {
+        let url = "hysteria2://authpassword@hy2.server.com:443#Hysteria2%20Server";
+
+        let config = parse_proxy_url(url).unwrap();
+
+        assert_eq!(config.protocol, ProxyProtocol::Hysteria2);
+        assert_eq!(config.server, "hy2.server.com");
+        assert_eq!(config.port, 443);
+        assert_eq!(config.password, Some("authpassword".to_string()));
+        assert!(config.tls); // Hysteria always uses TLS
+        assert_eq!(config.transport, Some("quic".to_string()));
+    }
+
+    #[test]
+    fn test_parse_hysteria2_hy2_prefix() {
+        let url = "hy2://authpass@hy2.server.com:443#HY2";
+
+        let config = parse_proxy_url(url).unwrap();
+
+        assert_eq!(config.protocol, ProxyProtocol::Hysteria2);
+        assert_eq!(config.server, "hy2.server.com");
+    }
+
+    #[test]
+    fn test_parse_hysteria2_with_params() {
+        let url = "hysteria2://auth@server.com:443?obfs=salamander&obfs-password=obfspass&sni=custom.sni.com&insecure=1#HY2";
+
+        let config = parse_proxy_url(url).unwrap();
+
+        assert_eq!(config.custom_fields.get("obfs"), Some(&"salamander".to_string()));
+        assert_eq!(config.custom_fields.get("obfs_password"), Some(&"obfspass".to_string()));
+        assert_eq!(config.sni, Some("custom.sni.com".to_string()));
+        assert_eq!(config.custom_fields.get("insecure"), Some(&"1".to_string()));
+    }
+
+    #[test]
+    fn test_parse_hysteria1_url() {
+        let url = "hysteria://auth@hy1.server.com:443?upmbps=100&downmbps=200#Hysteria1";
+
+        let config = parse_proxy_url(url).unwrap();
+
+        assert_eq!(config.protocol, ProxyProtocol::Hysteria);
+        assert_eq!(config.custom_fields.get("up_mbps"), Some(&"100".to_string()));
+        assert_eq!(config.custom_fields.get("down_mbps"), Some(&"200".to_string()));
+    }
+
+    #[test]
+    fn test_parse_hysteria_bandwidth_params() {
+        let url = "hysteria://auth@server.com:443?up=50&down=100";
+
+        let config = parse_proxy_url(url).unwrap();
+
+        assert_eq!(config.custom_fields.get("up_mbps"), Some(&"50".to_string()));
+        assert_eq!(config.custom_fields.get("down_mbps"), Some(&"100".to_string()));
+    }
+
+    #[test]
+    fn test_parse_hysteria_password_in_password_field() {
+        // Some URLs put auth in password position: hysteria2://:password@server
+        let url = "hysteria2://:secretauth@server.com:443";
+
+        let config = parse_proxy_url(url).unwrap();
+
+        assert_eq!(config.password, Some("secretauth".to_string()));
+    }
+
+    #[test]
+    fn test_parse_hysteria_missing_server() {
+        let url = "hysteria2://auth@:443";
+
+        assert!(parse_proxy_url(url).is_err());
+    }
+
+    // ========================================================================
+    // HTTP/HTTPS Proxy Tests
+    // ========================================================================
+
+    #[test]
+    fn test_parse_http_url_basic() {
+        let url = "http://proxy.example.com:8080";
+
+        let config = parse_proxy_url(url).unwrap();
+
+        assert_eq!(config.protocol, ProxyProtocol::Http);
+        assert_eq!(config.server, "proxy.example.com");
+        assert_eq!(config.port, 8080);
+        assert!(!config.tls);
+        assert_eq!(config.username, None);
+        assert_eq!(config.password, None);
+    }
+
+    #[test]
+    fn test_parse_http_url_with_auth() {
+        let url = "http://user:pass123@proxy.example.com:3128";
+
+        let config = parse_proxy_url(url).unwrap();
+
+        assert_eq!(config.protocol, ProxyProtocol::Http);
+        assert_eq!(config.username, Some("user".to_string()));
+        assert_eq!(config.password, Some("pass123".to_string()));
+    }
+
+    #[test]
+    fn test_parse_http_url_encoded_credentials() {
+        let url = "http://user%40domain:pass%23word@proxy.com:8080";
+
+        let config = parse_proxy_url(url).unwrap();
+
+        assert_eq!(config.username, Some("user@domain".to_string()));
+        assert_eq!(config.password, Some("pass#word".to_string()));
+    }
+
+    #[test]
+    fn test_parse_https_url() {
+        let url = "https://secure.proxy.com:443";
+
+        let config = parse_proxy_url(url).unwrap();
+
+        assert_eq!(config.protocol, ProxyProtocol::Https);
+        assert!(config.tls);
+        assert_eq!(config.port, 443);
+    }
+
+    #[test]
+    fn test_parse_http_default_port() {
+        let url = "http://proxy.com";
+
+        let config = parse_proxy_url(url).unwrap();
+
+        assert_eq!(config.port, 8080); // Default HTTP proxy port
+    }
+
+    #[test]
+    fn test_parse_https_default_port() {
+        let url = "https://proxy.com";
+
+        let config = parse_proxy_url(url).unwrap();
+
+        assert_eq!(config.port, 443); // Default HTTPS port
+    }
+
+    #[test]
+    fn test_parse_http_with_fragment() {
+        let url = "http://proxy.com:8080#My%20HTTP%20Proxy";
+
+        let config = parse_proxy_url(url).unwrap();
+
+        assert_eq!(config.name, "My HTTP Proxy");
+    }
+
+    // ========================================================================
+    // Subscription Tests
+    // ========================================================================
+
+    #[test]
+    fn test_parse_subscription_base64() {
+        let content = "vless://uuid1@server1.com:443#Server1\nvless://uuid2@server2.com:443#Server2";
+        let encoded = general_purpose::STANDARD.encode(content);
+
+        let configs = parse_subscription(&encoded).unwrap();
+
+        assert_eq!(configs.len(), 2);
+        assert_eq!(configs[0].server, "server1.com");
+        assert_eq!(configs[1].server, "server2.com");
+    }
+
+    #[test]
+    fn test_parse_subscription_plain_text() {
+        let content = "vless://uuid1@server1.com:443#Server1\nvless://uuid2@server2.com:443#Server2";
+
+        let configs = parse_subscription(content).unwrap();
+
+        assert_eq!(configs.len(), 2);
+    }
+
+    #[test]
+    fn test_parse_subscription_with_comments() {
+        let content = "# This is a comment\nvless://uuid@server.com:443#Server\n// Another comment\ntrojan://pass@trojan.com:443";
+
+        let configs = parse_subscription(content).unwrap();
+
+        assert_eq!(configs.len(), 2);
+    }
+
+    #[test]
+    fn test_parse_subscription_mixed_protocols() {
+        let content = "vless://uuid@vless.com:443\nss://YWVzLTI1Ni1nY206cGFzcw==@ss.com:8388\ntrojan://pass@trojan.com:443";
+
+        let configs = parse_subscription(content).unwrap();
+
+        assert_eq!(configs.len(), 3);
+        assert_eq!(configs[0].protocol, ProxyProtocol::Vless);
+        assert_eq!(configs[1].protocol, ProxyProtocol::Shadowsocks);
+        assert_eq!(configs[2].protocol, ProxyProtocol::Trojan);
+    }
+
+    #[test]
+    fn test_parse_subscription_skips_invalid() {
+        let content = "vless://uuid@valid.com:443\ninvalid-url\nvless://uuid2@valid2.com:443";
+
+        let configs = parse_subscription(content).unwrap();
+
+        assert_eq!(configs.len(), 2); // Invalid URL skipped
+    }
+
+    #[test]
+    fn test_parse_subscription_empty_lines() {
+        let content = "\n\nvless://uuid@server.com:443\n\n\n";
+
+        let configs = parse_subscription(content).unwrap();
+
+        assert_eq!(configs.len(), 1);
+    }
+
+    #[test]
+    fn test_parse_subscription_url_safe_base64() {
+        let content = "vless://uuid@server.com:443#Test";
+        let encoded = general_purpose::URL_SAFE.encode(content);
+
+        let configs = parse_subscription(&encoded).unwrap();
+
+        assert_eq!(configs.len(), 1);
+    }
+
+    #[test]
+    fn test_parse_subscription_empty() {
+        let content = "";
+
+        assert!(parse_subscription(content).is_err());
+    }
+
+    #[test]
+    fn test_parse_subscription_only_comments() {
+        let content = "# Comment 1\n// Comment 2\n# Comment 3";
+
+        assert!(parse_subscription(content).is_err());
+    }
+
+    #[test]
+    fn test_parse_subscription_all_invalid() {
+        let content = "invalid1\ninvalid2\nnot-a-url";
+
+        assert!(parse_subscription(content).is_err());
+    }
+
+    // ========================================================================
+    // Edge Cases
+    // ========================================================================
+
+    #[test]
+    fn test_empty_url() {
+        assert!(parse_proxy_url("").is_err());
+    }
+
+    #[test]
+    fn test_whitespace_url() {
+        assert!(parse_proxy_url("   ").is_err());
+    }
+
+    #[test]
+    fn test_url_with_whitespace_trimmed() {
+        let url = "  socks5://127.0.0.1:1080  ";
+        let config = parse_proxy_url(url).unwrap();
+        assert_eq!(config.server, "127.0.0.1");
+    }
+
+    #[test]
+    fn test_invalid_port_too_large() {
+        let url = "socks5://127.0.0.1:99999";
+        assert!(parse_proxy_url(url).is_err());
+    }
+
+    #[test]
+    fn test_vless_missing_uuid() {
+        let url = "vless://@server.com:443";
+        assert!(parse_proxy_url(url).is_err());
+    }
+
+    #[test]
+    fn test_vless_missing_server() {
+        let url = "vless://uuid@:443";
+        assert!(parse_proxy_url(url).is_err());
+    }
+
+    #[test]
+    fn test_trojan_missing_password() {
+        let url = "trojan://@server.com:443";
+        assert!(parse_proxy_url(url).is_err());
+    }
+
+    #[test]
+    fn test_socks_missing_server() {
+        let url = "socks5://:1080";
+        assert!(parse_proxy_url(url).is_err());
+    }
+
+    #[test]
+    fn test_vless_reality_params() {
+        let url = "vless://uuid@server.com:443?security=reality&pbk=publickey123&sid=shortid&fp=chrome#Reality";
+
+        let config = parse_proxy_url(url).unwrap();
+
+        assert!(config.tls); // reality counts as TLS
+        assert_eq!(config.custom_fields.get("public_key"), Some(&"publickey123".to_string()));
+        assert_eq!(config.custom_fields.get("short_id"), Some(&"shortid".to_string()));
+        assert_eq!(config.custom_fields.get("fingerprint"), Some(&"chrome".to_string()));
+    }
+
+    #[test]
+    fn test_vless_websocket_transport() {
+        let url = "vless://uuid@server.com:443?type=ws&path=/websocket&host=cdn.example.com";
+
+        let config = parse_proxy_url(url).unwrap();
+
+        assert_eq!(config.transport, Some("ws".to_string()));
+        assert_eq!(config.custom_fields.get("path"), Some(&"/websocket".to_string()));
+        assert_eq!(config.custom_fields.get("host"), Some(&"cdn.example.com".to_string()));
+    }
+
+    #[test]
+    fn test_trojan_with_transport() {
+        let url = "trojan://pass@server.com:443?type=ws&path=/trojan&fp=firefox&alpn=h2,http/1.1";
+
+        let config = parse_proxy_url(url).unwrap();
+
+        assert_eq!(config.transport, Some("ws".to_string()));
+        assert_eq!(config.custom_fields.get("fingerprint"), Some(&"firefox".to_string()));
+        assert_eq!(config.custom_fields.get("alpn"), Some(&"h2,http/1.1".to_string()));
+    }
+
+    #[test]
+    fn test_socks_without_auth() {
+        let url = "socks5://proxy.local:1080";
+
+        let config = parse_proxy_url(url).unwrap();
+
+        assert_eq!(config.username, None);
+        assert_eq!(config.password, None);
+    }
+
+    #[test]
+    fn test_socks_scheme_variant() {
+        let url = "socks://user:pass@proxy.local:1080";
+
+        let config = parse_proxy_url(url).unwrap();
+
+        assert_eq!(config.protocol, ProxyProtocol::Socks5);
+    }
+
+    #[test]
+    fn test_socks_default_port() {
+        let url = "socks5://proxy.local";
+
+        let config = parse_proxy_url(url).unwrap();
+
+        assert_eq!(config.port, 1080); // Default SOCKS port
+    }
+
+    #[test]
+    fn test_url_encoded_name() {
+        let url = "vless://uuid@server.com:443#%E6%B5%8B%E8%AF%95%E6%9C%8D%E5%8A%A1%E5%99%A8";
+
+        let config = parse_proxy_url(url).unwrap();
+
+        assert_eq!(config.name, "测试服务器"); // Chinese characters
+    }
+
+    #[test]
+    fn test_special_characters_in_password() {
+        let url = "trojan://p%40ss%3Aword%21@server.com:443";
+
+        let config = parse_proxy_url(url).unwrap();
+
+        assert_eq!(config.password, Some("p@ss:word!".to_string()));
+    }
+
+    #[test]
+    fn test_ipv4_server() {
+        let url = "vless://uuid@192.168.1.100:443";
+
+        let config = parse_proxy_url(url).unwrap();
+
+        assert_eq!(config.server, "192.168.1.100");
+    }
+
+    #[test]
+    fn test_ipv6_server_vless() {
+        let url = "vless://uuid@[2001:db8::1]:443";
+
+        let config = parse_proxy_url(url).unwrap();
+
+        // URL parser keeps brackets for IPv6
+        assert_eq!(config.server, "[2001:db8::1]");
+        assert_eq!(config.port, 443);
+    }
+
+    #[test]
+    fn test_generate_unique_ids() {
+        let url1 = "vless://uuid@server1.com:443";
+        let url2 = "vless://uuid@server2.com:443";
+
+        let config1 = parse_proxy_url(url1).unwrap();
+        let config2 = parse_proxy_url(url2).unwrap();
+
+        // IDs should be unique
+        assert_ne!(config1.id, config2.id);
+        // IDs should start with protocol prefix
+        assert!(config1.id.starts_with("vless_"));
+        assert!(config2.id.starts_with("vless_"));
+    }
 }

@@ -1,5 +1,10 @@
+// Allow dead code for modules that are not yet fully connected
+#![allow(dead_code)]
+
 mod commands;
 mod core;
+pub mod plugins;
+pub mod services;
 pub mod state;
 pub mod tray;
 
@@ -49,10 +54,18 @@ pub fn run() {
         "Starting Isolate..."
     );
 
-    tauri::Builder::default()
+    let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_updater::Builder::new().build());
+    
+    #[cfg(debug_assertions)]
+    {
+        builder = builder.plugin(tauri_plugin_mcp_bridge::init());
+    }
+    
+    builder
         .invoke_handler(tauri::generate_handler![
+            commands::is_backend_ready,
             commands::get_status,
             commands::get_strategies,
             commands::get_services,
@@ -103,6 +116,7 @@ pub fn run() {
             // QUIC blocking commands
             commands::enable_quic_block,
             commands::disable_quic_block,
+            commands::set_quic_block,
             commands::is_quic_blocked,
             commands::is_admin,
             // Hostlist commands
@@ -137,6 +151,7 @@ pub fn run() {
             // Testing commands
             commands::run_tests,
             commands::cancel_tests,
+            commands::test_strategy,
             // TUN mode commands
             commands::start_tun,
             commands::stop_tun,
@@ -177,6 +192,36 @@ pub fn run() {
             // Config updater commands
             commands::check_config_updates,
             commands::download_config_updates,
+            // Orchestra commands
+            commands::start_orchestra,
+            commands::stop_orchestra,
+            commands::get_orchestra_results,
+            commands::apply_orchestra_results,
+            commands::save_orchestra_results,
+            commands::load_orchestra_results,
+            // Engine mode commands
+            commands::get_engine_mode,
+            commands::set_engine_mode,
+            // AutoRun commands
+            commands::get_autorun_status,
+            commands::set_autorun,
+            // Plugin commands (JS plugins)
+            commands::get_plugins_dir,
+            commands::scan_plugin_directories,
+            commands::load_plugin_manifest,
+            commands::get_all_plugins_cmd,
+            commands::get_plugin_services,
+            commands::check_plugin_service,
+            commands::check_all_plugin_services,
+            // Service Registry commands (new services system)
+            commands::get_registry_services,
+            commands::get_service_status,
+            commands::check_single_service,
+            commands::check_all_registry_services,
+            commands::get_services_by_category,
+            commands::clear_service_cache,
+            commands::register_custom_service,
+            commands::unregister_custom_service,
         ])
         .setup(move |app| {
             let window = app.get_webview_window("main").unwrap();
@@ -198,12 +243,12 @@ pub fn run() {
                     Ok(app_state) => {
                         // Check if auto_apply is enabled in silent mode
                         if silent {
-                            let settings = app_state.storage.get_settings();
+                            let settings = app_state.storage.get_settings().await;
                             if let Ok(settings) = settings {
                                 if settings.auto_apply {
                                     tracing::info!("Silent mode with auto_apply: applying last strategy");
                                     // Get last strategy and apply it
-                                    if let Ok(Some(last_strategy)) = app_state.storage.get_setting::<String>("last_strategy") {
+                                    if let Ok(Some(last_strategy)) = app_state.storage.get_setting::<String>("last_strategy").await {
                                         tracing::info!(strategy = %last_strategy, "Auto-applying last strategy");
                                         // Emit event to frontend to apply strategy
                                         let _ = handle.emit("auto-apply-strategy", &last_strategy);

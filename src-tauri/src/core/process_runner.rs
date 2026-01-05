@@ -209,7 +209,7 @@ impl ProcessRunner {
         // Capture stdout
         if let Some(stdout) = child.stdout.take() {
             let tx = output_tx.clone();
-            let state_clone = state.clone();
+            let _state_clone = state.clone();
             let id_clone = id.to_string();
 
             tokio::spawn(async move {
@@ -233,7 +233,7 @@ impl ProcessRunner {
         // Capture stderr
         if let Some(stderr) = child.stderr.take() {
             let tx = output_tx.clone();
-            let state_clone = state.clone();
+            let _state_clone = state.clone();
             let id_clone = id.to_string();
 
             tokio::spawn(async move {
@@ -468,4 +468,75 @@ pub async fn run_command(
     }
 
     Ok((stdout, stderr))
+}
+
+/// Gracefully stop a child process with timeout
+///
+/// Sends a terminate signal (taskkill on Windows, SIGTERM on Unix) and waits
+/// for the process to exit. If the process doesn't exit within the timeout,
+/// it will be force killed.
+///
+/// # Arguments
+/// * `child` - Mutable reference to Child process
+/// * `timeout_ms` - Timeout for graceful shutdown in milliseconds
+/// * `process_name` - Name for logging purposes
+///
+/// # Returns
+/// * `Ok(true)` - Process terminated gracefully
+/// * `Ok(false)` - Process was force killed after timeout
+///
+/// # Example
+/// ```ignore
+/// let mut child = Command::new("some_process").spawn()?;
+/// let graceful = graceful_stop_child(&mut child, 3000, "some_process").await?;
+/// if graceful {
+///     println!("Process stopped gracefully");
+/// } else {
+///     println!("Process was force killed");
+/// }
+/// ```
+pub async fn graceful_stop_child(
+    child: &mut tokio::process::Child,
+    timeout_ms: u64,
+    process_name: &str,
+) -> Result<bool> {
+    #[cfg(windows)]
+    {
+        if let Some(pid) = child.id() {
+            debug!(pid, process_name, "Sending terminate signal via taskkill");
+            let _ = tokio::process::Command::new("taskkill")
+                .args(["/PID", &pid.to_string()])
+                .output()
+                .await;
+        }
+    }
+
+    #[cfg(not(windows))]
+    {
+        use nix::sys::signal::{kill, Signal};
+        use nix::unistd::Pid;
+        if let Some(pid) = child.id() {
+            debug!(pid, process_name, "Sending SIGTERM");
+            let _ = kill(Pid::from_raw(pid as i32), Signal::SIGTERM);
+        }
+    }
+
+    match timeout(Duration::from_millis(timeout_ms), child.wait()).await {
+        Ok(Ok(status)) => {
+            info!(process_name, ?status, "Process terminated gracefully");
+            Ok(true)
+        }
+        Ok(Err(e)) => {
+            warn!(process_name, error = %e, "Error waiting for process, force killing");
+            let _ = child.kill().await;
+            let _ = child.wait().await;
+            Ok(false)
+        }
+        Err(_) => {
+            warn!(process_name, timeout_ms, "Graceful shutdown timeout, force killing");
+            let _ = child.kill().await;
+            let _ = child.wait().await;
+            Ok(false)
+        }
+    }
 }

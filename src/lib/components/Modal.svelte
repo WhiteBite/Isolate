@@ -43,17 +43,17 @@
     onclick={handleBackdropClick}
   >
     <div
-      class="relative w-full max-w-lg bg-gray-800 rounded-xl border border-gray-700 shadow-2xl"
+      class="relative w-full max-w-lg bg-[#1a1f3a] rounded-xl border border-[#2a2f4a] shadow-2xl"
       role="dialog"
       aria-modal="true"
       aria-labelledby={title ? 'modal-title' : undefined}
     >
       {#if title}
-        <div class="flex items-center justify-between px-6 py-4 border-b border-gray-700">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-[#2a2f4a]">
           <h2 id="modal-title" class="text-lg font-semibold text-white">{title}</h2>
           <button
             onclick={handleClose}
-            class="p-1 text-gray-400 hover:text-white rounded-lg hover:bg-gray-700 transition-colors"
+            class="p-1 text-[#a0a0a0] hover:text-white rounded-lg hover:bg-[#2a2f4a] transition-colors"
             aria-label="Close modal"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -64,7 +64,7 @@
       {:else}
         <button
           onclick={handleClose}
-          class="absolute top-4 right-4 p-1 text-gray-400 hover:text-white rounded-lg hover:bg-gray-700 transition-colors"
+          class="absolute top-4 right-4 p-1 text-[#a0a0a0] hover:text-white rounded-lg hover:bg-[#2a2f4a] transition-colors"
           aria-label="Close modal"
         >
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

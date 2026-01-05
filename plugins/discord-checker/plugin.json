@@ -1,0 +1,38 @@
+{
+  "id": "discord-checker",
+  "name": "Discord Checker",
+  "version": "1.0.0",
+  "author": "Isolate Team",
+  "description": "Добавляет проверку доступности Discord",
+  "type": "service-checker",
+  "service": {
+    "id": "discord",
+    "name": "Discord",
+    "icon": "🎮",
+    "category": "communication",
+    "description": "Голосовой и текстовый мессенджер для геймеров",
+    "endpoints": [
+      {
+        "id": "api",
+        "name": "Discord API",
+        "url": "https://discord.com/api/v10/gateway",
+        "method": "GET"
+      },
+      {
+        "id": "cdn",
+        "name": "Discord CDN",
+        "url": "https://cdn.discordapp.com/",
+        "method": "HEAD"
+      },
+      {
+        "id": "status",
+        "name": "Status Page",
+        "url": "https://discordstatus.com/api/v2/status.json",
+        "method": "GET"
+      }
+    ]
+  },
+  "permissions": {
+    "http": ["discord.com", "discordapp.com", "discordstatus.com"]
+  }
+}

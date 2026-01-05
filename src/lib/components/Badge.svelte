@@ -14,19 +14,19 @@
   }: Props = $props();
 
   const variantClasses = {
-    active: 'bg-green-500/10 text-green-400 border-green-500/30',
-    inactive: 'bg-gray-500/10 text-gray-400 border-gray-500/30',
-    error: 'bg-red-500/10 text-red-400 border-red-500/30',
-    warning: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30',
-    info: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30'
+    active: 'bg-[#00ff88]/10 text-[#00ff88] border-[#00ff88]/30',
+    inactive: 'bg-[#a0a0a0]/10 text-[#a0a0a0] border-[#a0a0a0]/30',
+    error: 'bg-[#ff3333]/10 text-[#ff3333] border-[#ff3333]/30',
+    warning: 'bg-[#ffaa00]/10 text-[#ffaa00] border-[#ffaa00]/30',
+    info: 'bg-[#00d4ff]/10 text-[#00d4ff] border-[#00d4ff]/30'
   };
 
   const dotColors = {
-    active: 'bg-green-400',
-    inactive: 'bg-gray-400',
-    error: 'bg-red-400',
-    warning: 'bg-yellow-400',
-    info: 'bg-cyan-400'
+    active: 'bg-[#00ff88]',
+    inactive: 'bg-[#a0a0a0]',
+    error: 'bg-[#ff3333]',
+    warning: 'bg-[#ffaa00]',
+    info: 'bg-[#00d4ff]'
   };
 
   const sizeClasses = {

@@ -18,7 +18,7 @@ use tokio::process::{Child, Command};
 use tracing::{debug, error, info, warn};
 
 use crate::core::errors::{IsolateError, Result};
-use crate::core::paths::{get_binaries_dir, get_configs_dir};
+use crate::core::paths::get_configs_dir;
 
 // ============================================================================
 // VLESS Configuration Types
@@ -710,20 +710,7 @@ pub fn generate_singbox_config(config: &VlessConfig, socks_port: u16) -> serde_j
 // Sing-box Process Management
 // ============================================================================
 
-/// Get path to sing-box binary
-fn get_singbox_path() -> PathBuf {
-    let binaries_dir = get_binaries_dir();
-
-    #[cfg(windows)]
-    {
-        binaries_dir.join("sing-box.exe")
-    }
-
-    #[cfg(not(windows))]
-    {
-        binaries_dir.join("sing-box")
-    }
-}
+// NOTE: get_singbox_path moved to paths.rs - use crate::core::paths::get_singbox_path
 
 /// Get path for temporary config file
 fn get_temp_config_path(config_id: &str) -> PathBuf {
@@ -735,7 +722,7 @@ fn get_temp_config_path(config_id: &str) -> PathBuf {
 /// Writes configuration to a temp file and starts sing-box process.
 /// Returns the Child process handle for lifecycle management.
 pub async fn start_vless(config: &VlessConfig, socks_port: u16) -> Result<Child> {
-    let singbox_path = get_singbox_path();
+    let singbox_path = crate::core::paths::get_singbox_path();
 
     // Verify sing-box exists
     if !singbox_path.exists() {
@@ -892,6 +879,7 @@ pub struct HealthCheckResult {
 /// Checks:
 /// 1. SOCKS port is open and accepting connections
 /// 2. Optionally tests proxy connectivity
+#[allow(dead_code)]
 pub async fn health_check_socks(socks_port: u16) -> HealthCheckResult {
     let addr = format!("127.0.0.1:{}", socks_port);
     let timeout_duration = Duration::from_secs(3);
@@ -994,12 +982,14 @@ pub async fn test_proxy_connectivity(socks_port: u16, test_url: &str) -> Result<
 
 /// Registry path for Internet Settings
 #[cfg(windows)]
+#[allow(dead_code)]
 const INTERNET_SETTINGS_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Internet Settings";
 
 /// Set system proxy to use SOCKS5
 ///
 /// On Windows, this modifies the registry to set the proxy server.
 /// Note: Most applications respect this setting, but some may not.
+#[allow(dead_code)]
 pub async fn set_system_proxy(host: &str, port: u16) -> Result<()> {
     info!(host = %host, port = port, "Setting system proxy");
 
@@ -1037,6 +1027,7 @@ pub async fn set_system_proxy(host: &str, port: u16) -> Result<()> {
 }
 
 /// Clear system proxy settings
+#[allow(dead_code)]
 pub async fn clear_system_proxy() -> Result<()> {
     info!("Clearing system proxy");
 
@@ -1073,6 +1064,7 @@ pub async fn clear_system_proxy() -> Result<()> {
 
 /// Notify Windows of proxy settings change
 #[cfg(windows)]
+#[allow(dead_code)]
 fn notify_proxy_change() {
     use std::ptr;
 

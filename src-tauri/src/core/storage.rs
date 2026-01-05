@@ -3,9 +3,9 @@
 //! Путь к БД: %APPDATA%/Isolate/data.db
 
 use rusqlite::{params, Connection, OptionalExtension};
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::path::PathBuf;
-use std::sync::Mutex;
+use tokio::sync::Mutex;
 use tracing::{debug, info};
 
 use crate::core::errors::{IsolateError, Result};
@@ -33,13 +33,13 @@ pub struct Storage {
 
 impl Storage {
     /// Создаёт новое хранилище
-    pub fn new() -> Result<Self> {
+    pub async fn new() -> Result<Self> {
         let db_path = Self::get_db_path()?;
-        Self::open(&db_path)
+        Self::open(&db_path).await
     }
 
     /// Открывает хранилище по указанному пути
-    pub fn open(path: &PathBuf) -> Result<Self> {
+    pub async fn open(path: &PathBuf) -> Result<Self> {
         // Создаём директорию если не существует
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
@@ -51,7 +51,7 @@ impl Storage {
             conn: Mutex::new(conn),
         };
 
-        storage.init_schema()?;
+        storage.init_schema().await?;
 
         info!(path = %path.display(), "Storage initialized");
         Ok(storage)
@@ -75,10 +75,8 @@ impl Storage {
     // ========================================================================
 
     /// Получает настройку по ключу
-    pub fn get_setting<T: DeserializeOwned>(&self, key: &str) -> Result<Option<T>> {
-        let conn = self.conn.lock().map_err(|e| {
-            IsolateError::Storage(format!("Failed to lock connection: {}", e))
-        })?;
+    pub async fn get_setting<T: DeserializeOwned>(&self, key: &str) -> Result<Option<T>> {
+        let conn = self.conn.lock().await;
 
         let result: Option<String> = conn
             .query_row(
@@ -98,12 +96,10 @@ impl Storage {
     }
 
     /// Устанавливает настройку
-    pub fn set_setting<T: Serialize>(&self, key: &str, value: &T) -> Result<()> {
+    pub async fn set_setting<T: Serialize>(&self, key: &str, value: &T) -> Result<()> {
         let json = serde_json::to_string(value)?;
 
-        let conn = self.conn.lock().map_err(|e| {
-            IsolateError::Storage(format!("Failed to lock connection: {}", e))
-        })?;
+        let conn = self.conn.lock().await;
 
         conn.execute(
             "INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES (?1, ?2, datetime('now'))",
@@ -115,10 +111,8 @@ impl Storage {
     }
 
     /// Удаляет настройку
-    pub fn delete_setting(&self, key: &str) -> Result<()> {
-        let conn = self.conn.lock().map_err(|e| {
-            IsolateError::Storage(format!("Failed to lock connection: {}", e))
-        })?;
+    pub async fn delete_setting(&self, key: &str) -> Result<()> {
+        let conn = self.conn.lock().await;
 
         conn.execute("DELETE FROM settings WHERE key = ?1", params![key])?;
 
@@ -127,10 +121,8 @@ impl Storage {
     }
 
     /// Получает все настройки
-    pub fn get_all_settings(&self) -> Result<Vec<(String, String)>> {
-        let conn = self.conn.lock().map_err(|e| {
-            IsolateError::Storage(format!("Failed to lock connection: {}", e))
-        })?;
+    pub async fn get_all_settings(&self) -> Result<Vec<(String, String)>> {
+        let conn = self.conn.lock().await;
 
         let mut stmt = conn.prepare("SELECT key, value FROM settings")?;
         let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
@@ -148,28 +140,28 @@ impl Storage {
     // ========================================================================
 
     /// Получает настройки приложения
-    pub fn get_settings(&self) -> Result<Settings> {
-        let settings: Option<Settings> = self.get_setting(settings_keys::APP_SETTINGS)?;
+    pub async fn get_settings(&self) -> Result<Settings> {
+        let settings: Option<Settings> = self.get_setting(settings_keys::APP_SETTINGS).await?;
         Ok(settings.unwrap_or_default())
     }
 
     /// Сохраняет настройки приложения
-    pub fn save_settings(&self, settings: &Settings) -> Result<()> {
-        self.set_setting(settings_keys::APP_SETTINGS, settings)
+    pub async fn save_settings(&self, settings: &Settings) -> Result<()> {
+        self.set_setting(settings_keys::APP_SETTINGS, settings).await
     }
 
     /// Получает состояние включённости сервиса
-    pub fn get_service_enabled(&self, service_id: &str) -> Result<bool> {
+    pub async fn get_service_enabled(&self, service_id: &str) -> Result<bool> {
         let key = format!("{}{}", settings_keys::SERVICE_ENABLED_PREFIX, service_id);
-        let enabled: Option<bool> = self.get_setting(&key)?;
+        let enabled: Option<bool> = self.get_setting(&key).await?;
         // По умолчанию сервисы включены
         Ok(enabled.unwrap_or(true))
     }
 
     /// Устанавливает состояние включённости сервиса
-    pub fn set_service_enabled(&self, service_id: &str, enabled: bool) -> Result<()> {
+    pub async fn set_service_enabled(&self, service_id: &str, enabled: bool) -> Result<()> {
         let key = format!("{}{}", settings_keys::SERVICE_ENABLED_PREFIX, service_id);
-        self.set_setting(&key, &enabled)
+        self.set_setting(&key, &enabled).await
     }
 
     // ========================================================================
@@ -177,10 +169,8 @@ impl Storage {
     // ========================================================================
 
     /// Получает кэшированную стратегию для окружения
-    pub fn get_cached_strategy(&self, env_key: &str) -> Result<Option<CachedStrategy>> {
-        let conn = self.conn.lock().map_err(|e| {
-            IsolateError::Storage(format!("Failed to lock connection: {}", e))
-        })?;
+    pub async fn get_cached_strategy(&self, env_key: &str) -> Result<Option<CachedStrategy>> {
+        let conn = self.conn.lock().await;
 
         let result = conn
             .query_row(
@@ -209,10 +199,8 @@ impl Storage {
     }
 
     /// Сохраняет стратегию в кэш
-    pub fn cache_strategy(&self, env_key: &str, strategy_id: &str, score: f64) -> Result<()> {
-        let conn = self.conn.lock().map_err(|e| {
-            IsolateError::Storage(format!("Failed to lock connection: {}", e))
-        })?;
+    pub async fn cache_strategy(&self, env_key: &str, strategy_id: &str, score: f64) -> Result<()> {
+        let conn = self.conn.lock().await;
 
         conn.execute(
             r#"
@@ -227,10 +215,8 @@ impl Storage {
     }
 
     /// Инвалидирует кэш для окружения
-    pub fn invalidate_cache(&self, env_key: &str) -> Result<()> {
-        let conn = self.conn.lock().map_err(|e| {
-            IsolateError::Storage(format!("Failed to lock connection: {}", e))
-        })?;
+    pub async fn invalidate_cache(&self, env_key: &str) -> Result<()> {
+        let conn = self.conn.lock().await;
 
         conn.execute(
             "DELETE FROM strategy_cache WHERE env_key = ?1",
@@ -242,10 +228,8 @@ impl Storage {
     }
 
     /// Очищает весь кэш стратегий
-    pub fn clear_cache(&self) -> Result<()> {
-        let conn = self.conn.lock().map_err(|e| {
-            IsolateError::Storage(format!("Failed to lock connection: {}", e))
-        })?;
+    pub async fn clear_cache(&self) -> Result<()> {
+        let conn = self.conn.lock().await;
 
         conn.execute("DELETE FROM strategy_cache", [])?;
 
@@ -254,10 +238,8 @@ impl Storage {
     }
 
     /// Очищает устаревшие записи кэша
-    pub fn cleanup_expired_cache(&self) -> Result<u64> {
-        let conn = self.conn.lock().map_err(|e| {
-            IsolateError::Storage(format!("Failed to lock connection: {}", e))
-        })?;
+    pub async fn cleanup_expired_cache(&self) -> Result<u64> {
+        let conn = self.conn.lock().await;
 
         let deleted = conn.execute(
             "DELETE FROM strategy_cache WHERE timestamp < unixepoch() - ?1",
@@ -276,10 +258,8 @@ impl Storage {
     // ========================================================================
 
     /// Save a proxy configuration
-    pub fn save_proxy(&self, proxy: &ProxyConfig) -> Result<()> {
-        let conn = self.conn.lock().map_err(|e| {
-            IsolateError::Storage(format!("Failed to lock connection: {}", e))
-        })?;
+    pub async fn save_proxy(&self, proxy: &ProxyConfig) -> Result<()> {
+        let conn = self.conn.lock().await;
 
         let protocol = serde_json::to_string(&proxy.protocol)?;
         let custom_fields = serde_json::to_string(&proxy.custom_fields)?;
@@ -311,10 +291,8 @@ impl Storage {
     }
 
     /// Get a proxy by ID
-    pub fn get_proxy(&self, id: &str) -> Result<Option<ProxyConfig>> {
-        let conn = self.conn.lock().map_err(|e| {
-            IsolateError::Storage(format!("Failed to lock connection: {}", e))
-        })?;
+    pub async fn get_proxy(&self, id: &str) -> Result<Option<ProxyConfig>> {
+        let conn = self.conn.lock().await;
 
         let result = conn
             .query_row(
@@ -356,10 +334,8 @@ impl Storage {
     }
 
     /// Get all proxies
-    pub fn get_all_proxies(&self) -> Result<Vec<ProxyConfig>> {
-        let conn = self.conn.lock().map_err(|e| {
-            IsolateError::Storage(format!("Failed to lock connection: {}", e))
-        })?;
+    pub async fn get_all_proxies(&self) -> Result<Vec<ProxyConfig>> {
+        let conn = self.conn.lock().await;
 
         let mut stmt = conn.prepare(
             r#"
@@ -402,10 +378,8 @@ impl Storage {
     }
 
     /// Delete a proxy by ID
-    pub fn delete_proxy(&self, id: &str) -> Result<()> {
-        let conn = self.conn.lock().map_err(|e| {
-            IsolateError::Storage(format!("Failed to lock connection: {}", e))
-        })?;
+    pub async fn delete_proxy(&self, id: &str) -> Result<()> {
+        let conn = self.conn.lock().await;
 
         let deleted = conn.execute("DELETE FROM proxies WHERE id = ?1", params![id])?;
 
@@ -418,10 +392,8 @@ impl Storage {
     }
 
     /// Update an existing proxy
-    pub fn update_proxy(&self, proxy: &ProxyConfig) -> Result<()> {
-        let conn = self.conn.lock().map_err(|e| {
-            IsolateError::Storage(format!("Failed to lock connection: {}", e))
-        })?;
+    pub async fn update_proxy(&self, proxy: &ProxyConfig) -> Result<()> {
+        let conn = self.conn.lock().await;
 
         let protocol = serde_json::to_string(&proxy.protocol)?;
         let custom_fields = serde_json::to_string(&proxy.custom_fields)?;
@@ -460,10 +432,8 @@ impl Storage {
     }
 
     /// Set proxy active state
-    pub fn set_proxy_active(&self, id: &str, active: bool) -> Result<()> {
-        let conn = self.conn.lock().map_err(|e| {
-            IsolateError::Storage(format!("Failed to lock connection: {}", e))
-        })?;
+    pub async fn set_proxy_active(&self, id: &str, active: bool) -> Result<()> {
+        let conn = self.conn.lock().await;
 
         // If activating, deactivate all other proxies first
         if active {
@@ -484,10 +454,8 @@ impl Storage {
     }
 
     /// Get the currently active proxy
-    pub fn get_active_proxy(&self) -> Result<Option<ProxyConfig>> {
-        let conn = self.conn.lock().map_err(|e| {
-            IsolateError::Storage(format!("Failed to lock connection: {}", e))
-        })?;
+    pub async fn get_active_proxy(&self) -> Result<Option<ProxyConfig>> {
+        let conn = self.conn.lock().await;
 
         let result = conn
             .query_row(
@@ -534,10 +502,8 @@ impl Storage {
     // ========================================================================
 
     /// Save a domain route
-    pub fn save_domain_route(&self, route: &DomainRoute) -> Result<()> {
-        let conn = self.conn.lock().map_err(|e| {
-            IsolateError::Storage(format!("Failed to lock connection: {}", e))
-        })?;
+    pub async fn save_domain_route(&self, route: &DomainRoute) -> Result<()> {
+        let conn = self.conn.lock().await;
 
         conn.execute(
             "INSERT OR REPLACE INTO domain_routes (domain, proxy_id) VALUES (?1, ?2)",
@@ -549,10 +515,8 @@ impl Storage {
     }
 
     /// Delete a domain route
-    pub fn delete_domain_route(&self, domain: &str) -> Result<()> {
-        let conn = self.conn.lock().map_err(|e| {
-            IsolateError::Storage(format!("Failed to lock connection: {}", e))
-        })?;
+    pub async fn delete_domain_route(&self, domain: &str) -> Result<()> {
+        let conn = self.conn.lock().await;
 
         conn.execute(
             "DELETE FROM domain_routes WHERE domain = ?1",
@@ -564,10 +528,8 @@ impl Storage {
     }
 
     /// Get all domain routes
-    pub fn get_domain_routes(&self) -> Result<Vec<DomainRoute>> {
-        let conn = self.conn.lock().map_err(|e| {
-            IsolateError::Storage(format!("Failed to lock connection: {}", e))
-        })?;
+    pub async fn get_domain_routes(&self) -> Result<Vec<DomainRoute>> {
+        let conn = self.conn.lock().await;
 
         let mut stmt = conn.prepare("SELECT domain, proxy_id FROM domain_routes")?;
         let rows = stmt.query_map([], |row| {
@@ -590,10 +552,8 @@ impl Storage {
     // ========================================================================
 
     /// Save an app route
-    pub fn save_app_route(&self, route: &AppRoute) -> Result<()> {
-        let conn = self.conn.lock().map_err(|e| {
-            IsolateError::Storage(format!("Failed to lock connection: {}", e))
-        })?;
+    pub async fn save_app_route(&self, route: &AppRoute) -> Result<()> {
+        let conn = self.conn.lock().await;
 
         conn.execute(
             "INSERT OR REPLACE INTO app_routes (app_path, app_name, proxy_id) VALUES (?1, ?2, ?3)",
@@ -605,10 +565,8 @@ impl Storage {
     }
 
     /// Delete an app route
-    pub fn delete_app_route(&self, app_path: &str) -> Result<()> {
-        let conn = self.conn.lock().map_err(|e| {
-            IsolateError::Storage(format!("Failed to lock connection: {}", e))
-        })?;
+    pub async fn delete_app_route(&self, app_path: &str) -> Result<()> {
+        let conn = self.conn.lock().await;
 
         conn.execute(
             "DELETE FROM app_routes WHERE app_path = ?1",
@@ -620,10 +578,8 @@ impl Storage {
     }
 
     /// Get all app routes
-    pub fn get_app_routes(&self) -> Result<Vec<AppRoute>> {
-        let conn = self.conn.lock().map_err(|e| {
-            IsolateError::Storage(format!("Failed to lock connection: {}", e))
-        })?;
+    pub async fn get_app_routes(&self) -> Result<Vec<AppRoute>> {
+        let conn = self.conn.lock().await;
 
         let mut stmt = conn.prepare("SELECT app_path, app_name, proxy_id FROM app_routes")?;
         let rows = stmt.query_map([], |row| {
@@ -647,7 +603,7 @@ impl Storage {
     // ========================================================================
 
     /// Сохраняет результат теста стратегии
-    pub fn save_test_result(
+    pub async fn save_test_result(
         &self,
         env_key: &str,
         strategy_id: &str,
@@ -655,9 +611,7 @@ impl Storage {
         score: f64,
         latency_ms: f64,
     ) -> Result<()> {
-        let conn = self.conn.lock().map_err(|e| {
-            IsolateError::Storage(format!("Failed to lock connection: {}", e))
-        })?;
+        let conn = self.conn.lock().await;
 
         conn.execute(
             r#"
@@ -671,14 +625,12 @@ impl Storage {
     }
 
     /// Получает историю тестов для стратегии
-    pub fn get_test_history(
+    pub async fn get_test_history(
         &self,
         strategy_id: &str,
         limit: u32,
     ) -> Result<Vec<TestHistoryEntry>> {
-        let conn = self.conn.lock().map_err(|e| {
-            IsolateError::Storage(format!("Failed to lock connection: {}", e))
-        })?;
+        let conn = self.conn.lock().await;
 
         let mut stmt = conn.prepare(
             r#"
@@ -709,14 +661,122 @@ impl Storage {
     }
 
     // ========================================================================
+    // Learned Strategies (Orchestra)
+    // ========================================================================
+
+    /// Сохраняет обученную стратегию для домена
+    pub async fn save_learned_strategy(
+        &self,
+        domain: &str,
+        strategy_id: &str,
+        successes: u32,
+        failures: u32,
+        locked_at: Option<&str>,
+    ) -> Result<()> {
+        let conn = self.conn.lock().await;
+
+        conn.execute(
+            r#"
+            INSERT OR REPLACE INTO learned_strategies (domain, strategy_id, successes, failures, locked_at, updated_at)
+            VALUES (?1, ?2, ?3, ?4, ?5, datetime('now'))
+            "#,
+            params![domain, strategy_id, successes, failures, locked_at],
+        )?;
+
+        debug!(domain, strategy_id, successes, failures, "Learned strategy saved");
+        Ok(())
+    }
+
+    /// Получает все обученные стратегии
+    pub async fn get_learned_strategies(&self) -> Result<std::collections::HashMap<String, LearnedStrategy>> {
+        let conn = self.conn.lock().await;
+
+        let mut stmt = conn.prepare(
+            r#"
+            SELECT domain, strategy_id, successes, failures, locked_at, updated_at
+            FROM learned_strategies
+            "#,
+        )?;
+
+        let rows = stmt.query_map([], |row| {
+            Ok(LearnedStrategy {
+                domain: row.get(0)?,
+                strategy_id: row.get(1)?,
+                successes: row.get::<_, i32>(2)? as u32,
+                failures: row.get::<_, i32>(3)? as u32,
+                locked_at: row.get(4)?,
+                updated_at: row.get(5)?,
+            })
+        })?;
+
+        let mut strategies = std::collections::HashMap::new();
+        for row in rows {
+            let strategy = row?;
+            strategies.insert(strategy.domain.clone(), strategy);
+        }
+
+        debug!(count = strategies.len(), "Loaded learned strategies");
+        Ok(strategies)
+    }
+
+    /// Получает обученную стратегию для конкретного домена
+    pub async fn get_learned_strategy(&self, domain: &str) -> Result<Option<LearnedStrategy>> {
+        let conn = self.conn.lock().await;
+
+        let result = conn
+            .query_row(
+                r#"
+                SELECT domain, strategy_id, successes, failures, locked_at, updated_at
+                FROM learned_strategies
+                WHERE domain = ?1
+                "#,
+                params![domain],
+                |row| {
+                    Ok(LearnedStrategy {
+                        domain: row.get(0)?,
+                        strategy_id: row.get(1)?,
+                        successes: row.get::<_, i32>(2)? as u32,
+                        failures: row.get::<_, i32>(3)? as u32,
+                        locked_at: row.get(4)?,
+                        updated_at: row.get(5)?,
+                    })
+                },
+            )
+            .optional()?;
+
+        Ok(result)
+    }
+
+    /// Удаляет обученную стратегию для домена
+    pub async fn delete_learned_strategy(&self, domain: &str) -> Result<()> {
+        let conn = self.conn.lock().await;
+
+        conn.execute(
+            "DELETE FROM learned_strategies WHERE domain = ?1",
+            params![domain],
+        )?;
+
+        debug!(domain, "Learned strategy deleted");
+        Ok(())
+    }
+
+    /// Очищает все обученные стратегии
+    pub async fn clear_learned_strategies(&self) -> Result<()> {
+        let conn = self.conn.lock().await;
+
+        conn.execute("DELETE FROM learned_strategies", [])?;
+
+        info!("All learned strategies cleared");
+        Ok(())
+    }
+
+    // ========================================================================
     // Private Methods
     // ========================================================================
 
     /// Инициализирует схему базы данных
-    fn init_schema(&self) -> Result<()> {
-        let conn = self.conn.lock().map_err(|e| {
-            IsolateError::Storage(format!("Failed to lock connection: {}", e))
-        })?;
+    async fn init_schema(&self) -> Result<()> {
+        let conn = self.conn.lock().await;
 
         conn.execute_batch(
             r#"
@@ -778,6 +838,16 @@ impl Storage {
                 updated_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
 
+            -- Learned strategies (Orchestra)
+            CREATE TABLE IF NOT EXISTS learned_strategies (
+                domain TEXT PRIMARY KEY,
+                strategy_id TEXT NOT NULL,
+                successes INTEGER DEFAULT 0,
+                failures INTEGER DEFAULT 0,
+                locked_at TEXT,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+
             -- Индексы
             CREATE INDEX IF NOT EXISTS idx_test_history_strategy
                 ON test_history(strategy_id, timestamp DESC);
@@ -789,6 +859,8 @@ impl Storage {
                 ON app_routes(proxy_id);
             CREATE INDEX IF NOT EXISTS idx_proxies_active
                 ON proxies(active);
+            CREATE INDEX IF NOT EXISTS idx_learned_strategies_strategy
+                ON learned_strategies(strategy_id);
             "#,
         )?;
 
@@ -807,6 +879,17 @@ pub struct CachedStrategy {
     pub strategy_id: String,
     pub score: f64,
     pub timestamp: i64,
+}
+
+/// Обученная стратегия Orchestra
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LearnedStrategy {
+    pub domain: String,
+    pub strategy_id: String,
+    pub successes: u32,
+    pub failures: u32,
+    pub locked_at: Option<String>,
+    pub updated_at: String,
 }
 
 /// Запись истории тестов
@@ -906,45 +989,55 @@ mod tests {
     fn create_test_storage() -> Storage {
         let dir = tempdir().unwrap();
         let path = dir.path().join("test.db");
-        Storage::open(&path).unwrap()
+        tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(Storage::open(&path))
+            .unwrap()
     }
 
     #[test]
     fn test_settings_crud() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
         let storage = create_test_storage();
 
-        // Set
-        storage.set_setting("test_key", &"test_value").unwrap();
+        rt.block_on(async {
+            // Set
+            storage.set_setting("test_key", &"test_value").await.unwrap();
 
-        // Get
-        let value: Option<String> = storage.get_setting("test_key").unwrap();
-        assert_eq!(value, Some("test_value".to_string()));
+            // Get
+            let value: Option<String> = storage.get_setting("test_key").await.unwrap();
+            assert_eq!(value, Some("test_value".to_string()));
 
-        // Delete
-        storage.delete_setting("test_key").unwrap();
-        let value: Option<String> = storage.get_setting("test_key").unwrap();
-        assert_eq!(value, None);
+            // Delete
+            storage.delete_setting("test_key").await.unwrap();
+            let value: Option<String> = storage.get_setting("test_key").await.unwrap();
+            assert_eq!(value, None);
+        });
     }
 
     #[test]
     fn test_strategy_cache() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
         let storage = create_test_storage();
 
-        // Cache
-        storage
-            .cache_strategy("env1", "strategy1", 0.95)
-            .unwrap();
+        rt.block_on(async {
+            // Cache
+            storage
+                .cache_strategy("env1", "strategy1", 0.95)
+                .await
+                .unwrap();
 
-        // Get
-        let cached = storage.get_cached_strategy("env1").unwrap();
-        assert!(cached.is_some());
-        let cached = cached.unwrap();
-        assert_eq!(cached.strategy_id, "strategy1");
-        assert_eq!(cached.score, 0.95);
+            // Get
+            let cached = storage.get_cached_strategy("env1").await.unwrap();
+            assert!(cached.is_some());
+            let cached = cached.unwrap();
+            assert_eq!(cached.strategy_id, "strategy1");
+            assert_eq!(cached.score, 0.95);
 
-        // Invalidate
-        storage.invalidate_cache("env1").unwrap();
-        let cached = storage.get_cached_strategy("env1").unwrap();
-        assert!(cached.is_none());
+            // Invalidate
+            storage.invalidate_cache("env1").await.unwrap();
+            let cached = storage.get_cached_strategy("env1").await.unwrap();
+            assert!(cached.is_none());
+        });
     }
 }

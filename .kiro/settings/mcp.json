@@ -1,0 +1,56 @@
+{
+  "mcpServers": {
+    "hyperv": {
+      "command": "python",
+      "args": [
+        "D:/Sources/StartUp/Isolate/tools/mcp-hyperv/hyperv_mcp.py"
+      ],
+      "disabled": false,
+      "autoApprove": [
+        "hyperv_status",
+        "hyperv_vm_list",
+        "hyperv_network_status",
+        "hyperv_vm_start",
+        "hyperv_vm_stop",
+        "vm_ssh_exec",
+        "dpi_status",
+        "dpi_stats",
+        "dpi_reset_stats",
+        "dpi_test_block",
+        "powershell_exec",
+        "winws_deploy",
+        "winws_start",
+        "winws_stop",
+        "dpi_test_domain",
+        "dpi_full_test"
+      ]
+    },
+    "tauri": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@hypothesi/tauri-mcp-server"
+      ],
+      "disabled": false,
+      "autoApprove": [
+        "tauri_get_setup_instructions",
+        "tauri_list_devices",
+        "tauri_driver_session",
+        "tauri_webview_find_element",
+        "tauri_read_logs",
+        "tauri_webview_interact",
+        "tauri_webview_screenshot",
+        "tauri_webview_keyboard",
+        "tauri_webview_wait_for",
+        "tauri_webview_get_styles",
+        "tauri_webview_execute_js",
+        "tauri_ipc_execute_command",
+        "tauri_ipc_monitor",
+        "tauri_ipc_get_captured",
+        "tauri_ipc_emit_event",
+        "tauri_ipc_get_backend_state",
+        "tauri_manage_window"
+      ]
+    }
+  }
+}

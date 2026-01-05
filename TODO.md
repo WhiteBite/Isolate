@@ -1,271 +1,397 @@
-# Isolate — Полный список задач для Production
+# Isolate — Master Plan & Progress
 
-## ✅ ВЫПОЛНЕНО
-
-### Этап 1: Модели и парсеры
-- [x] **1.1** Расширение `models.rs` — ProxyProtocol enum, ProxyConfig, DomainRoute, AppRoute
-- [x] **1.2** Создание `proxy_parser.rs` — парсинг всех типов прокси URL (VLESS, VMess, SS, Trojan, TUIC, Hysteria, SOCKS, HTTP)
-- [x] **1.3** Создание `singbox_config.rs` — генерация JSON конфигов sing-box для всех протоколов
-
-### Этап 2: Routing модули
-- [x] **2.1** Создание `domain_routing.rs` — DomainRouter с CRUD и генерацией правил
-- [x] **2.2** Создание `app_routing.rs` — AppRouter с CRUD, сканированием приложений Windows, генерацией правил
-- [x] **2.3** Обновление `storage.rs` — таблицы domain_routes, app_routes, методы CRUD
-
-### Этап 3: UI страницы
-- [x] **3.1** Layout с боковой навигацией (`+layout.svelte`)
-- [x] **3.2** Dashboard (`+page.svelte`) — Status Card, Quick Actions, Active Proxies, Recent Activity
-- [x] **3.3** Proxies страница (`proxies/+page.svelte`) — таблица, модалы добавления/редактирования
-- [x] **3.4** Routing страница (`routing/+page.svelte`) — табы per-domain/per-app
-- [x] **3.5** Strategies страница (`strategies/+page.svelte`) — фильтры, карточки стратегий
-- [x] **3.6** Testing страница (`testing/+page.svelte`) — UI для тестирования
-- [x] **3.7** Settings страница (`settings/+page.svelte`) — секции настроек
-- [x] **3.8** Logs страница (`logs/+page.svelte`) — фильтры, виртуализация
-
-### Этап 4: Tauri Commands
-- [x] **4.1** Proxy Commands — get_proxies, add_proxy, update_proxy, delete_proxy, apply_proxy, test_proxy, import_proxy_url, import_subscription
-- [x] **4.2** Routing Commands — get_domain_routes, add_domain_route, remove_domain_route, get_app_routes, add_app_route, remove_app_route, get_installed_apps
-- [x] **4.3** Testing Commands — run_tests, cancel_tests + события test:progress, test:result, test:complete
-- [x] **4.4** Log Commands — get_logs (с фильтрацией), clear_logs, export_logs + событие log:entry
-
-### Backend (уже было)
-- [x] Strategy Engine, Orchestrator, Test Engine, Diagnostics
-- [x] Storage (SQLite), Config Manager
-- [x] VLESS Engine, Sing-box Manager
-- [x] QUIC Blocker, Hostlists
-- [x] System Tray, Tauri Commands (базовые)
-- [x] Log Capture System (`log_capture.rs`) — захват логов в память с фильтрацией
+> Дата: 2026-01-05
+> Концепция: **Modular Ecosystem** — OS-подобный интерфейс уровня VS Code/Figma
 
 ---
 
-## 🔴 КРИТИЧНО — Нужно сделать
+# 🚀 ISOLATE 2.0: THE MODULAR ECOSYSTEM
 
-### Этап 1: Интеграция Sing-box с routing
+## Концепция
+Не "админка с вкладками", а **кокпит космического корабля** с системой плагинов.
+Референсы: VS Code, Linear, Figma, Arc Browser, Star Citizen UI.
 
-#### 1.1 Обновить SingboxManager
-```rust
-// src-tauri/src/core/singbox_manager.rs — ОБНОВИТЬ:
-start_with_routing(
-    proxy: &ProxyConfig,
-    domain_routes: &[DomainRoute],
-    app_routes: &[AppRoute],
-    socks_port: u16
-) -> Result<SingboxInstance>
+---
+
+# 🎨 PHASE 1: Visual Language — "Glass & Void"
+
+## 1.1 Цветовая палитра (tailwind.config.js)
 ```
+void:
+  DEFAULT: #050505    ← База (почти чёрный)
+  50:      #0F1012    ← Surface (карточки)
+  100:     #1A1D24    ← Elevated (модалки)
+  200:     #252830    ← Hover states
+  300:     #2E323C    ← Active states
+
+glass:
+  border:        rgba(255,255,255,0.03)   ← Едва заметные
+  border-active: rgba(255,255,255,0.08)   ← При hover/focus
+  surface:       rgba(15,16,18,0.8)       ← Полупрозрачные панели
+
+electric:
+  DEFAULT: #3B82F6                        ← Primary Blue
+  glow:    rgba(59,130,246,0.5)           ← Glow эффект
+  dim:     rgba(59,130,246,0.2)           ← Subtle accent
+
+neon:
+  green:  #22C55E    ← Success
+  red:    #EF4444    ← Error
+  yellow: #F59E0B    ← Warning
+  cyan:   #00D4FF    ← Accent
+
+text:
+  primary:   #F3F4F6
+  secondary: #9CA3AF
+  muted:     #6B7280
+```
+
+### ✅ Реализовано:
+- [x] tailwind.config.js обновлён с полной палитрой
+- [x] Glow shadows (shadow-glow, shadow-glow-lg, shadow-glow-green/red/cyan)
+- [x] Анимации (pulse-glow, slide-up, slide-down, fade-in)
+- [x] Шрифты: Inter/Geist (sans), JetBrains Mono/Geist Mono (mono)
+
+### ⏳ TODO:
+- [ ] Windows Mica/Acrylic эффект для sidebar (требует Tauri window API)
+- [ ] Кастомные window controls (убрать системные)
+
+---
+
+## 1.2 Типографика
+- **UI:** `font-sans` — Inter / Geist Sans
+- **Code/Data:** `font-mono` — JetBrains Mono / Geist Mono (IP, порты, логи)
+- **Weights:** 600 (заголовки), 500 (кнопки), 400 (текст)
+
+---
+
+## 1.3 Эффекты
+- **Glow:** `shadow-glow` = `0 0 20px -5px rgba(59, 130, 246, 0.5)`
+- **Borders:** `border-glass-border` = `1px solid rgba(255,255,255,0.03)`
+- **Radius:** `rounded-lg` (8px), `rounded-xl` (12px), `rounded-2xl` (16px)
+- **Backdrop blur:** `backdrop-blur-md` для модалок
+
+---
+
+# 🏗 PHASE 2: Layout Architecture — "Three-Pane Layout"
+
+## 2.1 Структура
+```
+┌──────┬─────────────────────────────────────────────────┐
+│      │                                                 │
+│  S   │              Main Content Area                  │
+│  I   │                                                 │
+│  D   │   Dashboard / Services / Routing / Proxies     │
+│  E   │                                                 │
+│  B   │                                                 │
+│  A   │                                                 │
+│  R   │                                                 │
+│      │                                                 │
+├──────┴─────────────────────────────────────────────────┤
+│              Terminal / Logs Panel (collapsible)       │
+└────────────────────────────────────────────────────────┘
+```
+
+### ✅ Реализовано:
+- [x] `+layout.svelte` — новый Three-Pane layout
+- [x] `Sidebar.svelte` — collapsible (60px/200px), три секции
+- [x] `TerminalPanel.svelte` — выезжающая панель логов (Ctrl+`)
+- [x] `ResizablePanelGroup.svelte` — система resizable панелей
+- [x] `ResizablePanel.svelte` — панель с min/max/collapse
+- [x] `ResizableHandle.svelte` — ручка для resize
+- [x] Top Bar с breadcrumb и status indicator
+
+### ✅ Реализовано:
+- [x] Master-Detail view для Services страницы
+- [x] Configure modal для сервисов
+
+### ⏳ TODO:
+- [ ] Сохранение layout в localStorage (частично работает)
+
+---
+
+## 2.2 Sidebar
+**Верх (Navigation):**
+- Dashboard, Services, Routing, Proxies
+
+**Центр (Plugins Area):**
+- Динамические иконки из `installedPlugins` store
+
+**Низ (System):**
+- Marketplace, Settings, Logs
+
+### ✅ Реализовано:
+- [x] Collapsed/Expanded toggle с анимацией
+- [x] Active state для текущего route
+- [x] Lucide-style SVG иконки
+- [x] Plugins section из store
+
+---
+
+# 🖥 PHASE 3: Functional Blocks
+
+## 3.1 Dashboard — "Bento Grid System"
+
+### ✅ Реализовано:
+- [x] `BentoGrid.svelte` — контейнер сетки (columns, gap)
+- [x] `BentoWidget.svelte` — виджет с colspan/rowspan
+- [x] `StatusWidget.svelte` — Global Status с BigToggleButton + glow
+- [x] `HealthWidget.svelte` — Health Monitor с ping и индикаторами
+- [x] `MethodWidget.svelte` — Active Method (zapret/vless/proxy/direct)
+- [x] `QuickActionsWidget.svelte` — Quick Actions grid 2x2
+
+### ⏳ TODO:
+- [ ] Drag-n-Drop для виджетов (dnd-kit аналог)
+- [ ] Сохранение layout виджетов в localStorage
+- [ ] Plugin Widgets slot
+
+---
+
+## 3.2 Services — "Master-Detail View"
+
+### ✅ Реализовано:
+- [x] Master-Detail layout (левая панель — список, правая — детали)
+- [x] Список сервисов с иконками и статусами
+- [x] Detail panel с информацией о выбранном сервисе
+- [x] Configure modal с настройками сервиса
+- [x] Add Custom Service modal
+
+### ⏳ TODO:
+- [ ] Real-time ping график
+- [ ] Логи только этого сервиса
+
+---
+
+## 3.3 Routing — "Visual Flow Builder"
+
+### ✅ Реализовано:
+- [x] Visual Flow карточки (Source → Condition → Action)
+- [x] Add/Edit Rule modal с preview
+- [x] Toggle enable/disable для правил
+- [x] Stats bar (Total, Active, Proxied, Blocked)
+
+### ⏳ TODO:
+- [ ] Drag-n-drop сортировка правил
+- [ ] JSON editor с подсветкой
+
+---
+
+## 3.4 Proxies — "Wallet View"
+
+### ✅ Реализовано:
+- [x] `ProxyCard.svelte` — карточка прокси
+- [x] Card-based list view
+- [x] Add Modal с табами
+- [x] Auto-paste из буфера
+
+### ✅ Реализовано:
+- [x] Флаги стран (emoji flags)
+- [x] Subscription import modal
+
+### ⏳ TODO:
+- [ ] Drag-n-drop сортировка
+
+---
+
+## 3.5 Terminal — "Developer Console"
+
+### ✅ Реализовано:
+- [x] `TerminalPanel.svelte` — выезжающая панель
+- [x] `logs` store с методами error/warn/info/debug/success
+- [x] Цветная подсветка уровней
+- [x] Фильтрация по level/source/search
+- [x] Auto-scroll с toggle
+- [x] Copy/Clear функции
+- [x] Resize по высоте
+- [x] Keyboard shortcut (Ctrl+`)
+
+---
+
+# ⚡️ PHASE 4: UX Patterns (AAA Quality)
+
+## 4.1 Command Palette (Ctrl+K)
+
+### ✅ Реализовано:
+- [x] `CommandPalette.svelte` — модальное окно
+- [x] Fuzzy search по командам
+- [x] Категории: Navigation, Actions, Settings
+- [x] Keyboard navigation (↑↓ + Enter)
+- [x] Shortcut hints справа
+- [x] Glass & Void дизайн
+
+### Команды:
+- Go to Dashboard/Diagnostics/Proxies/Settings
+- Start/Stop Protection
+- Add Proxy
+- Test Connection
+- Panic Reset
+- Toggle Theme
+
+---
+
+## 4.2 Context Menus
+
+### ✅ Реализовано:
+- [x] `ContextMenu.svelte` — контейнер меню
+- [x] `ContextMenuItem.svelte` — элемент с icon/shortcut
+- [x] `ContextMenuSeparator.svelte` — разделитель
+- [x] Позиционирование у курсора
+- [x] Закрытие по Escape/клик вне
+- [x] Danger variant
+- [x] Анимация появления (scale + opacity)
+
+---
+
+## 4.3 States & Feedback
+
+### ✅ Реализовано:
+- [x] Toast notifications (`Toast.svelte`, `ToastContainer.svelte`)
+- [x] Loading states в BigToggleButton
+- [x] Glow эффекты при активации
+- [x] Skeleton loaders (`Skeleton.svelte`, `SkeletonCard.svelte`, `SkeletonList.svelte`)
+- [x] Page transitions (`PageTransition.svelte` — fly + fade)
+- [x] Dashboard skeleton (`DashboardSkeleton.svelte`)
+
+### ⏳ TODO:
+- [ ] Scanning states с бегущими строками
+
+---
+
+## 4.4 Keyboard Shortcuts
+
+### ✅ Реализовано:
+- [x] `Ctrl+K` — Command Palette
+- [x] `Ctrl+\`` — Toggle Terminal
+- [x] `Escape` — Close modals/panels
+- [x] `Ctrl+1-4` — Switch panels (Dashboard, Services, Routing, Proxies)
+
+---
+
+# � PHASEК 5: Plugin Architecture
+
+### ✅ Реализовано:
+- [x] `installedPlugins` store с демо-данными
+- [x] Sidebar отображает плагины из store
+
+### ⏳ TODO:
+- [ ] `PluginSlot.svelte` — слоты для UI плагинов
+- [ ] Plugin Manifest система
+- [ ] Marketplace UI
+- [ ] Plugin settings интеграция
+
+---
+
+# 🔧 ТЕХНИЧЕСКИЙ АУДИТ
+
+## 🔴 КРИТИЧЕСКИЕ ПРОБЛЕМЫ
+
+### ~~1. Блокирующий `std::sync::Mutex` в async контексте~~ ✅ ИСПРАВЛЕНО
+**Файл:** `src-tauri/src/core/storage.rs`
+**Решение:** Заменён `std::sync::Mutex` на `tokio::sync::Mutex`
+
+### 2. Две системы стратегий (JSON vs YAML)
+**Статус:** ⏳ TODO — унифицировать в JSON
 
 ---
 
 ## 🟠 ВЫСОКИЙ ПРИОРИТЕТ
 
-### Этап 2: System Tray улучшения
+### 3. Монолитный commands/mod.rs
+**Было:** 2,777 строк, 78 команд
+**Стало:** Разбит на модули
 
-#### 2.1 Обновить меню трея
-```rust
-// src-tauri/src/tray.rs — ОБНОВИТЬ:
-- Статус: "Активен: {strategy_name}" / "Неактивен"
-- Разделитель
-- Открыть Isolate
-- Оптимизировать (Turbo)
-- Оптимизировать (Deep)
-- Разделитель
-- Включить/Отключить обход
-- Разделитель
-- Panic Reset (красный)
-- Разделитель
-- Настройки
-- Выход
-```
+### ✅ Созданные модули:
+- [x] `commands/vless.rs` — 13 VLESS команд
+- [x] `commands/proxies.rs` — 9 proxy команд
+- [x] `commands/hostlists.rs` — 8 hostlist команд
+- [x] `commands/settings.rs` — 6 settings команд
+- [x] `commands/diagnostics.rs`
+- [x] `commands/logs.rs`
+- [x] `commands/quic.rs`
+- [x] `commands/routing.rs`
+- [x] `commands/system.rs`
+- [x] `commands/tray.rs`
+- [x] `commands/updates.rs`
 
-#### 2.2 Динамические иконки трея
-- Зеленая: стратегия активна
-- Серая: неактивна
-- Желтая: оптимизация
-- Красная: ошибка
-
-### Этап 3: Onboarding улучшения
-
-#### 3.1 Обновить `src/routes/onboarding/+page.svelte`
-- Шаг 1: Добро пожаловать
-- Шаг 2: Выбор сервисов (чекбоксы)
-- Шаг 3: Диагностика (автоматическая)
-- Шаг 4: Первая оптимизация
-- Шаг 5: Завершение
-
-### ✅ Этап 8: Monitor (фоновый мониторинг) — ВЫПОЛНЕНО
-
-- [x] `src-tauri/src/core/monitor.rs` — полная реализация
-- [x] Health check каждые 30 секунд
-- [x] События: `monitor:health_check`, `strategy:degraded`, `strategy:recovered`
-- [x] Auto-restart опция
-- [x] Интеграция в AppState
-- [x] Tauri commands: start_monitor, stop_monitor, is_monitor_running, etc.
-- [x] Frontend API в api.ts
-
-### ✅ Этап 9: Telemetry (opt-in) — ВЫПОЛНЕНО
-
-- [x] `src-tauri/src/core/telemetry.rs` — полная реализация
-- [x] Opt-in по умолчанию (disabled)
-- [x] Batch events, flush каждые 5 минут
-- [x] Анонимизация ошибок (удаление путей, IP, UUID, email)
-- [x] Интеграция в AppState
-- [x] Tauri commands: set_telemetry_enabled, flush_telemetry, etc.
-- [x] Frontend API в api.ts
+### ✅ Реализовано:
+- [x] Унифицированный `IsolateError` тип (`src-tauri/src/core/errors.rs`)
+- [x] Serialize для Tauri IPC с kind + message
+- [x] From implementations для std::io, serde_yaml, serde_json, reqwest, rusqlite, anyhow
+- [x] Helper constructors (config, strategy, process, network, validation, tauri, other)
+- [x] Unit тесты для всех вариантов
 
 ---
 
-## 🟡 СРЕДНИЙ ПРИОРИТЕТ — ВЫПОЛНЕНО
+## 🟡 СРЕДНИЙ ПРИОРИТЕТ
 
-### ✅ Этап 10: Автообновление — ВЫПОЛНЕНО
+### 4. Блокирующие `std::fs::*` в async функциях
+**Статус:** ⏳ TODO — ~30 мест
 
-- [x] Конфигурация updater в `tauri.conf.json` (placeholder pubkey, endpoints)
-- [x] Windows installer настроен (WiX + NSIS с поддержкой ru/en)
-- [x] UI для обновлений в Settings/About секции
-
-### ✅ Этап 11: Автообновление конфигов — ВЫПОЛНЕНО
-
-- [x] `src-tauri/src/core/config_updater.rs` — полная реализация
-- [x] Проверка обновлений через GitHub API
-- [x] Скачивание strategies, services, hostlists
-- [x] Tauri commands: check_config_updates, download_config_updates
-- [x] Frontend API в api.ts
-
-### ✅ Этап 13: Логирование в файл — ВЫПОЛНЕНО
-
-- [x] `tracing-appender` добавлен в Cargo.toml
-- [x] Ежедневная ротация логов в `get_logs_dir()`
-- [x] Dual output: файл + stdout
-- [x] Фильтры: isolate=info, tauri=warn
+### 5. Тестовое покрытие
+- **Rust:** 78% модулей с тестами
+- **Frontend:** 1 файл
+- **E2E:** 2 файла
 
 ---
 
-## 🟢 НИЗКИЙ ПРИОРИТЕТ (Улучшения)
+# 📊 ПРОГРЕСС MASTER PLAN
 
-### Этап 14: Per-App Routing через WinDivert
+## UI Components
+| Компонент | Статус | Файл |
+|-----------|--------|------|
+| Sidebar | ✅ | `src/lib/components/Sidebar.svelte` |
+| CommandPalette | ✅ | `src/lib/components/CommandPalette.svelte` |
+| TerminalPanel | ✅ | `src/lib/components/TerminalPanel.svelte` |
+| BentoGrid | ✅ | `src/lib/components/BentoGrid.svelte` |
+| BentoWidget | ✅ | `src/lib/components/BentoWidget.svelte` |
+| StatusWidget | ✅ | `src/lib/components/widgets/StatusWidget.svelte` |
+| HealthWidget | ✅ | `src/lib/components/widgets/HealthWidget.svelte` |
+| MethodWidget | ✅ | `src/lib/components/widgets/MethodWidget.svelte` |
+| QuickActionsWidget | ✅ | `src/lib/components/widgets/QuickActionsWidget.svelte` |
+| ContextMenu | ✅ | `src/lib/components/ContextMenu.svelte` |
+| ResizablePanelGroup | ✅ | `src/lib/components/ResizablePanelGroup.svelte` |
+| ResizablePanel | ✅ | `src/lib/components/ResizablePanel.svelte` |
+| ResizableHandle | ✅ | `src/lib/components/ResizableHandle.svelte` |
 
-#### 14.1 Фильтрация по PID
-```rust
-// src-tauri/src/core/app_filter.rs
-pub fn get_process_pids(name: &str) -> Vec<u32>
-pub fn apply_windivert_filter(pids: &[u32]) -> Result<()>
-```
+## Stores
+| Store | Статус | Файл |
+|-------|--------|------|
+| logs | ✅ | `src/lib/stores/logs.ts` |
+| plugins | ✅ | `src/lib/stores/plugins.ts` |
+| toast | ✅ | `src/lib/stores/toast.ts` |
+| appStatus | ✅ | `src/lib/stores/index.ts` |
 
-### Этап 15: Расписание
-
-#### 15.1 Создать `src-tauri/src/core/scheduler.rs`
-```rust
-pub struct Scheduler {
-    start_time: Option<NaiveTime>,
-    end_time: Option<NaiveTime>,
-    enabled: bool,
-}
-```
-
-### Этап 16: Browser Extension
-
-#### 16.1 WebSocket сервер в Isolate
-```rust
-// src-tauri/src/core/ws_server.rs
-pub async fn start_ws_server(port: u16) -> Result<()>
-```
-
-#### 16.2 Extension (Manifest V3)
-- Popup с статусом
-- Кнопка оптимизации
-
-### Этап 17: CLI режим
-
-#### 17.1 Создать `src-tauri/src/cli.rs`
-```bash
-isolate optimize --mode turbo
-isolate apply --strategy zapret_universal
-isolate stop
-isolate status
-isolate diagnose
-isolate reset
-```
-
-### Этап 18: Плагины (пользовательские стратегии)
-
-#### 18.1 Загрузка из `%APPDATA%/Isolate/plugins/`
-- Валидация YAML
-- Метка "Custom" в UI
+## Config
+| Файл | Статус |
+|------|--------|
+| tailwind.config.js | ✅ Glass & Void палитра |
+| +layout.svelte | ✅ Three-Pane Layout |
 
 ---
 
-## 📦 DEPLOYMENT
+# 🎯 NEXT STEPS
 
-### CI/CD Pipeline
+## Immediate (сейчас)
+1. [ ] Обновить Dashboard (`+page.svelte`) с BentoGrid виджетами
+2. [ ] Применить Glass & Void стили ко всем страницам
+3. [ ] Интегрировать ContextMenu в списки
 
-#### GitHub Actions `.github/workflows/release.yml`
-```yaml
-- Build Windows x64
-- Run tests
-- Sign binaries (Code Signing Certificate)
-- Create GitHub Release
-- Upload .msi, .exe
-- Update latest.json
-```
+## Short-term (эта неделя)
+4. [ ] Services Master-Detail view
+5. [ ] Skeleton loaders
+6. [ ] Page transitions
 
-### Installer (WiX)
-
-#### Настройки в `tauri.conf.json`
-```json
-{
-  "bundle": {
-    "windows": {
-      "wix": {
-        "language": ["en-US", "ru-RU"]
-      }
-    }
-  }
-}
-```
+## Medium-term (следующая неделя)
+7. [ ] Visual Flow Builder для Routing
+8. [ ] Plugin Slots система
+9. [ ] Windows Mica эффект
 
 ---
 
-## 📊 МЕТРИКИ УСПЕХА
+# ✅ Definition of Done (AAA Quality)
 
-| Метрика | Цель |
-|---------|------|
-| Success rate оптимизации | > 90% |
-| Время Turbo оптимизации | < 15 сек |
-| Crash rate | < 0.1% |
-| Покрытие тестами | > 80% |
-
----
-
-## 🚀 ПОРЯДОК ВЫПОЛНЕНИЯ
-
-### Фаза 1 (Критично) — 5-7 дней
-1. Proxy Commands + Storage
-2. Routing Commands
-3. AppState расширение
-4. Testing страница
-
-### Фаза 2 (Высокий) — 3-5 дней
-5. System Tray улучшения
-6. Onboarding
-7. Monitor
-8. Telemetry
-
-### Фаза 3 (Средний) — 3-4 дня
-9. Автообновление
-10. Crash Reporting
-11. Логирование в файл
-
-### Фаза 4 (Низкий) — по желанию
-12. Per-App WinDivert
-13. Расписание
-14. Browser Extension
-15. CLI
-16. Плагины
-
----
-
-## 📝 ПРИМЕЧАНИЯ
-
-- **НИКОГДА** не запускать несколько winws/WinDivert процессов параллельно (BSOD!)
-- Параллельный запуск разрешён ТОЛЬКО для VLESS/Sing-box (разные SOCKS-порты)
-- Zapret стратегии — строго последовательно с таймаутом 2-3 сек
-- Все пути к бинарникам через `paths.rs`, не хардкодить
-- Логи не должны содержать IP пользователя
+1. **Power User:** Ctrl+K работает ✅, все действия доступны с клавиатуры
+2. **Visual:** Glow эффекты ✅, плавные анимации ⏳, Mica blur ⏳
+3. **Modular:** Плагины могут добавлять UI элементы ⏳
+4. **Professional:** Выглядит как VS Code / Linear / Figma ⏳
+5. **Responsive:** Panels resizable ✅, layout сохраняется ⏳

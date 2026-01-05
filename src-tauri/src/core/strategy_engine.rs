@@ -6,15 +6,20 @@
 //!
 //! КРИТИЧНО: Zapret стратегии запускаются ТОЛЬКО последовательно!
 //! Используется nodpi_engine для управления winws процессами.
+//!
+//! ## Engine Mode
+//! Движок поддерживает три режима работы:
+//! - Real: реальный запуск winws/sing-box процессов
+//! - Mock: симуляция для UI разработки (без реальных процессов)
+//! - DpiTest: ожидает DPI Simulator для тестирования
 
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::process::{Child, Command};
 use tokio::sync::{Mutex, RwLock};
 use tracing::{debug, info, warn};
-
-#[cfg(windows)]
-use std::os::windows::process::CommandExt;
+use serde::{Deserialize, Serialize};
+use rand::Rng;
 
 use crate::core::errors::{IsolateError, Result};
 use crate::core::models::{LaunchTemplate, Strategy, StrategyEngine as EngineType};
@@ -36,10 +41,38 @@ const MAX_SOCKS_PORTS: u16 = 100;
 const SHUTDOWN_TIMEOUT_MS: u64 = 3000;
 /// Задержка между запусками Zapret стратегий
 const ZAPRET_LAUNCH_DELAY_MS: u64 = 2500;
+/// Минимальная задержка для mock-симуляции (мс)
+const MOCK_DELAY_MIN_MS: u64 = 500;
+/// Максимальная задержка для mock-симуляции (мс)
+const MOCK_DELAY_MAX_MS: u64 = 1500;
+/// Вероятность успеха в mock-режиме (80%)
+const MOCK_SUCCESS_RATE: f64 = 0.8;
 
 // ============================================================================
 // Types
 // ============================================================================
+
+/// Режим работы движка стратегий
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum EngineMode {
+    /// Реальный режим - запускает настоящие winws/sing-box процессы
+    #[default]
+    Real,
+    /// Mock режим - симуляция для UI разработки без реальных процессов
+    Mock,
+    /// DPI Test режим - ожидает подключения DPI Simulator
+    DpiTest,
+}
+
+impl std::fmt::Display for EngineMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            EngineMode::Real => write!(f, "Real"),
+            EngineMode::Mock => write!(f, "Mock"),
+            EngineMode::DpiTest => write!(f, "DpiTest"),
+        }
+    }
+}
 
 /// Режим запуска стратегии
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -113,6 +146,8 @@ impl PortManager {
 
 /// Движок управления стратегиями
 pub struct StrategyEngine {
+    /// Режим работы движка
+    mode: RwLock<EngineMode>,
     /// Запущенные процессы (не-Zapret)
     processes: RwLock<HashMap<String, RunningProcess>>,
     /// Запущенная Zapret стратегия (через nodpi_engine)
@@ -123,18 +158,65 @@ pub struct StrategyEngine {
     zapret_lock: Mutex<()>,
     /// Текущая глобальная стратегия
     global_strategy: RwLock<Option<String>>,
+    /// Mock-состояние запущенных стратегий (для Mock режима)
+    mock_running: RwLock<HashMap<String, MockStrategyState>>,
+}
+
+/// Состояние mock-стратегии
+#[derive(Debug, Clone)]
+struct MockStrategyState {
+    strategy_id: String,
+    mode: LaunchMode,
+    port: Option<u16>,
+    started_at: std::time::Instant,
 }
 
 impl StrategyEngine {
     /// Создаёт новый экземпляр движка
     pub fn new() -> Self {
         Self {
+            mode: RwLock::new(EngineMode::Real),
             processes: RwLock::new(HashMap::new()),
             zapret_strategy: RwLock::new(None),
             port_manager: Mutex::new(PortManager::default()),
             zapret_lock: Mutex::new(()),
             global_strategy: RwLock::new(None),
+            mock_running: RwLock::new(HashMap::new()),
         }
+    }
+
+    /// Устанавливает режим работы движка
+    pub async fn set_mode(&self, mode: EngineMode) {
+        let old_mode = {
+            let mut current = self.mode.write().await;
+            let old = *current;
+            *current = mode;
+            old
+        };
+
+        if old_mode != mode {
+            info!(
+                old_mode = %old_mode,
+                new_mode = %mode,
+                "Engine mode changed"
+            );
+
+            // При смене режима очищаем mock-состояние
+            if mode != EngineMode::Mock {
+                let mut mock = self.mock_running.write().await;
+                mock.clear();
+            }
+        }
+    }
+
+    /// Получает текущий режим работы движка
+    pub async fn get_mode(&self) -> EngineMode {
+        *self.mode.read().await
+    }
+
+    /// Проверяет, работает ли движок в mock-режиме
+    async fn is_mock_mode(&self) -> bool {
+        *self.mode.read().await == EngineMode::Mock
     }
 
     /// Запускает стратегию в SOCKS-режиме
@@ -161,6 +243,16 @@ impl StrategyEngine {
             let mut pm = self.port_manager.lock().await;
             pm.allocate(&strategy.id)?
         };
+
+        // Mock режим - симуляция без реальных процессов
+        if self.is_mock_mode().await {
+            let result = self.mock_start_strategy(strategy, LaunchMode::Socks, Some(port)).await;
+            if result.is_err() {
+                let mut pm = self.port_manager.lock().await;
+                pm.release(port);
+            }
+            return result.map(|_| port);
+        }
 
         // Для Zapret - последовательный запуск
         let result = if strategy.engine == EngineType::Zapret {
@@ -196,6 +288,27 @@ impl StrategyEngine {
             ))
         })?;
 
+        // Mock режим - симуляция без реальных процессов
+        if self.is_mock_mode().await {
+            // Останавливаем текущую mock-глобальную стратегию
+            self.mock_stop_global().await?;
+            
+            self.mock_start_strategy(strategy, LaunchMode::Global, None).await?;
+            
+            // Сохраняем ID глобальной стратегии
+            {
+                let mut global = self.global_strategy.write().await;
+                *global = Some(strategy.id.clone());
+            }
+            
+            info!(
+                strategy_id = %strategy.id,
+                mode = "Mock",
+                "Started global strategy (mock)"
+            );
+            return Ok(());
+        }
+
         // Проверяем права администратора
         if template.requires_admin && !is_admin() {
             return Err(IsolateError::RequiresAdmin);
@@ -229,7 +342,12 @@ impl StrategyEngine {
             pm.get_port(strategy_id)
         };
 
-        self.stop_process(strategy_id).await?;
+        // Mock режим
+        if self.is_mock_mode().await {
+            self.mock_stop_strategy(strategy_id).await?;
+        } else {
+            self.stop_process(strategy_id).await?;
+        }
 
         if let Some(port) = port {
             let mut pm = self.port_manager.lock().await;
@@ -241,6 +359,11 @@ impl StrategyEngine {
 
     /// Останавливает глобальную стратегию
     pub async fn stop_global(&self) -> Result<()> {
+        // Mock режим
+        if self.is_mock_mode().await {
+            return self.mock_stop_global().await;
+        }
+
         let strategy_id = {
             let global = self.global_strategy.read().await;
             global.clone()
@@ -270,6 +393,24 @@ impl StrategyEngine {
     /// Останавливает все запущенные процессы
     pub async fn shutdown_all(&self) -> Result<()> {
         info!("Shutting down all strategy processes");
+
+        // Mock режим - просто очищаем состояние
+        if self.is_mock_mode().await {
+            {
+                let mut mock = self.mock_running.write().await;
+                mock.clear();
+            }
+            {
+                let mut global = self.global_strategy.write().await;
+                *global = None;
+            }
+            {
+                let mut pm = self.port_manager.lock().await;
+                *pm = PortManager::default();
+            }
+            info!("All mock strategies stopped");
+            return Ok(());
+        }
 
         // Останавливаем Zapret стратегию если запущена
         self.stop_zapret_strategy().await.ok();
@@ -305,6 +446,12 @@ impl StrategyEngine {
 
     /// Проверяет, запущена ли стратегия
     pub async fn is_running(&self, strategy_id: &str) -> bool {
+        // Mock режим
+        if self.is_mock_mode().await {
+            let mock = self.mock_running.read().await;
+            return mock.contains_key(strategy_id);
+        }
+
         // Проверяем Zapret стратегию
         {
             let zapret = self.zapret_strategy.read().await;
@@ -563,6 +710,133 @@ impl StrategyEngine {
             Some(p) => s.replace("{{port}}", &p.to_string()),
             None => s.to_string(),
         }
+    }
+
+    // ========================================================================
+    // Mock Methods
+    // ========================================================================
+
+    /// Симулирует запуск стратегии в mock-режиме
+    async fn mock_start_strategy(
+        &self,
+        strategy: &Strategy,
+        mode: LaunchMode,
+        port: Option<u16>,
+    ) -> Result<()> {
+        // Проверяем, не запущена ли уже стратегия
+        {
+            let mock = self.mock_running.read().await;
+            if mock.contains_key(&strategy.id) {
+                return Err(IsolateError::Process(format!(
+                    "Strategy '{}' is already running (mock)",
+                    strategy.id
+                )));
+            }
+        }
+
+        // Симулируем задержку запуска (500-1500ms)
+        let delay = {
+            let mut rng = rand::rng();
+            rng.random_range(MOCK_DELAY_MIN_MS..=MOCK_DELAY_MAX_MS)
+        };
+
+        info!(
+            strategy_id = %strategy.id,
+            mode = ?mode,
+            port = ?port,
+            delay_ms = delay,
+            "[MOCK] Simulating strategy start"
+        );
+
+        tokio::time::sleep(tokio::time::Duration::from_millis(delay)).await;
+
+        // Сохраняем mock-состояние
+        {
+            let mut mock = self.mock_running.write().await;
+            mock.insert(
+                strategy.id.clone(),
+                MockStrategyState {
+                    strategy_id: strategy.id.clone(),
+                    mode,
+                    port,
+                    started_at: std::time::Instant::now(),
+                },
+            );
+        }
+
+        info!(
+            strategy_id = %strategy.id,
+            mode = ?mode,
+            port = ?port,
+            "[MOCK] Strategy started successfully"
+        );
+
+        Ok(())
+    }
+
+    /// Останавливает mock-стратегию
+    async fn mock_stop_strategy(&self, strategy_id: &str) -> Result<()> {
+        let mut mock = self.mock_running.write().await;
+
+        if let Some(state) = mock.remove(strategy_id) {
+            let running_time = state.started_at.elapsed();
+            info!(
+                strategy_id = %strategy_id,
+                running_time_ms = running_time.as_millis(),
+                "[MOCK] Strategy stopped"
+            );
+        }
+
+        Ok(())
+    }
+
+    /// Останавливает глобальную mock-стратегию
+    async fn mock_stop_global(&self) -> Result<()> {
+        let strategy_id = {
+            let global = self.global_strategy.read().await;
+            global.clone()
+        };
+
+        if let Some(id) = strategy_id {
+            self.mock_stop_strategy(&id).await?;
+
+            let mut global = self.global_strategy.write().await;
+            *global = None;
+
+            info!(strategy_id = %id, "[MOCK] Global strategy stopped");
+        }
+
+        Ok(())
+    }
+
+    /// Симулирует результат тестирования стратегии (80% успех, 20% fail)
+    #[allow(dead_code)]
+    pub async fn mock_test_result(&self) -> bool {
+        if !self.is_mock_mode().await {
+            warn!("mock_test_result called in non-mock mode");
+            return false;
+        }
+
+        // Симулируем задержку тестирования
+        let delay = {
+            let mut rng = rand::rng();
+            rng.random_range(MOCK_DELAY_MIN_MS..=MOCK_DELAY_MAX_MS)
+        };
+        tokio::time::sleep(tokio::time::Duration::from_millis(delay)).await;
+
+        // 80% успех
+        let success = {
+            let mut rng = rand::rng();
+            rng.random::<f64>() < MOCK_SUCCESS_RATE
+        };
+
+        info!(
+            success = success,
+            delay_ms = delay,
+            "[MOCK] Test result simulated"
+        );
+
+        success
     }
 }
 

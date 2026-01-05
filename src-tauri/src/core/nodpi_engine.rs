@@ -30,9 +30,10 @@ use tokio::time::timeout;
 use tracing::{debug, error, info, warn};
 
 use crate::core::errors::{IsolateError, Result};
+use crate::core::global_runner;
 use crate::core::models::{LaunchTemplate, Strategy, StrategyEngine as ModelEngine};
 use crate::core::paths::{get_binaries_dir, get_hostlists_dir};
-use crate::core::process_runner::{ManagedProcess, ProcessConfig, ProcessRunner};
+use crate::core::process_runner::{ManagedProcess, ProcessConfig};
 
 /// Global flag to track if a WinDivert-based engine is running
 /// CRITICAL: Only one WinDivert process can run at a time!
@@ -357,9 +358,7 @@ pub async fn verify_strategy_binaries(strategy: &Strategy) -> Result<()> {
 pub struct NoDpiHandle {
     /// Configuration used to start the process
     pub config: NoDpiConfig,
-    /// Process runner managing the process
-    runner: ProcessRunner,
-    /// Process ID in the runner
+    /// Process ID in the global runner
     process_id: String,
     /// Strategy ID (if started from strategy)
     pub strategy_id: Option<String>,
@@ -368,12 +367,12 @@ pub struct NoDpiHandle {
 impl NoDpiHandle {
     /// Check if the process is still running
     pub async fn is_running(&self) -> bool {
-        self.runner.is_running(&self.process_id).await
+        global_runner::is_running(&self.process_id).await
     }
 
     /// Get the system PID of the process
     pub async fn pid(&self) -> Option<u32> {
-        if let Some(process) = self.runner.get(&self.process_id).await {
+        if let Some(process) = global_runner::get(&self.process_id).await {
             process.pid().await
         } else {
             None
@@ -382,12 +381,17 @@ impl NoDpiHandle {
 
     /// Stop the NoDPI process gracefully
     pub async fn stop(&mut self) -> Result<()> {
-        stop_nodpi_internal(&self.runner, &self.process_id, &self.config.engine).await
+        stop_nodpi_internal(&self.process_id, &self.config.engine).await
     }
 
     /// Get the managed process reference
     pub async fn get_process(&self) -> Option<Arc<ManagedProcess>> {
-        self.runner.get(&self.process_id).await
+        global_runner::get(&self.process_id).await
+    }
+    
+    /// Get the process ID
+    pub fn process_id(&self) -> &str {
+        &self.process_id
     }
 }
 
@@ -441,10 +445,9 @@ pub async fn start_nodpi(config: &NoDpiConfig) -> Result<NoDpiHandle> {
         .with_admin(true) // WinDivert requires admin
         .with_working_dir(get_binaries_dir());
 
-    let runner = ProcessRunner::new();
     let process_id = format!("nodpi-{}", config.id);
 
-    match runner.spawn(&process_id, process_config).await {
+    match global_runner::spawn(&process_id, process_config).await {
         Ok(_) => {
             info!(
                 "NoDPI engine started successfully: {} (id: {})",
@@ -453,7 +456,6 @@ pub async fn start_nodpi(config: &NoDpiConfig) -> Result<NoDpiHandle> {
 
             Ok(NoDpiHandle {
                 config: config.clone(),
-                runner,
                 process_id,
                 strategy_id: None,
             })
@@ -559,11 +561,10 @@ pub async fn start_nodpi_from_strategy(strategy: &Strategy, use_global: bool) ->
         .with_admin(template.requires_admin)
         .with_working_dir(get_binaries_dir());
 
-    // Spawn process
-    let runner = ProcessRunner::new();
+    // Spawn process using global runner
     let process_id = format!("zapret-{}", strategy.id);
 
-    match runner.spawn(&process_id, process_config).await {
+    match global_runner::spawn(&process_id, process_config).await {
         Ok(_) => {
             info!(
                 "Zapret strategy started: {} (process_id: {})",
@@ -581,7 +582,6 @@ pub async fn start_nodpi_from_strategy(strategy: &Strategy, use_global: bool) ->
 
             Ok(NoDpiHandle {
                 config,
-                runner,
                 process_id,
                 strategy_id: Some(strategy.id.clone()),
             })
@@ -611,13 +611,12 @@ pub async fn stop_nodpi_strategy(handle: &mut NoDpiHandle) -> Result<()> {
 
 /// Internal function to stop a NoDPI process
 async fn stop_nodpi_internal(
-    runner: &ProcessRunner,
     process_id: &str,
     engine: &NoDpiEngine,
 ) -> Result<()> {
     info!("Stopping NoDPI process: {}", process_id);
 
-    let result = runner.stop(process_id).await;
+    let result = global_runner::stop(process_id).await;
 
     // Release WinDivert lock
     if engine.uses_windivert() {
@@ -794,6 +793,30 @@ pub fn is_windivert_active() -> bool {
 pub fn reset_windivert_flag() {
     warn!("Resetting WinDivert active flag - use with caution!");
     WINDIVERT_ACTIVE.store(false, Ordering::SeqCst);
+}
+
+/// Stop all NoDPI processes via global runner
+///
+/// This is the recommended way to stop all running processes.
+/// It uses the global ProcessRunner to ensure all processes are stopped.
+pub async fn stop_all_nodpi() -> Result<()> {
+    info!("Stopping all NoDPI processes");
+    
+    // Stop all processes via global runner
+    global_runner::stop_all().await?;
+    
+    // Reset WinDivert flag
+    WINDIVERT_ACTIVE.store(false, Ordering::SeqCst);
+    
+    Ok(())
+}
+
+/// Get list of running NoDPI process IDs
+pub async fn list_running_nodpi() -> Vec<String> {
+    global_runner::list().await
+        .into_iter()
+        .filter(|id| id.starts_with("nodpi-") || id.starts_with("zapret-"))
+        .collect()
 }
 
 #[cfg(test)]

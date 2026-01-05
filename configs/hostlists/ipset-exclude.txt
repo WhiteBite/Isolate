@@ -1,0 +1,18 @@
+# IP ranges to exclude from DPI bypass
+# Source: zapret-discord-youtube project
+# Includes: private networks, loopback, multicast, CGNAT
+
+# IPv4 private and special ranges
+0.0.0.0/8
+10.0.0.0/8
+127.0.0.0/8
+172.16.0.0/12
+192.168.0.0/16
+169.254.0.0/16
+224.0.0.0/4
+100.64.0.0/10
+
+# IPv6 private and special ranges
+::1
+fc00::/7
+fe80::/10

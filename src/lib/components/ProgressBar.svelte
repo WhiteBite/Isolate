@@ -16,10 +16,10 @@
   const clampedValue = $derived(Math.min(100, Math.max(0, value)));
 
   const colorClasses = {
-    cyan: 'bg-cyan-500',
-    green: 'bg-green-500',
-    red: 'bg-red-500',
-    yellow: 'bg-yellow-500'
+    cyan: 'bg-[#00d4ff]',
+    green: 'bg-[#00ff88]',
+    red: 'bg-[#ff3333]',
+    yellow: 'bg-[#ffaa00]'
   };
 </script>
 

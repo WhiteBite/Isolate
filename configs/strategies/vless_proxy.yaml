@@ -3,7 +3,7 @@ id: "vless_proxy"
 name: "VLESS Proxy"
 description: "Прокси через VLESS сервер"
 family: vless
-engine: singbox
+engine: sing_box
 
 mode_capabilities:
   supports_socks: true

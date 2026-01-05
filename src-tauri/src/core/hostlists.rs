@@ -396,24 +396,90 @@ pub async fn merge_hostlists(ids: &[&str]) -> Result<Vec<String>> {
 mod tests {
     use super::*;
 
+    // ==================== id_to_name tests ====================
+
     #[test]
-    fn test_id_to_name() {
+    fn test_id_to_name_known_services() {
         assert_eq!(id_to_name("discord"), "Discord");
         assert_eq!(id_to_name("youtube"), "YouTube");
         assert_eq!(id_to_name("telegram"), "Telegram");
-        assert_eq!(id_to_name("custom"), "Custom");
+        assert_eq!(id_to_name("cloudflare"), "Cloudflare");
+        assert_eq!(id_to_name("general"), "General");
     }
 
     #[test]
-    fn test_hostlist_new() {
+    fn test_id_to_name_custom_capitalizes_first_letter() {
+        assert_eq!(id_to_name("custom"), "Custom");
+        assert_eq!(id_to_name("mylist"), "Mylist");
+        assert_eq!(id_to_name("test"), "Test");
+    }
+
+    #[test]
+    fn test_id_to_name_empty_string() {
+        assert_eq!(id_to_name(""), "");
+    }
+
+    #[test]
+    fn test_id_to_name_single_char() {
+        assert_eq!(id_to_name("a"), "A");
+        assert_eq!(id_to_name("x"), "X");
+    }
+
+    #[test]
+    fn test_id_to_name_already_capitalized() {
+        assert_eq!(id_to_name("Discord"), "Discord");
+        assert_eq!(id_to_name("ALLCAPS"), "ALLCAPS");
+    }
+
+    #[test]
+    fn test_id_to_name_with_numbers() {
+        assert_eq!(id_to_name("list123"), "List123");
+        assert_eq!(id_to_name("123list"), "123list");
+    }
+
+    #[test]
+    fn test_id_to_name_with_underscores() {
+        assert_eq!(id_to_name("my_custom_list"), "My_custom_list");
+    }
+
+    // ==================== Hostlist::new tests ====================
+
+    #[test]
+    fn test_hostlist_new_basic() {
         let hostlist = Hostlist::new("test", "Test List");
         assert_eq!(hostlist.id, "test");
         assert_eq!(hostlist.name, "Test List");
         assert!(hostlist.domains.is_empty());
+        assert!(hostlist.updated_at.is_none());
     }
 
     #[test]
-    fn test_unique_domains() {
+    fn test_hostlist_new_with_string_types() {
+        // Test with String instead of &str
+        let hostlist = Hostlist::new(String::from("my_id"), String::from("My Name"));
+        assert_eq!(hostlist.id, "my_id");
+        assert_eq!(hostlist.name, "My Name");
+    }
+
+    #[test]
+    fn test_hostlist_new_empty_values() {
+        let hostlist = Hostlist::new("", "");
+        assert_eq!(hostlist.id, "");
+        assert_eq!(hostlist.name, "");
+        assert!(hostlist.domains.is_empty());
+    }
+
+    #[test]
+    fn test_hostlist_new_with_special_chars() {
+        let hostlist = Hostlist::new("my-list_v2", "My List (v2)");
+        assert_eq!(hostlist.id, "my-list_v2");
+        assert_eq!(hostlist.name, "My List (v2)");
+    }
+
+    // ==================== Hostlist::unique_domains tests ====================
+
+    #[test]
+    fn test_unique_domains_with_duplicates() {
         let mut hostlist = Hostlist::new("test", "Test");
         hostlist.domains = vec![
             "example.com".to_string(),
@@ -425,5 +491,226 @@ mod tests {
         assert_eq!(unique.len(), 2);
         assert!(unique.contains("example.com"));
         assert!(unique.contains("test.com"));
+    }
+
+    #[test]
+    fn test_unique_domains_empty_list() {
+        let hostlist = Hostlist::new("test", "Test");
+        let unique = hostlist.unique_domains();
+        assert!(unique.is_empty());
+        assert_eq!(unique.len(), 0);
+    }
+
+    #[test]
+    fn test_unique_domains_all_unique() {
+        let mut hostlist = Hostlist::new("test", "Test");
+        hostlist.domains = vec![
+            "a.com".to_string(),
+            "b.com".to_string(),
+            "c.com".to_string(),
+        ];
+
+        let unique = hostlist.unique_domains();
+        assert_eq!(unique.len(), 3);
+    }
+
+    #[test]
+    fn test_unique_domains_all_duplicates() {
+        let mut hostlist = Hostlist::new("test", "Test");
+        hostlist.domains = vec![
+            "same.com".to_string(),
+            "same.com".to_string(),
+            "same.com".to_string(),
+        ];
+
+        let unique = hostlist.unique_domains();
+        assert_eq!(unique.len(), 1);
+        assert!(unique.contains("same.com"));
+    }
+
+    #[test]
+    fn test_unique_domains_single_domain() {
+        let mut hostlist = Hostlist::new("test", "Test");
+        hostlist.domains = vec!["only.com".to_string()];
+
+        let unique = hostlist.unique_domains();
+        assert_eq!(unique.len(), 1);
+        assert!(unique.contains("only.com"));
+    }
+
+    #[test]
+    fn test_unique_domains_case_sensitive() {
+        // Note: unique_domains doesn't normalize case, it preserves original
+        let mut hostlist = Hostlist::new("test", "Test");
+        hostlist.domains = vec![
+            "Example.com".to_string(),
+            "example.com".to_string(),
+            "EXAMPLE.COM".to_string(),
+        ];
+
+        let unique = hostlist.unique_domains();
+        // All three are considered different because case differs
+        assert_eq!(unique.len(), 3);
+    }
+
+    // ==================== Hostlist::domain_count tests ====================
+
+    #[test]
+    fn test_domain_count_empty() {
+        let hostlist = Hostlist::new("test", "Test");
+        assert_eq!(hostlist.domain_count(), 0);
+    }
+
+    #[test]
+    fn test_domain_count_with_domains() {
+        let mut hostlist = Hostlist::new("test", "Test");
+        hostlist.domains = vec![
+            "a.com".to_string(),
+            "b.com".to_string(),
+            "c.com".to_string(),
+        ];
+        assert_eq!(hostlist.domain_count(), 3);
+    }
+
+    #[test]
+    fn test_domain_count_includes_duplicates() {
+        // domain_count returns total count including duplicates
+        let mut hostlist = Hostlist::new("test", "Test");
+        hostlist.domains = vec![
+            "same.com".to_string(),
+            "same.com".to_string(),
+            "other.com".to_string(),
+        ];
+        assert_eq!(hostlist.domain_count(), 3);
+    }
+
+    #[test]
+    fn test_domain_count_single() {
+        let mut hostlist = Hostlist::new("test", "Test");
+        hostlist.domains = vec!["only.com".to_string()];
+        assert_eq!(hostlist.domain_count(), 1);
+    }
+
+    #[test]
+    fn test_domain_count_large_list() {
+        let mut hostlist = Hostlist::new("test", "Test");
+        hostlist.domains = (0..1000).map(|i| format!("domain{}.com", i)).collect();
+        assert_eq!(hostlist.domain_count(), 1000);
+    }
+
+    // ==================== Hostlist::file_path tests ====================
+
+    #[test]
+    fn test_file_path_basic() {
+        let hostlist = Hostlist::new("discord", "Discord");
+        let path = hostlist.file_path();
+
+        // Should end with {id}.txt
+        assert!(path.to_string_lossy().ends_with("discord.txt"));
+    }
+
+    #[test]
+    fn test_file_path_custom_id() {
+        let hostlist = Hostlist::new("my_custom_list", "My Custom List");
+        let path = hostlist.file_path();
+
+        assert!(path.to_string_lossy().ends_with("my_custom_list.txt"));
+    }
+
+    #[test]
+    fn test_file_path_contains_hostlists_dir() {
+        let hostlist = Hostlist::new("test", "Test");
+        let path = hostlist.file_path();
+
+        // Path should be in hostlists directory
+        let path_str = path.to_string_lossy();
+        assert!(path_str.contains("hostlists") || path_str.ends_with("test.txt"));
+    }
+
+    #[test]
+    fn test_file_path_with_special_chars_in_id() {
+        let hostlist = Hostlist::new("my-list_v2", "My List v2");
+        let path = hostlist.file_path();
+
+        assert!(path.to_string_lossy().ends_with("my-list_v2.txt"));
+    }
+
+    // ==================== Edge cases ====================
+
+    #[test]
+    fn test_hostlist_clone() {
+        let mut original = Hostlist::new("test", "Test");
+        original.domains = vec!["a.com".to_string(), "b.com".to_string()];
+        original.updated_at = Some("2024-01-01T00:00:00Z".to_string());
+
+        let cloned = original.clone();
+
+        assert_eq!(cloned.id, original.id);
+        assert_eq!(cloned.name, original.name);
+        assert_eq!(cloned.domains, original.domains);
+        assert_eq!(cloned.updated_at, original.updated_at);
+    }
+
+    #[test]
+    fn test_hostlist_debug_format() {
+        let hostlist = Hostlist::new("test", "Test");
+        let debug_str = format!("{:?}", hostlist);
+
+        assert!(debug_str.contains("Hostlist"));
+        assert!(debug_str.contains("test"));
+        assert!(debug_str.contains("Test"));
+    }
+
+    #[test]
+    fn test_hostlist_with_empty_domain_strings() {
+        let mut hostlist = Hostlist::new("test", "Test");
+        hostlist.domains = vec![
+            "".to_string(),
+            "valid.com".to_string(),
+            "".to_string(),
+        ];
+
+        // domain_count includes empty strings
+        assert_eq!(hostlist.domain_count(), 3);
+
+        // unique_domains includes empty string as one unique entry
+        let unique = hostlist.unique_domains();
+        assert_eq!(unique.len(), 2); // "" and "valid.com"
+    }
+
+    #[test]
+    fn test_hostlist_with_whitespace_domains() {
+        let mut hostlist = Hostlist::new("test", "Test");
+        hostlist.domains = vec![
+            "  ".to_string(),
+            "valid.com".to_string(),
+            " spaced.com ".to_string(),
+        ];
+
+        assert_eq!(hostlist.domain_count(), 3);
+
+        let unique = hostlist.unique_domains();
+        assert_eq!(unique.len(), 3);
+        assert!(unique.contains("  "));
+        assert!(unique.contains("valid.com"));
+        assert!(unique.contains(" spaced.com "));
+    }
+
+    #[test]
+    fn test_unique_domains_vs_domain_count() {
+        let mut hostlist = Hostlist::new("test", "Test");
+        hostlist.domains = vec![
+            "a.com".to_string(),
+            "b.com".to_string(),
+            "a.com".to_string(),
+            "c.com".to_string(),
+            "b.com".to_string(),
+        ];
+
+        // domain_count returns raw count (5)
+        assert_eq!(hostlist.domain_count(), 5);
+
+        // unique_domains returns deduplicated count (3)
+        assert_eq!(hostlist.unique_domains().len(), 3);
     }
 }

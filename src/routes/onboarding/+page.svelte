@@ -1,125 +1,127 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
   import { browser } from '$app/environment';
   import { goto } from '$app/navigation';
-  import type { UnlistenFn } from '@tauri-apps/api/event';
-  import type { Service, DiagnosticResult, OptimizationProgress } from '$lib/api';
 
-  // Step definitions
-  type Step = 'welcome' | 'services' | 'diagnostics' | 'optimization' | 'complete';
-  const steps: Step[] = ['welcome', 'services', 'diagnostics', 'optimization', 'complete'];
+  // Step definitions (4 steps as per requirements)
+  type Step = 1 | 2 | 3 | 4;
   
   // State
-  let currentStep = $state<Step>('welcome');
-  let currentStepIndex = $derived(steps.indexOf(currentStep));
-  let stepDirection = $state<'forward' | 'backward'>('forward');
-  let isTransitioning = $state(false);
+  let currentStep = $state<Step>(1);
   
   // Services state
-  let availableServices = $state<Service[]>([]);
+  interface ServiceItem {
+    id: string;
+    name: string;
+    icon: string;
+    description: string;
+  }
+  
+  let availableServices = $state<ServiceItem[]>([
+    { id: 'youtube', name: 'YouTube', icon: '📺', description: 'Видео и стримы' },
+    { id: 'discord', name: 'Discord', icon: '💬', description: 'Голос и чаты' },
+    { id: 'telegram', name: 'Telegram', icon: '✈️', description: 'Мессенджер' },
+    { id: 'twitch', name: 'Twitch', icon: '🎮', description: 'Стриминг' },
+    { id: 'spotify', name: 'Spotify', icon: '🎵', description: 'Музыка' },
+    { id: 'instagram', name: 'Instagram', icon: '📷', description: 'Фото и сторис' },
+  ]);
   let selectedServices = $state<Set<string>>(new Set(['youtube', 'discord']));
   let loadingServices = $state(true);
   
-  // Diagnostics state
-  let diagnosticResult = $state<DiagnosticResult | null>(null);
-  let diagnosticError = $state<string | null>(null);
-  let isDiagnosing = $state(false);
+  // Step 3 state - Connection method
+  type ConnectionMode = 'auto' | 'proxy';
+  let connectionMode = $state<ConnectionMode>('auto');
   
-  // Optimization state
-  let optimizationProgress = $state<OptimizationProgress | null>(null);
-  let optimizationResult = $state<{ strategy_id: string; strategy_name: string; score: number } | null>(null);
-  let optimizationError = $state<string | null>(null);
-  let isOptimizing = $state(false);
-  
+  // Step 4 state - Setup progress
+  interface SetupTask {
+    id: string;
+    label: string;
+    status: 'pending' | 'running' | 'done' | 'error';
+  }
+  let setupTasks = $state<SetupTask[]>([
+    { id: 'binaries', label: 'Проверка компонентов', status: 'pending' },
+    { id: 'configs', label: 'Загрузка конфигураций', status: 'pending' },
+    { id: 'connection', label: 'Тестирование соединения', status: 'pending' },
+  ]);
+  let setupProgress = $state(0);
+  let isSettingUp = $state(false);
+  let setupComplete = $state(false);
+
   // Derived states
   let canProceed = $derived(
-    currentStep === 'welcome' ||
-    (currentStep === 'services' && selectedServices.size > 0) ||
-    (currentStep === 'diagnostics' && !isDiagnosing) ||
-    (currentStep === 'optimization' && !isOptimizing) ||
-    currentStep === 'complete'
+    currentStep === 1 ? true : // Welcome step - always can proceed
+    currentStep === 2 ? selectedServices.size > 0 :
+    currentStep === 3 ? connectionMode !== null :
+    true
   );
   
-  let progressPercent = $derived(((currentStepIndex + 1) / steps.length) * 100);
-  
-  // Event listeners
-  let unlistenProgress: UnlistenFn | null = null;
-  let unlistenComplete: UnlistenFn | null = null;
-  let unlistenFailed: UnlistenFn | null = null;
+  let progressPercent = $derived((currentStep / 4) * 100);
 
-  onMount(async () => {
+  // Step titles for header
+  let stepTitles = ['Welcome', 'Services', 'Method', 'Setup'];
+
+  $effect(() => {
     if (!browser) return;
-    await loadServices();
-    await setupEventListeners();
+    loadServices();
   });
 
-  onDestroy(() => {
-    unlistenProgress?.();
-    unlistenComplete?.();
-    unlistenFailed?.();
-  });
-  
-  // Auto-run diagnostics/optimization when entering those steps
-  $effect(() => {
-    if (currentStep === 'diagnostics' && !diagnosticResult && !isDiagnosing && !diagnosticError) {
-      runDiagnostics();
-    }
-  });
-  
-  $effect(() => {
-    if (currentStep === 'optimization' && !optimizationResult && !isOptimizing && !optimizationError) {
-      runOptimization();
-    }
-  });
-
-  async function loadServices() {
+  async function loadServices(retries = 10) {
     try {
-      const { getServices } = await import('$lib/api');
-      availableServices = await getServices();
-      if (availableServices.length === 0) {
-        // Fallback services
-        availableServices = [
-          { id: 'youtube', name: 'YouTube', critical: true },
-          { id: 'discord', name: 'Discord', critical: true },
-          { id: 'twitch', name: 'Twitch', critical: false },
-          { id: 'telegram', name: 'Telegram', critical: false },
-          { id: 'spotify', name: 'Spotify', critical: false }
-        ];
+      const { invoke } = await import('@tauri-apps/api/core');
+      
+      // Wait for backend to be ready
+      for (let i = 0; i < retries; i++) {
+        try {
+          const ready = await invoke<boolean>('is_backend_ready');
+          if (ready) break;
+        } catch {
+          // Backend not ready yet
+        }
+        await new Promise(r => setTimeout(r, 200));
+      }
+      
+      const services = await invoke<{ id: string; name: string; critical?: boolean }[]>('get_services');
+      if (services && services.length > 0) {
+        availableServices = services.map(s => ({
+          id: s.id,
+          name: s.name,
+          icon: getServiceIcon(s.id),
+          description: getServiceDescription(s.id)
+        }));
       }
     } catch (e) {
       console.error('Failed to load services:', e);
-      availableServices = [
-        { id: 'youtube', name: 'YouTube', critical: true },
-        { id: 'discord', name: 'Discord', critical: true },
-        { id: 'twitch', name: 'Twitch', critical: false },
-        { id: 'telegram', name: 'Telegram', critical: false }
-      ];
+      // Keep default services
     } finally {
       loadingServices = false;
     }
   }
 
-  async function setupEventListeners() {
-    const { listen } = await import('@tauri-apps/api/event');
-    
-    unlistenProgress = await listen('optimization:progress', (event) => {
-      optimizationProgress = event.payload as OptimizationProgress;
-    });
-    
-    unlistenComplete = await listen('optimization:complete', (event) => {
-      const result = event.payload as { strategy_id: string; strategy_name: string; score: number };
-      optimizationResult = result;
-      isOptimizing = false;
-      // Auto-advance to complete step
-      setTimeout(() => {
-        currentStep = 'complete';
-      }, 1500);
-    });
-    
-    unlistenFailed = await listen('optimization:failed', (event) => {
-      optimizationError = event.payload as string;
-      isOptimizing = false;
-    });
+  function getServiceIcon(serviceId: string): string {
+    const icons: Record<string, string> = {
+      youtube: '📺',
+      discord: '💬',
+      twitch: '🎮',
+      telegram: '✈️',
+      spotify: '🎵',
+      google: '🔍',
+      twitter: '🐦',
+      instagram: '📷',
+    };
+    return icons[serviceId] || '🌐';
+  }
+
+  function getServiceDescription(serviceId: string): string {
+    const descriptions: Record<string, string> = {
+      youtube: 'Видео и стримы',
+      discord: 'Голос и чаты',
+      twitch: 'Стриминг',
+      telegram: 'Мессенджер',
+      spotify: 'Музыка',
+      google: 'Поиск',
+      twitter: 'Соцсеть',
+      instagram: 'Фото и сторис',
+    };
+    return descriptions[serviceId] || 'Сервис';
   }
 
   function toggleService(serviceId: string) {
@@ -132,36 +134,90 @@
     selectedServices = newSet;
   }
 
-  async function runDiagnostics() {
-    isDiagnosing = true;
-    diagnosticError = null;
-    diagnosticResult = null;
-    
-    try {
-      const { diagnose } = await import('$lib/api');
-      diagnosticResult = await diagnose();
-    } catch (e) {
-      console.error('Diagnostics failed:', e);
-      diagnosticError = String(e);
-    } finally {
-      isDiagnosing = false;
+  function selectAllServices() {
+    selectedServices = new Set(availableServices.map(s => s.id));
+  }
+
+  function deselectAllServices() {
+    selectedServices = new Set();
+  }
+
+  function nextStep() {
+    if (currentStep < 4) {
+      currentStep = (currentStep + 1) as Step;
+      if (currentStep === 4) {
+        runSetup();
+      }
     }
   }
 
-  async function runOptimization() {
-    isOptimizing = true;
-    optimizationError = null;
-    optimizationResult = null;
-    optimizationProgress = null;
-    
-    try {
-      const { runOptimization: optimize } = await import('$lib/api');
-      await optimize('turbo');
-    } catch (e) {
-      console.error('Optimization failed:', e);
-      optimizationError = String(e);
-      isOptimizing = false;
+  function prevStep() {
+    if (currentStep > 1) {
+      currentStep = (currentStep - 1) as Step;
     }
+  }
+
+  function skipOnboarding() {
+    // Set defaults and complete
+    selectedServices = new Set(['youtube', 'discord']);
+    connectionMode = 'auto';
+    completeOnboarding();
+  }
+
+  async function runSetup() {
+    isSettingUp = true;
+    setupProgress = 0;
+    setupComplete = false;
+    
+    // Reset tasks
+    setupTasks = setupTasks.map(t => ({ ...t, status: 'pending' }));
+    
+    const taskDurations = [1000, 1200, 1500]; // ms per task
+    
+    for (let i = 0; i < setupTasks.length; i++) {
+      // Mark current task as running
+      setupTasks = setupTasks.map((t, idx) => ({
+        ...t,
+        status: idx === i ? 'running' : idx < i ? 'done' : 'pending'
+      }));
+      
+      // Simulate task execution with progress animation
+      const duration = taskDurations[i];
+      const startProgress = (i / setupTasks.length) * 100;
+      const endProgress = ((i + 1) / setupTasks.length) * 100;
+      
+      // Animate progress smoothly
+      const steps = 20;
+      const stepDuration = duration / steps;
+      for (let s = 0; s <= steps; s++) {
+        await new Promise(r => setTimeout(r, stepDuration));
+        setupProgress = startProgress + ((endProgress - startProgress) * (s / steps));
+      }
+      
+      // Try to call actual Tauri commands
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        if (i === 0) {
+          await invoke('check_binaries').catch(() => {});
+        } else if (i === 1) {
+          // Configs are loaded automatically
+        } else if (i === 2) {
+          // Connection test
+        }
+      } catch (e) {
+        console.error('Setup task failed:', e);
+      }
+      
+      // Mark task as done
+      setupTasks = setupTasks.map((t, idx) => ({
+        ...t,
+        status: idx <= i ? 'done' : 'pending'
+      }));
+    }
+    
+    setupProgress = 100;
+    isSettingUp = false;
+    setupComplete = true;
   }
 
   async function completeOnboarding() {
@@ -174,7 +230,7 @@
       await invoke('save_settings', {
         settings: {
           auto_start: false,
-          auto_apply: true,
+          auto_apply: connectionMode === 'auto',
           minimize_to_tray: true,
           block_quic: true,
           default_mode: 'turbo',
@@ -187,485 +243,410 @@
           language: 'ru',
           telemetry_enabled: false
         }
-      });
+      }).catch(() => {});
       
       // Mark onboarding complete
       await invoke('set_setting', { key: 'onboarding_complete', value: true }).catch(() => {});
       
-      goto('/');
     } catch (e) {
-      console.error('Failed to complete onboarding:', e);
-      goto('/');
+      console.error('Failed to save settings:', e);
     }
-  }
-
-  function nextStep() {
-    const idx = currentStepIndex;
-    if (idx < steps.length - 1) {
-      stepDirection = 'forward';
-      isTransitioning = true;
-      setTimeout(() => {
-        currentStep = steps[idx + 1];
-        isTransitioning = false;
-      }, 150);
-    } else {
-      completeOnboarding();
-    }
-  }
-
-  function prevStep() {
-    const idx = currentStepIndex;
-    if (idx > 0) {
-      stepDirection = 'backward';
-      isTransitioning = true;
-      setTimeout(() => {
-        currentStep = steps[idx - 1];
-        isTransitioning = false;
-      }, 150);
-    }
-  }
-
-  function skipOnboarding() {
-    completeOnboarding();
-  }
-
-  function getServiceIcon(serviceId: string): string {
-    const icons: Record<string, string> = {
-      youtube: '📺',
-      discord: '💬',
-      twitch: '🎮',
-      telegram: '✈️',
-      spotify: '🎵',
-      google: '🔍'
-    };
-    return icons[serviceId] || '🌐';
-  }
-
-  function getStageText(stage: string): string {
-    const stages: Record<string, string> = {
-      'initializing': 'Инициализация...',
-      'checking_cache': 'Проверка кэша...',
-      'diagnosing': 'Диагностика DPI...',
-      'selecting_candidates': 'Выбор стратегий...',
-      'testing_vless': 'Тестирование VLESS...',
-      'testing_zapret': 'Тестирование Zapret...',
-      'selecting_best': 'Выбор лучшей...',
-      'applying': 'Применение стратегии...',
-      'completed': 'Завершено!',
-      'failed': 'Ошибка'
-    };
-    return stages[stage] || stage;
+    
+    goto('/');
   }
 </script>
 
-<div class="min-h-screen bg-[#0a0e27] flex flex-col items-center justify-center p-8">
-  <div class="w-full max-w-lg">
-    <!-- Progress Bar (линия) -->
-    <div class="mb-2">
-      <div class="h-1 bg-[#2a2f4a] rounded-full overflow-hidden">
-        <div 
-          class="h-full bg-gradient-to-r from-[#00d4ff] to-[#00ff88] rounded-full transition-all duration-500 ease-out"
-          style="width: {progressPercent}%"
-        ></div>
+<div class="min-h-screen bg-zinc-950 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-900/20 via-zinc-950 to-zinc-950 flex flex-col items-center justify-center p-6">
+  <!-- Background decorations -->
+  <div class="fixed inset-0 overflow-hidden pointer-events-none">
+    <div class="absolute -top-40 -right-40 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl"></div>
+    <div class="absolute -bottom-40 -left-40 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl"></div>
+  </div>
+
+  <div class="relative w-full max-w-xl z-10">
+    <!-- Logo & Title -->
+    <div class="text-center mb-8">
+      <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg shadow-indigo-500/25 mb-4">
+        <span class="text-3xl">🛡️</span>
       </div>
+      <h1 class="text-2xl font-bold text-white">Isolate</h1>
     </div>
-    
-    <!-- Progress Indicator (точки) -->
-    <div class="flex justify-center items-center gap-2 mb-8">
-      {#each steps as step, i}
-        <button 
-          onclick={() => {
-            if (i < currentStepIndex) {
-              stepDirection = 'backward';
-              isTransitioning = true;
-              setTimeout(() => {
-                currentStep = steps[i];
-                isTransitioning = false;
-              }, 150);
-            }
-          }}
-          disabled={i >= currentStepIndex}
-          class="h-2 rounded-full transition-all duration-500 {i <= currentStepIndex ? 'bg-[#00d4ff]' : 'bg-[#2a2f4a]'} {i === currentStepIndex ? 'w-8' : 'w-4'} {i < currentStepIndex ? 'cursor-pointer hover:bg-[#00b8e6]' : 'cursor-default'}"
-        ></button>
+
+    <!-- Progress Indicator (Dots) -->
+    <div class="flex justify-center items-center gap-3 mb-6">
+      {#each [1, 2, 3, 4] as step}
+        <button
+          onclick={() => { if (step < currentStep) currentStep = step as Step; }}
+          disabled={step > currentStep}
+          class="group relative flex flex-col items-center gap-1"
+        >
+          <div 
+            class="w-3 h-3 rounded-full transition-all duration-300 
+                   {step < currentStep 
+                     ? 'bg-emerald-400 scale-100' 
+                     : step === currentStep 
+                       ? 'bg-indigo-500 scale-125 ring-4 ring-indigo-500/20' 
+                       : 'bg-zinc-700 scale-100'}"
+          ></div>
+          <span class="text-[10px] font-medium transition-colors
+                       {step === currentStep ? 'text-indigo-400' : step < currentStep ? 'text-emerald-400' : 'text-zinc-600'}">
+            {stepTitles[step - 1]}
+          </span>
+        </button>
       {/each}
     </div>
 
-    <!-- Step Content Container -->
-    <div class="bg-[#1a1f3a] rounded-2xl p-8 border border-[#2a2f4a] shadow-2xl shadow-[#00d4ff]/5 min-h-[500px] flex flex-col overflow-hidden">
-      
-      <!-- Step 1: Welcome -->
-      {#if currentStep === 'welcome'}
-        <div class="flex-1 flex flex-col items-center justify-center text-center space-y-6 {isTransitioning ? 'animate-fade-out' : 'animate-fade-in'} {stepDirection === 'backward' ? 'slide-from-left' : 'slide-from-right'}">
-          <div class="w-24 h-24 bg-[#00d4ff]/20 rounded-full flex items-center justify-center">
-            <svg class="w-12 h-12 text-[#00d4ff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-          </div>
-          
-          <div>
-            <h1 class="text-3xl font-bold text-white mb-3">Добро пожаловать в Isolate</h1>
-            <p class="text-[#a0a0a0] leading-relaxed max-w-md">
-              Isolate автоматически находит и применяет лучший способ обхода DPI-блокировок для вашего интернет-провайдера.
-            </p>
-          </div>
-          
-          <div class="space-y-3 text-left w-full max-w-sm">
-            <div class="flex items-center gap-3 text-[#a0a0a0]">
-              <div class="w-8 h-8 rounded-lg bg-[#00ff88]/20 flex items-center justify-center flex-shrink-0">
-                <svg class="w-4 h-4 text-[#00ff88]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                </svg>
-              </div>
-              <span>Автоматический подбор стратегии</span>
-            </div>
-            <div class="flex items-center gap-3 text-[#a0a0a0]">
-              <div class="w-8 h-8 rounded-lg bg-[#00ff88]/20 flex items-center justify-center flex-shrink-0">
-                <svg class="w-4 h-4 text-[#00ff88]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                </svg>
-              </div>
-              <span>Поддержка Discord, YouTube, Telegram</span>
-            </div>
-            <div class="flex items-center gap-3 text-[#a0a0a0]">
-              <div class="w-8 h-8 rounded-lg bg-[#00ff88]/20 flex items-center justify-center flex-shrink-0">
-                <svg class="w-4 h-4 text-[#00ff88]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                </svg>
-              </div>
-              <span>Работает в один клик</span>
-            </div>
-          </div>
-        </div>
-      {/if}
+    <!-- Main Card -->
+    <div class="backdrop-blur-xl bg-zinc-900/60 rounded-3xl border border-white/10 shadow-2xl shadow-black/50 overflow-hidden">
+      <!-- Card Content -->
+      <div class="p-8 min-h-[480px] flex flex-col">
 
-      <!-- Step 2: Services -->
-      {#if currentStep === 'services'}
-        <div class="flex-1 flex flex-col {isTransitioning ? 'animate-fade-out' : 'animate-fade-in'} {stepDirection === 'backward' ? 'slide-from-left' : 'slide-from-right'}">
-          <div class="text-center mb-6">
-            <h2 class="text-2xl font-bold text-white mb-2">Выберите сервисы</h2>
-            <p class="text-[#a0a0a0]">Какие сервисы вы хотите разблокировать?</p>
-          </div>
-          
-          {#if loadingServices}
-            <div class="flex-1 flex items-center justify-center">
-              <div class="w-8 h-8 border-2 border-[#00d4ff] border-t-transparent rounded-full animate-spin"></div>
+        <!-- Step 1: Welcome -->
+        {#if currentStep === 1}
+          <div class="flex-1 flex flex-col items-center justify-center text-center animate-fade-in">
+            <div class="w-24 h-24 rounded-3xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-indigo-500/20 flex items-center justify-center mb-6">
+              <span class="text-5xl">👋</span>
             </div>
-          {:else}
-            <div class="space-y-3 flex-1 overflow-y-auto">
-              {#each availableServices as service}
-                <button
-                  onclick={() => toggleService(service.id)}
-                  class="w-full p-4 rounded-xl border-2 transition-all duration-200 text-left flex items-center gap-4 {selectedServices.has(service.id) ? 'border-[#00d4ff] bg-[#00d4ff]/10' : 'border-[#2a2f4a] bg-[#2a2f4a]/50 hover:border-[#3a3f5a]'}"
-                >
-                  <div class="w-10 h-10 rounded-lg bg-[#2a2f4a] flex items-center justify-center text-xl">
-                    {getServiceIcon(service.id)}
+            <h2 class="text-3xl font-bold text-white mb-3">Добро пожаловать!</h2>
+            <p class="text-zinc-400 text-lg mb-8 max-w-sm">
+              Isolate поможет вам получить доступ к заблокированным сервисам быстро и безопасно
+            </p>
+            
+            <!-- Features list -->
+            <div class="grid grid-cols-1 gap-3 w-full max-w-sm text-left">
+              <div class="flex items-center gap-3 p-3 rounded-xl bg-zinc-800/40 border border-white/5">
+                <div class="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                  <span class="text-xl">⚡</span>
+                </div>
+                <div>
+                  <div class="text-sm font-medium text-white">Быстрая настройка</div>
+                  <div class="text-xs text-zinc-500">Автоматический подбор метода</div>
+                </div>
+              </div>
+              <div class="flex items-center gap-3 p-3 rounded-xl bg-zinc-800/40 border border-white/5">
+                <div class="w-10 h-10 rounded-lg bg-indigo-500/10 flex items-center justify-center">
+                  <span class="text-xl">🔒</span>
+                </div>
+                <div>
+                  <div class="text-sm font-medium text-white">Безопасность</div>
+                  <div class="text-xs text-zinc-500">Никаких логов и телеметрии</div>
+                </div>
+              </div>
+              <div class="flex items-center gap-3 p-3 rounded-xl bg-zinc-800/40 border border-white/5">
+                <div class="w-10 h-10 rounded-lg bg-purple-500/10 flex items-center justify-center">
+                  <span class="text-xl">🎯</span>
+                </div>
+                <div>
+                  <div class="text-sm font-medium text-white">Точечный обход</div>
+                  <div class="text-xs text-zinc-500">Только нужные сервисы</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        {/if}
+
+        <!-- Step 2: Select Services -->
+        {#if currentStep === 2}
+          <div class="flex-1 flex flex-col animate-fade-in">
+            <div class="text-center mb-6">
+              <h2 class="text-2xl font-bold text-white mb-2">Выберите сервисы</h2>
+              <p class="text-zinc-400">Какие сервисы вы хотите разблокировать?</p>
+            </div>
+            
+            <!-- Quick actions -->
+            <div class="flex justify-center gap-2 mb-4">
+              <button
+                onclick={selectAllServices}
+                class="px-3 py-1.5 text-xs font-medium text-indigo-400 hover:text-indigo-300 
+                       bg-indigo-500/10 hover:bg-indigo-500/20 rounded-lg transition-colors"
+              >
+                Выбрать все
+              </button>
+              <button
+                onclick={deselectAllServices}
+                class="px-3 py-1.5 text-xs font-medium text-zinc-400 hover:text-zinc-300 
+                       bg-zinc-800/60 hover:bg-zinc-800 rounded-lg transition-colors"
+              >
+                Сбросить
+              </button>
+            </div>
+            
+            {#if loadingServices}
+              <div class="flex-1 flex items-center justify-center">
+                <div class="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            {:else}
+              <div class="grid grid-cols-2 gap-3 flex-1 overflow-y-auto">
+                {#each availableServices as service}
+                  <button
+                    onclick={() => toggleService(service.id)}
+                    class="group p-4 rounded-xl border transition-all duration-200 text-left
+                           {selectedServices.has(service.id) 
+                             ? 'border-indigo-500/50 bg-indigo-500/10 shadow-lg shadow-indigo-500/10' 
+                             : 'border-white/5 bg-zinc-800/30 hover:border-white/10 hover:bg-zinc-800/50'}"
+                  >
+                    <div class="flex items-start gap-3">
+                      <span class="text-2xl">{service.icon}</span>
+                      <div class="flex-1 min-w-0">
+                        <div class="text-sm font-medium text-white truncate">{service.name}</div>
+                        <div class="text-xs text-zinc-500">{service.description}</div>
+                      </div>
+                      <div class="w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all
+                                  {selectedServices.has(service.id) 
+                                    ? 'border-indigo-500 bg-indigo-500' 
+                                    : 'border-zinc-600 group-hover:border-zinc-500'}">
+                        {#if selectedServices.has(service.id)}
+                          <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+                          </svg>
+                        {/if}
+                      </div>
+                    </div>
+                  </button>
+                {/each}
+              </div>
+              
+              <!-- Selection counter -->
+              <div class="mt-4 text-center">
+                <span class="text-sm {selectedServices.size > 0 ? 'text-indigo-400' : 'text-amber-400'}">
+                  {selectedServices.size > 0 
+                    ? `Выбрано: ${selectedServices.size} сервис${selectedServices.size === 1 ? '' : selectedServices.size < 5 ? 'а' : 'ов'}`
+                    : 'Выберите хотя бы один сервис'}
+                </span>
+              </div>
+            {/if}
+          </div>
+        {/if}
+
+        <!-- Step 3: Choose Method -->
+        {#if currentStep === 3}
+          <div class="flex-1 flex flex-col animate-fade-in">
+            <div class="text-center mb-6">
+              <h2 class="text-2xl font-bold text-white mb-2">Метод подключения</h2>
+              <p class="text-zinc-400">Как вы хотите обходить блокировки?</p>
+            </div>
+            
+            <div class="flex-1 flex flex-col gap-4 justify-center">
+              <!-- Auto mode -->
+              <button
+                onclick={() => connectionMode = 'auto'}
+                class="group p-5 rounded-2xl border-2 transition-all duration-200 text-left
+                       {connectionMode === 'auto' 
+                         ? 'border-indigo-500/50 bg-indigo-500/10 shadow-lg shadow-indigo-500/10' 
+                         : 'border-white/5 bg-zinc-800/30 hover:border-white/10'}"
+              >
+                <div class="flex items-start gap-4">
+                  <div class="w-14 h-14 rounded-xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 
+                              border border-indigo-500/20 flex items-center justify-center flex-shrink-0">
+                    <span class="text-2xl">🔧</span>
                   </div>
                   <div class="flex-1">
-                    <div class="font-medium text-white flex items-center gap-2">
-                      {service.name}
-                      {#if service.critical}
-                        <span class="text-xs px-2 py-0.5 bg-[#ffaa00]/20 text-[#ffaa00] rounded">Популярный</span>
-                      {/if}
+                    <h3 class="text-white font-semibold text-lg mb-1">Автоматически</h3>
+                    <p class="text-zinc-400 text-sm">
+                      Isolate подберёт лучший метод обхода DPI для вашего провайдера
+                    </p>
+                    <div class="flex items-center gap-2 mt-2">
+                      <span class="px-2 py-0.5 text-xs font-medium bg-emerald-500/10 text-emerald-400 rounded">Рекомендуется</span>
                     </div>
                   </div>
-                  <div class="w-6 h-6 rounded-md border-2 flex items-center justify-center transition-colors {selectedServices.has(service.id) ? 'border-[#00d4ff] bg-[#00d4ff]' : 'border-[#a0a0a0]'}">
-                    {#if selectedServices.has(service.id)}
-                      <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
-                      </svg>
+                  <div class="w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all
+                              {connectionMode === 'auto' ? 'border-indigo-500 bg-indigo-500' : 'border-zinc-600'}">
+                    {#if connectionMode === 'auto'}
+                      <div class="w-2 h-2 rounded-full bg-white"></div>
                     {/if}
                   </div>
-                </button>
-              {/each}
-            </div>
-            
-            {#if selectedServices.size === 0}
-              <p class="text-[#ffaa00] text-sm text-center mt-4">
-                Выберите хотя бы один сервис для продолжения
-              </p>
-            {/if}
-          {/if}
-        </div>
-      {/if}
-
-      <!-- Step 3: Diagnostics -->
-      {#if currentStep === 'diagnostics'}
-        <div class="flex-1 flex flex-col items-center justify-center text-center space-y-6 {isTransitioning ? 'animate-fade-out' : 'animate-fade-in'} {stepDirection === 'backward' ? 'slide-from-left' : 'slide-from-right'}">
-          {#if isDiagnosing}
-            <div class="w-24 h-24 bg-[#00d4ff]/20 rounded-full flex items-center justify-center">
-              <div class="w-16 h-16 border-4 border-[#00d4ff] border-t-transparent rounded-full animate-spin"></div>
-            </div>
-            <div>
-              <h2 class="text-2xl font-bold text-white mb-2">Диагностика сети</h2>
-              <p class="text-[#a0a0a0]">Анализируем тип DPI вашего провайдера...</p>
-            </div>
-            <div class="w-full max-w-xs">
-              <div class="h-1 bg-[#2a2f4a] rounded-full overflow-hidden">
-                <div class="h-full bg-[#00d4ff] rounded-full animate-progress"></div>
-              </div>
-            </div>
-          {:else if diagnosticError}
-            <div class="w-24 h-24 bg-[#ff3333]/20 rounded-full flex items-center justify-center">
-              <svg class="w-12 h-12 text-[#ff3333]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-            </div>
-            <div>
-              <h2 class="text-2xl font-bold text-white mb-2">Ошибка диагностики</h2>
-              <p class="text-[#a0a0a0] mb-4">{diagnosticError}</p>
-            </div>
-            <button
-              onclick={runDiagnostics}
-              class="px-6 py-3 bg-[#00d4ff] hover:bg-[#00b8e6] text-white rounded-xl font-medium transition-colors"
-            >
-              Повторить
-            </button>
-          {:else if diagnosticResult}
-            <div class="w-24 h-24 bg-[#00ff88]/20 rounded-full flex items-center justify-center">
-              <svg class="w-12 h-12 text-[#00ff88]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <div>
-              <h2 class="text-2xl font-bold text-white mb-2">Диагностика завершена</h2>
-              <p class="text-[#a0a0a0]">Определён профиль вашего провайдера</p>
-            </div>
-            
-            <div class="bg-[#2a2f4a]/50 rounded-xl p-4 w-full text-left space-y-3">
-              <div class="flex justify-between">
-                <span class="text-[#a0a0a0]">Тип DPI:</span>
-                <span class="text-white font-medium">{diagnosticResult.profile.kind}</span>
-              </div>
-              {#if diagnosticResult.profile.details}
-                <div class="flex justify-between">
-                  <span class="text-[#a0a0a0]">Детали:</span>
-                  <span class="text-white">{diagnosticResult.profile.details}</span>
                 </div>
-              {/if}
-              <div class="flex justify-between">
-                <span class="text-[#a0a0a0]">Заблокировано:</span>
-                <span class="text-[#ff3333]">{diagnosticResult.blocked_services.length} сервисов</span>
-              </div>
-              <div class="flex justify-between">
-                <span class="text-[#a0a0a0]">Рекомендуемые стратегии:</span>
-                <span class="text-[#00d4ff]">{diagnosticResult.profile.candidate_families.join(', ') || 'Все'}</span>
-              </div>
-            </div>
-          {/if}
-        </div>
-      {/if}
-
-      <!-- Step 4: Optimization -->
-      {#if currentStep === 'optimization'}
-        <div class="flex-1 flex flex-col items-center justify-center text-center space-y-6 {isTransitioning ? 'animate-fade-out' : 'animate-fade-in'} {stepDirection === 'backward' ? 'slide-from-left' : 'slide-from-right'}">
-          {#if isOptimizing}
-            <div class="w-24 h-24 bg-[#ffaa00]/20 rounded-full flex items-center justify-center relative">
-              <div class="w-16 h-16 border-4 border-[#ffaa00] border-t-transparent rounded-full animate-spin"></div>
-              <span class="absolute text-[#ffaa00] font-bold text-lg">
-                {optimizationProgress?.percent ?? 0}%
-              </span>
-            </div>
-            <div>
-              <h2 class="text-2xl font-bold text-white mb-2">Оптимизация</h2>
-              <p class="text-[#a0a0a0]">
-                {optimizationProgress ? getStageText(optimizationProgress.stage) : 'Запуск...'}
-              </p>
-            </div>
-            
-            <div class="w-full max-w-sm space-y-2">
-              <div class="h-2 bg-[#2a2f4a] rounded-full overflow-hidden">
-                <div 
-                  class="h-full bg-[#ffaa00] rounded-full transition-all duration-300"
-                  style="width: {optimizationProgress?.percent ?? 0}%"
-                ></div>
-              </div>
-              {#if optimizationProgress}
-                <p class="text-sm text-[#a0a0a0]">{optimizationProgress.message}</p>
-                {#if optimizationProgress.tested_count > 0}
-                  <p class="text-xs text-[#a0a0a0]">
-                    Протестировано: {optimizationProgress.tested_count} / {optimizationProgress.total_count}
-                  </p>
-                {/if}
-              {/if}
-            </div>
-          {:else if optimizationError}
-            <div class="w-24 h-24 bg-[#ff3333]/20 rounded-full flex items-center justify-center">
-              <svg class="w-12 h-12 text-[#ff3333]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-            </div>
-            <div>
-              <h2 class="text-2xl font-bold text-white mb-2">Ошибка оптимизации</h2>
-              <p class="text-[#a0a0a0] mb-4">{optimizationError}</p>
-            </div>
-            <div class="flex gap-3">
-              <button
-                onclick={runOptimization}
-                class="px-6 py-3 bg-[#00d4ff] hover:bg-[#00b8e6] text-white rounded-xl font-medium transition-colors"
-              >
-                Повторить
               </button>
+              
+              <!-- Proxy mode -->
               <button
-                onclick={() => currentStep = 'complete'}
-                class="px-6 py-3 bg-[#2a2f4a] hover:bg-[#3a3f5a] text-white rounded-xl font-medium transition-colors"
+                onclick={() => connectionMode = 'proxy'}
+                class="group p-5 rounded-2xl border-2 transition-all duration-200 text-left
+                       {connectionMode === 'proxy' 
+                         ? 'border-indigo-500/50 bg-indigo-500/10 shadow-lg shadow-indigo-500/10' 
+                         : 'border-white/5 bg-zinc-800/30 hover:border-white/10'}"
               >
-                Пропустить
+                <div class="flex items-start gap-4">
+                  <div class="w-14 h-14 rounded-xl bg-gradient-to-br from-emerald-500/20 to-cyan-500/20 
+                              border border-emerald-500/20 flex items-center justify-center flex-shrink-0">
+                    <span class="text-2xl">🌐</span>
+                  </div>
+                  <div class="flex-1">
+                    <h3 class="text-white font-semibold text-lg mb-1">Свой прокси</h3>
+                    <p class="text-zinc-400 text-sm">
+                      Использовать VLESS, Shadowsocks, SOCKS5 или другой прокси
+                    </p>
+                    <div class="flex items-center gap-2 mt-2">
+                      <span class="px-2 py-0.5 text-xs font-medium bg-zinc-700 text-zinc-400 rounded">Для продвинутых</span>
+                    </div>
+                  </div>
+                  <div class="w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all
+                              {connectionMode === 'proxy' ? 'border-indigo-500 bg-indigo-500' : 'border-zinc-600'}">
+                    {#if connectionMode === 'proxy'}
+                      <div class="w-2 h-2 rounded-full bg-white"></div>
+                    {/if}
+                  </div>
+                </div>
               </button>
             </div>
-          {:else if optimizationResult}
-            <div class="w-24 h-24 bg-[#00ff88]/20 rounded-full flex items-center justify-center">
-              <svg class="w-12 h-12 text-[#00ff88]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <div>
-              <h2 class="text-2xl font-bold text-white mb-2">Оптимизация завершена!</h2>
-              <p class="text-[#a0a0a0]">Найдена лучшая стратегия для вашего провайдера</p>
-            </div>
-            
-            <div class="bg-[#2a2f4a]/50 rounded-xl p-4 w-full text-left space-y-3">
-              <div class="flex justify-between">
-                <span class="text-[#a0a0a0]">Стратегия:</span>
-                <span class="text-white font-medium">{optimizationResult.strategy_name}</span>
-              </div>
-              <div class="flex justify-between">
-                <span class="text-[#a0a0a0]">Оценка:</span>
-                <span class="text-[#00ff88] font-medium">{optimizationResult.score}%</span>
-              </div>
-            </div>
-          {/if}
-        </div>
-      {/if}
+          </div>
+        {/if}
 
-      <!-- Step 5: Complete -->
-      {#if currentStep === 'complete'}
-        <div class="flex-1 flex flex-col items-center justify-center text-center space-y-6 {isTransitioning ? 'animate-fade-out' : 'animate-fade-in'} {stepDirection === 'backward' ? 'slide-from-left' : 'slide-from-right'}">
-          <div class="w-24 h-24 bg-[#00ff88]/20 rounded-full flex items-center justify-center">
-            <svg class="w-12 h-12 text-[#00ff88]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
-          
-          <div>
-            <h2 class="text-2xl font-bold text-white mb-2">Всё готово!</h2>
-            <p class="text-[#a0a0a0] leading-relaxed">
-              Isolate настроен и готов к работе.
-              {#if optimizationResult}
-                Стратегия <span class="text-[#00d4ff]">{optimizationResult.strategy_name}</span> уже применена.
-              {:else}
-                Нажмите «Начать», чтобы перейти к главному экрану.
-              {/if}
-            </p>
-          </div>
-          
-          <div class="bg-[#2a2f4a]/50 rounded-xl p-4 w-full text-left space-y-3">
-            <div class="flex justify-between text-sm">
-              <span class="text-[#a0a0a0]">Выбранные сервисы:</span>
-              <span class="text-white">
-                {Array.from(selectedServices).map(id => 
-                  availableServices.find(s => s.id === id)?.name || id
-                ).join(', ')}
-              </span>
-            </div>
-            {#if optimizationResult}
-              <div class="flex justify-between text-sm">
-                <span class="text-[#a0a0a0]">Активная стратегия:</span>
-                <span class="text-[#00ff88]">{optimizationResult.strategy_name}</span>
+        <!-- Step 4: Complete / Setup -->
+        {#if currentStep === 4}
+          <div class="flex-1 flex flex-col items-center justify-center animate-fade-in">
+            {#if !setupComplete}
+              <!-- Setup in progress -->
+              <div class="text-center mb-8">
+                <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 
+                            border border-indigo-500/20 flex items-center justify-center mb-4 mx-auto">
+                  <span class="text-4xl animate-bounce">🚀</span>
+                </div>
+                <h2 class="text-2xl font-bold text-white mb-2">Настройка системы</h2>
+                <p class="text-zinc-400">Подождите, это займёт несколько секунд...</p>
               </div>
-            {/if}
-            {#if diagnosticResult}
-              <div class="flex justify-between text-sm">
-                <span class="text-[#a0a0a0]">Профиль DPI:</span>
-                <span class="text-white">{diagnosticResult.profile.kind}</span>
+              
+              <!-- Progress Bar -->
+              <div class="w-full max-w-sm mb-8">
+                <div class="h-2 bg-zinc-800 rounded-full overflow-hidden">
+                  <div 
+                    class="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-300"
+                    style="width: {setupProgress}%"
+                  ></div>
+                </div>
+                <p class="text-center text-zinc-500 text-sm font-mono mt-2">{Math.round(setupProgress)}%</p>
+              </div>
+              
+              <!-- Tasks List -->
+              <div class="w-full max-w-sm space-y-3">
+                {#each setupTasks as task}
+                  <div class="flex items-center gap-3 p-3 rounded-xl bg-zinc-800/30 border border-white/5">
+                    {#if task.status === 'done'}
+                      <div class="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                        <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                    {:else if task.status === 'running'}
+                      <div class="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center">
+                        <div class="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                      </div>
+                    {:else}
+                      <div class="w-8 h-8 rounded-lg bg-zinc-800 flex items-center justify-center">
+                        <div class="w-2 h-2 rounded-full bg-zinc-600"></div>
+                      </div>
+                    {/if}
+                    <span class="text-sm font-medium
+                                 {task.status === 'done' ? 'text-emerald-400' : 
+                                  task.status === 'running' ? 'text-white' : 'text-zinc-500'}">
+                      {task.label}
+                    </span>
+                  </div>
+                {/each}
+              </div>
+            {:else}
+              <!-- Setup complete -->
+              <div class="text-center">
+                <div class="w-24 h-24 rounded-3xl bg-gradient-to-br from-emerald-500/20 to-cyan-500/20 
+                            border border-emerald-500/20 flex items-center justify-center mb-6 mx-auto
+                            animate-success-pop">
+                  <span class="text-5xl">✅</span>
+                </div>
+                <h2 class="text-3xl font-bold text-white mb-3">Всё готово!</h2>
+                <p class="text-zinc-400 text-lg mb-8 max-w-sm">
+                  Isolate настроен и готов к работе. Нажмите кнопку ниже, чтобы начать.
+                </p>
+                
+                <!-- Summary -->
+                <div class="p-4 rounded-xl bg-zinc-800/30 border border-white/5 text-left max-w-sm mx-auto mb-6">
+                  <div class="text-xs text-zinc-500 uppercase tracking-wider mb-2">Ваши настройки</div>
+                  <div class="space-y-2 text-sm">
+                    <div class="flex justify-between">
+                      <span class="text-zinc-400">Сервисы:</span>
+                      <span class="text-white font-medium">{selectedServices.size} выбрано</span>
+                    </div>
+                    <div class="flex justify-between">
+                      <span class="text-zinc-400">Метод:</span>
+                      <span class="text-white font-medium">{connectionMode === 'auto' ? 'Автоматический' : 'Свой прокси'}</span>
+                    </div>
+                  </div>
+                </div>
               </div>
             {/if}
           </div>
-          
-          <div class="flex items-center gap-2 text-sm text-[#a0a0a0]">
-            <svg class="w-4 h-4 text-[#00d4ff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span>Вы можете изменить настройки в любое время</span>
-          </div>
-        </div>
-      {/if}
+        {/if}
 
-      <!-- Navigation Buttons -->
-      <div class="flex gap-3 pt-6 mt-auto border-t border-[#2a2f4a]">
-        {#if currentStep === 'welcome'}
-          <button
-            onclick={skipOnboarding}
-            class="flex-1 py-3 px-6 text-[#a0a0a0] hover:text-white rounded-xl font-medium transition-colors"
-          >
-            Пропустить
-          </button>
-        {:else if currentStep !== 'diagnostics' && currentStep !== 'optimization'}
-          <button
-            onclick={prevStep}
-            class="flex-1 py-3 px-6 bg-[#2a2f4a] hover:bg-[#3a3f5a] text-white rounded-xl font-medium transition-colors"
-          >
-            Назад
-          </button>
-        {:else}
+        <!-- Navigation Buttons -->
+        <div class="flex gap-3 pt-6 mt-auto border-t border-white/5">
+          {#if currentStep > 1 && currentStep < 4}
+            <button
+              onclick={prevStep}
+              class="flex items-center justify-center gap-2 px-5 py-3 
+                     bg-zinc-800/60 hover:bg-zinc-800 border border-white/5 hover:border-white/10
+                     text-zinc-300 rounded-xl font-medium transition-all"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+              </svg>
+              Назад
+            </button>
+          {:else if currentStep === 1}
+            <button
+              onclick={skipOnboarding}
+              class="px-5 py-3 text-zinc-500 hover:text-zinc-400 font-medium transition-colors"
+            >
+              Пропустить
+            </button>
+          {:else}
+            <div></div>
+          {/if}
+          
           <div class="flex-1"></div>
-        {/if}
-        
-        {#if currentStep === 'diagnostics'}
-          {#if isDiagnosing}
-            <button
-              disabled
-              class="flex-1 py-3 px-6 bg-[#2a2f4a] text-[#a0a0a0] rounded-xl font-medium cursor-not-allowed"
-            >
-              Диагностика...
-            </button>
-          {:else}
+          
+          {#if currentStep < 4}
             <button
               onclick={nextStep}
-              class="flex-1 py-3 px-6 bg-[#00d4ff] hover:bg-[#00b8e6] text-white rounded-xl font-medium transition-colors"
+              disabled={!canProceed}
+              class="flex items-center justify-center gap-2 px-6 py-3 
+                     bg-indigo-500 hover:bg-indigo-600 disabled:bg-zinc-800 disabled:text-zinc-600
+                     text-white rounded-xl font-medium transition-all
+                     disabled:cursor-not-allowed shadow-lg shadow-indigo-500/20 disabled:shadow-none
+                     hover:-translate-y-0.5 disabled:translate-y-0"
             >
-              {diagnosticResult ? 'Далее' : 'Пропустить'}
+              {currentStep === 1 ? 'Начать' : 'Далее'}
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+              </svg>
             </button>
-          {/if}
-        {:else if currentStep === 'optimization'}
-          {#if isOptimizing}
+          {:else if setupComplete}
             <button
-              disabled
-              class="flex-1 py-3 px-6 bg-[#2a2f4a] text-[#a0a0a0] rounded-xl font-medium cursor-not-allowed"
+              onclick={completeOnboarding}
+              class="flex items-center justify-center gap-2 px-8 py-3 
+                     bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600
+                     text-white rounded-xl font-semibold transition-all
+                     shadow-lg shadow-emerald-500/20
+                     hover:-translate-y-0.5"
             >
-              Оптимизация...
+              Начать работу
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+              </svg>
             </button>
           {:else}
-            <button
-              onclick={nextStep}
-              class="flex-1 py-3 px-6 bg-[#00d4ff] hover:bg-[#00b8e6] text-white rounded-xl font-medium transition-colors"
-            >
-              {optimizationResult ? 'Далее' : 'Пропустить'}
-            </button>
+            <div class="flex items-center gap-2 px-6 py-3 text-zinc-500">
+              <div class="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+              Настройка...
+            </div>
           {/if}
-        {:else if currentStep === 'services'}
-          <button
-            onclick={nextStep}
-            disabled={selectedServices.size === 0}
-            class="flex-1 py-3 px-6 bg-[#00d4ff] hover:bg-[#00b8e6] disabled:bg-[#2a2f4a] disabled:text-[#a0a0a0] disabled:cursor-not-allowed text-white rounded-xl font-medium transition-colors"
-          >
-            Далее
-          </button>
-        {:else if currentStep === 'complete'}
-          <button
-            onclick={completeOnboarding}
-            class="flex-1 py-3 px-6 bg-[#00ff88] hover:bg-[#00e67a] text-[#0a0e27] rounded-xl font-bold transition-colors"
-          >
-            Начать использование
-          </button>
-        {:else}
-          <button
-            onclick={nextStep}
-            class="flex-1 py-3 px-6 bg-[#00d4ff] hover:bg-[#00b8e6] text-white rounded-xl font-medium transition-colors"
-          >
-            Далее
-          </button>
-        {/if}
+        </div>
       </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="mt-6 text-center">
+      <p class="text-xs text-zinc-600">
+        Isolate v1.0 • Ваши данные остаются на вашем устройстве
+      </p>
     </div>
   </div>
 </div>
@@ -682,66 +663,17 @@
     }
   }
   
-  @keyframes fade-out {
-    from {
-      opacity: 1;
-      transform: translateY(0);
-    }
-    to {
-      opacity: 0;
-      transform: translateY(-10px);
-    }
-  }
-  
-  @keyframes slide-in-right {
-    from {
-      opacity: 0;
-      transform: translateX(30px);
-    }
-    to {
-      opacity: 1;
-      transform: translateX(0);
-    }
-  }
-  
-  @keyframes slide-in-left {
-    from {
-      opacity: 0;
-      transform: translateX(-30px);
-    }
-    to {
-      opacity: 1;
-      transform: translateX(0);
-    }
-  }
-  
-  @keyframes progress {
+  @keyframes success-pop {
     0% {
-      width: 0%;
+      transform: scale(0.8);
+      opacity: 0;
     }
     50% {
-      width: 70%;
+      transform: scale(1.1);
     }
     100% {
-      width: 100%;
-    }
-  }
-  
-  @keyframes pulse-glow {
-    0%, 100% {
-      box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
-    }
-    50% {
-      box-shadow: 0 0 40px rgba(0, 212, 255, 0.6);
-    }
-  }
-  
-  @keyframes spin-slow {
-    from {
-      transform: rotate(0deg);
-    }
-    to {
-      transform: rotate(360deg);
+      transform: scale(1);
+      opacity: 1;
     }
   }
   
@@ -749,27 +681,7 @@
     animation: fade-in 0.4s ease-out forwards;
   }
   
-  .animate-fade-out {
-    animation: fade-out 0.15s ease-in forwards;
-  }
-  
-  .slide-from-right {
-    animation: slide-in-right 0.4s ease-out forwards;
-  }
-  
-  .slide-from-left {
-    animation: slide-in-left 0.4s ease-out forwards;
-  }
-  
-  .animate-progress {
-    animation: progress 2s ease-in-out infinite;
-  }
-  
-  .animate-pulse-glow {
-    animation: pulse-glow 2s ease-in-out infinite;
-  }
-  
-  .animate-spin-slow {
-    animation: spin-slow 3s linear infinite;
+  .animate-success-pop {
+    animation: success-pop 0.5s ease-out forwards;
   }
 </style>

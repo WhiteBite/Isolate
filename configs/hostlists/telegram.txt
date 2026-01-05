@@ -1,8 +1,8 @@
 # Telegram domains
 
-t.me
-telegram.me
 telegram.org
+telegram.me
+t.me
 telegram.dog
 telegra.ph
 telesco.pe

@@ -14,7 +14,7 @@ use tokio::process::{Child, Command};
 use tracing::{debug, error, info, warn};
 
 use crate::core::errors::{IsolateError, Result};
-use crate::core::paths::{get_binaries_dir, get_app_data_dir};
+use crate::core::paths::{get_app_data_dir, get_singbox_path};
 use crate::core::quic_blocker::is_admin;
 
 // ============================================================================
@@ -144,12 +144,12 @@ impl TunManager {
         // Ensure directory exists
         if let Some(parent) = config_path.parent() {
             std::fs::create_dir_all(parent)
-                .map_err(|e| IsolateError::Io(e))?;
+                .map_err(|e| IsolateError::Io(e.to_string()))?;
         }
 
         // Write config file
         std::fs::write(&config_path, &config_content)
-            .map_err(|e| IsolateError::Io(e))?;
+            .map_err(|e| IsolateError::Io(e.to_string()))?;
 
         debug!(path = %config_path.display(), "TUN config written");
 
@@ -369,20 +369,7 @@ impl TunManager {
 // Utility Functions
 // ============================================================================
 
-/// Get path to sing-box binary
-fn get_singbox_path() -> PathBuf {
-    let binaries_dir = get_binaries_dir();
-
-    #[cfg(windows)]
-    {
-        binaries_dir.join("sing-box.exe")
-    }
-
-    #[cfg(not(windows))]
-    {
-        binaries_dir.join("sing-box")
-    }
-}
+// NOTE: get_singbox_path moved to paths.rs - use crate::core::paths::get_singbox_path
 
 /// Check if TUN mode is available
 ///
@@ -390,7 +377,7 @@ fn get_singbox_path() -> PathBuf {
 /// - sing-box binary exists
 /// - Running with admin privileges
 pub fn is_tun_available() -> bool {
-    get_singbox_path().exists() && is_admin()
+    crate::core::paths::get_singbox_path().exists() && is_admin()
 }
 
 // ============================================================================

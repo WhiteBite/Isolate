@@ -1,0 +1,33 @@
+# Domains to block for DPI testing
+# One domain per line, supports subdomains
+
+# YouTube
+youtube.com
+googlevideo.com
+ytimg.com
+yt3.ggpht.com
+
+# Discord
+discord.com
+discord.gg
+discordapp.com
+discord.media
+discordapp.net
+
+# Twitch
+twitch.tv
+ttvnw.net
+jtvnw.net
+
+# Instagram
+instagram.com
+cdninstagram.com
+
+# Twitter/X
+twitter.com
+x.com
+twimg.com
+
+# Test domains
+example-blocked.com
+test-dpi-block.local

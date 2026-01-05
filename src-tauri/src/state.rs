@@ -18,6 +18,7 @@ use crate::core::orchestrator::{create_orchestrator, SharedOrchestrator};
 use crate::core::storage::Storage;
 use crate::core::strategy_engine::{create_engine, SharedStrategyEngine};
 use crate::core::telemetry::TelemetryService;
+use crate::services::{ServiceChecker, ServiceRegistry};
 
 // ============================================================================
 // Constants
@@ -56,6 +57,12 @@ pub struct AppState {
     pub monitor: Arc<Monitor>,
     /// Telemetry service (opt-in)
     pub telemetry: Arc<TelemetryService>,
+    /// Plugins directory path
+    pub plugins_dir: PathBuf,
+    /// Service registry (new services system)
+    pub service_registry: Arc<ServiceRegistry>,
+    /// Service checker (new services system)
+    pub service_checker: Arc<ServiceChecker>,
 }
 
 impl AppState {
@@ -84,7 +91,7 @@ impl AppState {
         );
 
         // 4. Инициализируем Storage (SQLite)
-        let storage = Arc::new(Storage::new()?);
+        let storage = Arc::new(Storage::new().await?);
         debug!("Storage initialized");
 
         // 5. Создаём StrategyEngine
@@ -117,6 +124,45 @@ impl AppState {
         let app_router = Arc::new(AppRouter::new(storage.clone()));
         debug!("Routing managers created");
 
+        // 9. Определяем путь к плагинам
+        let plugins_dir = if cfg!(debug_assertions) {
+            let current = std::env::current_dir()
+                .map_err(|e| IsolateError::Config(format!("Failed to get current dir: {}", e)))?;
+            if current.ends_with("src-tauri") {
+                current.parent().map(|p| p.to_path_buf()).unwrap_or(current)
+            } else {
+                current
+            }.join("plugins")
+        } else {
+            let app_data = std::env::var("APPDATA").map_err(|_| {
+                IsolateError::Config("APPDATA environment variable not found".into())
+            })?;
+            PathBuf::from(app_data).join(APP_DIR_NAME).join("plugins")
+        };
+        
+        // Создаём директорию плагинов если не существует
+        if !plugins_dir.exists() {
+            std::fs::create_dir_all(&plugins_dir)
+                .map_err(|e| IsolateError::Config(format!("Failed to create plugins dir: {}", e)))?;
+        }
+        debug!(plugins_dir = %plugins_dir.display(), "Plugins directory configured");
+
+        // 10. Создаём ServiceRegistry и загружаем сервисы
+        let service_registry = Arc::new(ServiceRegistry::new());
+        
+        // Load services from plugins FIRST (they have priority)
+        if let Err(e) = service_registry.load_from_plugins(&plugins_dir).await {
+            tracing::warn!(error = %e, "Failed to load services from plugins");
+        }
+        
+        // Register built-in services (won't override existing from plugins)
+        service_registry.register_builtin_services().await;
+        debug!("Service registry initialized");
+
+        // 11. Создаём ServiceChecker
+        let service_checker = Arc::new(ServiceChecker::new(service_registry.clone()));
+        debug!("Service checker created");
+
         let state = Self {
             orchestrator,
             strategy_engine,
@@ -127,6 +173,9 @@ impl AppState {
             app_router,
             monitor,
             telemetry,
+            plugins_dir,
+            service_registry,
+            service_checker,
         };
 
         info!("Application state initialized successfully");
@@ -135,13 +184,22 @@ impl AppState {
 
     /// Определяет пути к директориям конфигов
     ///
-    /// В dev-режиме: `configs/strategies/` и `configs/services/`
+    /// В dev-режиме: `configs/strategies/` и `configs/services/` (относительно корня проекта)
     /// В prod-режиме: `%APPDATA%/Isolate/configs/strategies/` и `%APPDATA%/Isolate/configs/services/`
     fn get_config_paths() -> Result<(PathBuf, PathBuf)> {
         let base_dir = if cfg!(debug_assertions) {
-            // Dev mode: используем локальную директорию configs/
-            std::env::current_dir()
-                .map_err(|e| IsolateError::Config(format!("Failed to get current dir: {}", e)))?
+            // Dev mode: cargo запускается из src-tauri/, поэтому поднимаемся на уровень выше
+            let current = std::env::current_dir()
+                .map_err(|e| IsolateError::Config(format!("Failed to get current dir: {}", e)))?;
+            
+            // Если мы в src-tauri, поднимаемся на уровень выше
+            if current.ends_with("src-tauri") {
+                current.parent()
+                    .map(|p| p.to_path_buf())
+                    .unwrap_or(current)
+            } else {
+                current
+            }
         } else {
             // Prod mode: используем %APPDATA%/Isolate/
             let app_data = std::env::var("APPDATA").map_err(|_| {
@@ -194,7 +252,7 @@ impl AppState {
         self.strategy_engine.shutdown_all().await?;
 
         // Очищаем устаревший кэш
-        let _ = self.storage.cleanup_expired_cache();
+        let _ = self.storage.cleanup_expired_cache().await;
 
         info!("Application state shutdown complete");
         Ok(())

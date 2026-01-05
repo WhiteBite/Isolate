@@ -283,9 +283,13 @@ fn handle_menu_event<R: Runtime>(app: &AppHandle<R>, id: &str) {
             info!("Tray: Quit requested");
             // Emit event for graceful shutdown
             emit_event(app, "tray:quit", ());
-            // Give time for cleanup
-            std::thread::sleep(std::time::Duration::from_millis(500));
-            app.exit(0);
+            // Perform delayed exit in separate thread to avoid blocking tokio runtime
+            let app_handle = app.clone();
+            std::thread::spawn(move || {
+                // Give time for cleanup
+                std::thread::sleep(std::time::Duration::from_millis(500));
+                app_handle.exit(0);
+            });
         }
         _ => {
             warn!("Unknown tray menu item: {}", id);

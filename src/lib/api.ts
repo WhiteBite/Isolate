@@ -1122,3 +1122,44 @@ export async function checkConfigUpdates(): Promise<ConfigUpdate[]> {
 export async function downloadConfigUpdates(): Promise<ConfigUpdateResult> {
     return invoke('download_config_updates');
 }
+
+// ============================================================================
+// DPI Simulator Testing API
+// ============================================================================
+
+/** DPI test result */
+export interface DpiTestResult {
+    /** Strategy ID that was tested */
+    strategy_id: string;
+    /** Whether the strategy successfully bypassed DPI */
+    success: boolean;
+    /** Packets blocked before strategy was applied */
+    blocked_before: number;
+    /** Packets blocked after strategy was applied */
+    blocked_after: number;
+    /** Packets passed after strategy was applied */
+    passed_after: number;
+    /** Latency in milliseconds */
+    latency_ms?: number;
+    /** Error message if test failed */
+    error?: string;
+}
+
+/**
+ * Test a strategy against the DPI simulator.
+ * 
+ * This runs a full test cycle:
+ * 1. Reset DPI stats
+ * 2. Verify domain is blocked without strategy
+ * 3. Apply strategy
+ * 4. Verify domain is accessible with strategy
+ * 5. Stop strategy
+ * 
+ * Requires DPI simulator VM to be running.
+ * 
+ * @param strategyId - ID of the strategy to test
+ * @returns Test result with blocking statistics
+ */
+export async function testStrategyWithDpi(strategyId: string): Promise<DpiTestResult> {
+    return invoke('test_strategy_with_dpi', { strategyId });
+}

@@ -33,6 +33,14 @@ jobs:
         with:
           workspaces: src-tauri
           
+      - name: pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.pnpm-store
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
+          
       - name: Install dependencies
         run: pnpm install
         
@@ -41,6 +49,12 @@ jobs:
         
       - name: Clippy
         run: cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
+        
+      - name: Run Rust tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+        
+      - name: Run TypeScript tests
+        run: pnpm test
         
       - name: Build frontend
         run: pnpm build

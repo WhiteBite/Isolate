@@ -1,0 +1,344 @@
+name: E2E Tests (Hyper-V DPI Simulation)
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    # Каждую ночь в 3:00 UTC
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+    inputs:
+      dpi_mode:
+        description: 'DPI mode to test'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - drop
+          - rst
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  e2e-tests:
+    name: E2E (${{ matrix.dpi_mode }})
+    runs-on: [self-hosted, windows, hyper-v]
+    timeout-minutes: 30
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        dpi_mode: [drop, rst]
+        exclude:
+          - dpi_mode: ${{ github.event.inputs.dpi_mode != 'all' && github.event.inputs.dpi_mode != 'drop' && 'drop' || 'never-exclude' }}
+          - dpi_mode: ${{ github.event.inputs.dpi_mode != 'all' && github.event.inputs.dpi_mode != 'rst' && 'rst' || 'never-exclude' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Setup Rust
+        uses: dtolnay/rust-action@stable
+        with:
+          toolchain: stable
+          components: clippy
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Start DPI VM (${{ matrix.dpi_mode }})
+        id: start-vm
+        shell: pwsh
+        run: |
+          $vmName = "dpi-simulator-${{ matrix.dpi_mode }}"
+          
+          # Проверяем состояние VM
+          $vm = Get-VM -Name $vmName -ErrorAction SilentlyContinue
+          if (-not $vm) {
+            Write-Error "VM '$vmName' not found"
+            exit 1
+          }
+          
+          # Запускаем VM если не запущена
+          if ($vm.State -ne 'Running') {
+            Write-Host "Starting VM '$vmName'..."
+            Start-VM -Name $vmName
+            
+            # Ждём запуска (max 2 минуты)
+            $timeout = 120
+            $elapsed = 0
+            while ((Get-VM -Name $vmName).State -ne 'Running' -and $elapsed -lt $timeout) {
+              Start-Sleep -Seconds 5
+              $elapsed += 5
+            }
+            
+            if ((Get-VM -Name $vmName).State -ne 'Running') {
+              Write-Error "Failed to start VM within timeout"
+              exit 1
+            }
+            
+            # Дополнительное ожидание для инициализации сети
+            Write-Host "Waiting for VM network initialization..."
+            Start-Sleep -Seconds 30
+          }
+          
+          # Получаем IP адрес VM
+          $vmIp = (Get-VMNetworkAdapter -VMName $vmName | 
+                   Get-VMNetworkAdapterAddress).IPAddresses | 
+                   Where-Object { $_ -match '^\d+\.\d+\.\d+\.\d+$' } | 
+                   Select-Object -First 1
+          
+          if (-not $vmIp) {
+            Write-Error "Could not get VM IP address"
+            exit 1
+          }
+          
+          Write-Host "VM IP: $vmIp"
+          echo "vm_ip=$vmIp" >> $env:GITHUB_OUTPUT
+          echo "vm_name=$vmName" >> $env:GITHUB_OUTPUT
+
+      - name: Configure DPI mode on VM
+        shell: pwsh
+        run: |
+          $vmIp = "${{ steps.start-vm.outputs.vm_ip }}"
+          $dpiMode = "${{ matrix.dpi_mode }}"
+          
+          Write-Host "Configuring DPI mode '$dpiMode' on VM at $vmIp..."
+          
+          # Отправляем команду на VM для настройки DPI режима
+          Invoke-Command -ComputerName $vmIp -Credential ${{ secrets.VM_CREDENTIALS }} -ScriptBlock {
+            param($mode)
+            & "C:\dpi-simulator\configure-dpi.ps1" -Mode $mode
+          } -ArgumentList $dpiMode
+          
+          # Проверяем что DPI активен
+          Start-Sleep -Seconds 5
+
+      - name: Configure routing through DPI VM
+        shell: pwsh
+        run: |
+          $vmIp = "${{ steps.start-vm.outputs.vm_ip }}"
+          
+          Write-Host "Configuring routing through DPI VM..."
+          
+          # Добавляем маршрут для тестовых доменов через VM
+          # Предполагается что VM работает как прозрачный прокси
+          route add 0.0.0.0 mask 0.0.0.0 $vmIp metric 1 -p
+          
+          # Проверяем маршрутизацию
+          Write-Host "Current routing table:"
+          route print
+
+      - name: Build Isolate
+        shell: pwsh
+        run: |
+          Write-Host "Building Isolate application..."
+          pnpm tauri build --debug
+          
+          # Проверяем что билд успешен
+          $exePath = "src-tauri/target/debug/isolate.exe"
+          if (-not (Test-Path $exePath)) {
+            Write-Error "Build failed: $exePath not found"
+            exit 1
+          }
+          
+          Write-Host "Build successful: $exePath"
+
+      - name: Run E2E tests
+        id: e2e-tests
+        shell: pwsh
+        env:
+          DPI_MODE: ${{ matrix.dpi_mode }}
+          DPI_VM_IP: ${{ steps.start-vm.outputs.vm_ip }}
+          ISOLATE_E2E: true
+        run: |
+          Write-Host "Running E2E tests with DPI mode: $env:DPI_MODE"
+          
+          # Создаём директории для артефактов
+          New-Item -ItemType Directory -Force -Path "test-results"
+          New-Item -ItemType Directory -Force -Path "test-results/screenshots"
+          New-Item -ItemType Directory -Force -Path "test-results/logs"
+          
+          # Запускаем тесты
+          pnpm test:e2e --reporter=json --output=test-results/results.json 2>&1 | Tee-Object -FilePath "test-results/logs/e2e-output.log"
+          
+          $exitCode = $LASTEXITCODE
+          echo "test_exit_code=$exitCode" >> $env:GITHUB_OUTPUT
+          
+          if ($exitCode -ne 0) {
+            Write-Warning "E2E tests failed with exit code: $exitCode"
+          }
+
+      - name: Collect application logs
+        if: always()
+        shell: pwsh
+        run: |
+          Write-Host "Collecting application logs..."
+          
+          # Копируем логи Isolate
+          $logDir = "$env:APPDATA\isolate\logs"
+          if (Test-Path $logDir) {
+            Copy-Item -Path "$logDir\*" -Destination "test-results/logs/" -Recurse -Force
+          }
+          
+          # Копируем логи winws если есть
+          $winwsLog = "$env:TEMP\winws.log"
+          if (Test-Path $winwsLog) {
+            Copy-Item -Path $winwsLog -Destination "test-results/logs/"
+          }
+          
+          # Системные события
+          Get-EventLog -LogName Application -Newest 100 -Source "Isolate*" -ErrorAction SilentlyContinue | 
+            Export-Csv -Path "test-results/logs/event-log.csv" -NoTypeInformation
+
+      - name: Collect VM logs
+        if: always()
+        shell: pwsh
+        run: |
+          $vmIp = "${{ steps.start-vm.outputs.vm_ip }}"
+          
+          Write-Host "Collecting DPI VM logs..."
+          
+          Invoke-Command -ComputerName $vmIp -Credential ${{ secrets.VM_CREDENTIALS }} -ScriptBlock {
+            Get-Content "C:\dpi-simulator\logs\dpi.log" -Tail 500
+          } | Out-File -FilePath "test-results/logs/dpi-vm.log"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.dpi_mode }}
+          path: test-results/
+          retention-days: 7
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-${{ matrix.dpi_mode }}
+          path: test-results/screenshots/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-${{ matrix.dpi_mode }}
+          path: test-results/logs/
+          retention-days: 14
+
+      - name: Cleanup routing
+        if: always()
+        shell: pwsh
+        run: |
+          Write-Host "Cleaning up routing configuration..."
+          
+          $vmIp = "${{ steps.start-vm.outputs.vm_ip }}"
+          
+          # Удаляем добавленные маршруты
+          route delete 0.0.0.0 mask 0.0.0.0 $vmIp -ErrorAction SilentlyContinue
+          
+          Write-Host "Routing cleanup complete"
+
+      - name: Stop DPI VM
+        if: always()
+        shell: pwsh
+        run: |
+          $vmName = "${{ steps.start-vm.outputs.vm_name }}"
+          
+          if ($vmName) {
+            Write-Host "Stopping VM '$vmName'..."
+            
+            # Сначала пробуем graceful shutdown
+            Stop-VM -Name $vmName -Force -TurnOff -ErrorAction SilentlyContinue
+            
+            # Ждём остановки (max 1 минута)
+            $timeout = 60
+            $elapsed = 0
+            while ((Get-VM -Name $vmName -ErrorAction SilentlyContinue).State -eq 'Running' -and $elapsed -lt $timeout) {
+              Start-Sleep -Seconds 5
+              $elapsed += 5
+            }
+            
+            Write-Host "VM stopped"
+          }
+
+      - name: Check test results
+        if: always()
+        shell: pwsh
+        run: |
+          $exitCode = "${{ steps.e2e-tests.outputs.test_exit_code }}"
+          
+          if ($exitCode -ne "0") {
+            Write-Error "E2E tests failed for DPI mode: ${{ matrix.dpi_mode }}"
+            exit 1
+          }
+          
+          Write-Host "E2E tests passed for DPI mode: ${{ matrix.dpi_mode }}"
+
+  # Сводный отчёт после всех тестов
+  summary:
+    name: Test Summary
+    runs-on: [self-hosted, windows]
+    needs: e2e-tests
+    if: always()
+    
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: all-results
+
+      - name: Generate summary
+        shell: pwsh
+        run: |
+          Write-Host "## E2E Test Summary" >> $env:GITHUB_STEP_SUMMARY
+          Write-Host "" >> $env:GITHUB_STEP_SUMMARY
+          
+          $results = @()
+          Get-ChildItem -Path "all-results" -Filter "results.json" -Recurse | ForEach-Object {
+            $content = Get-Content $_.FullName | ConvertFrom-Json
+            $results += $content
+          }
+          
+          $passed = ($results | Where-Object { $_.status -eq 'passed' }).Count
+          $failed = ($results | Where-Object { $_.status -eq 'failed' }).Count
+          $total = $results.Count
+          
+          Write-Host "| DPI Mode | Status | Duration |" >> $env:GITHUB_STEP_SUMMARY
+          Write-Host "|----------|--------|----------|" >> $env:GITHUB_STEP_SUMMARY
+          
+          foreach ($result in $results) {
+            $status = if ($result.status -eq 'passed') { '✅' } else { '❌' }
+            Write-Host "| $($result.dpiMode) | $status | $($result.duration)s |" >> $env:GITHUB_STEP_SUMMARY
+          }
+          
+          Write-Host "" >> $env:GITHUB_STEP_SUMMARY
+          Write-Host "**Total:** $passed/$total passed" >> $env:GITHUB_STEP_SUMMARY
+
+      - name: Notify on failure
+        if: failure()
+        shell: pwsh
+        run: |
+          Write-Host "E2E tests failed - notification would be sent here"
+          # Здесь можно добавить интеграцию с Slack/Discord/Telegram

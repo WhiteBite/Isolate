@@ -25,10 +25,60 @@ Isolate — десктопное Windows-приложение для автом�
 
 ### Code Organization
 - Backend (Rust): `src-tauri/src/`
+  - `core/` — бизнес-логика (strategy_engine, scoring, models)
+  - `commands/` — Tauri IPC команды
+  - `services/` — сервисы (registry, checker)
+  - `plugins/` — система плагинов
 - Frontend (Svelte): `src/`
+  - `routes/` — страницы SvelteKit
+  - `lib/` — компоненты, stores, утилиты
 - Configs: `configs/strategies/`, `configs/services/`
 - Documentation: `docs/` (уже создана, НЕ добавлять новые .md без запроса)
 - Reference projects: `thirdparty/` (read-only, только для изучения)
+
+### Tauri IPC Architecture
+
+#### AppState Initialization (КРИТИЧНО!)
+- `AppState` инициализируется **асинхронно** в `setup()` через `tauri::async_runtime::spawn`
+- Фронтенд может загрузиться **ДО** готовности AppState (~300-500ms race condition)
+- **ВСЕГДА** используй `is_backend_ready` для проверки готовности перед вызовом команд
+- Команды без State (например `is_backend_ready`) работают сразу
+
+```rust
+// Команда БЕЗ State — работает сразу
+#[tauri::command]
+pub fn is_backend_ready(app: AppHandle) -> bool {
+    app.try_state::<Arc<AppState>>().is_some()
+}
+
+// Команда С State — требует готовности AppState
+#[tauri::command]
+pub async fn get_services(state: State<'_, Arc<AppState>>) -> Result<Vec<Service>, String> {
+    // ...
+}
+```
+
+#### Frontend Pattern для IPC
+```typescript
+// ПРАВИЛЬНО: ждём готовности бэкенда
+async function loadData(retries = 10) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const ready = await invoke<boolean>('is_backend_ready');
+      if (!ready) {
+        await new Promise(r => setTimeout(r, 200));
+        continue;
+      }
+      return await invoke<Data>('get_data');
+    } catch {
+      await new Promise(r => setTimeout(r, 200));
+    }
+  }
+}
+
+// НЕПРАВИЛЬНО: вызов без проверки готовности
+const data = await invoke<Data>('get_data'); // может упасть!
+```
 
 ### Rust Backend Rules
 - Async runtime: Tokio
@@ -37,12 +87,33 @@ Isolate — десктопное Windows-приложение для автом�
 - Logging: `tracing` crate
 - Модули должны быть изолированы с чёткими интерфейсами
 - Внешние процессы (winws, sing-box) запускать ТОЛЬКО через `process_runner.rs`
+- Новые Tauri commands регистрировать в `lib.rs` invoke_handler
 
-### Frontend Rules
+### Frontend Rules (Svelte 5 Runes)
 - SvelteKit с TypeScript (strict mode)
+- **Svelte 5 runes mode** — использовать `$state`, `$derived`, `$effect`
+- НЕ использовать устаревший синтаксис: `let x = value`, `$:`, `onMount` для реактивности
 - Стили: Tailwind CSS, никаких inline styles
-- State management: Svelte stores
-- Tauri API: использовать `@tauri-apps/api` для IPC
+- State management: Svelte stores + runes
+- Tauri API: использовать `@tauri-apps/api/core` для IPC
+
+```svelte
+<script lang="ts">
+  // ПРАВИЛЬНО: Svelte 5 runes
+  let services = $state<Service[]>([]);
+  let loading = $state(true);
+  let selected = $derived(services.find(s => s.id === selectedId));
+  
+  $effect(() => {
+    loadServices();
+  });
+
+  // НЕПРАВИЛЬНО: устаревший синтаксис
+  let services: Service[] = [];  // не реактивно в runes mode
+  $: selected = services.find(...);  // ошибка в runes mode
+  onMount(() => { ... });  // не вызывается при навигации
+</script>
+```
 
 ### Strategy Engine Critical Rules
 - **НИКОГДА** не запускать несколько winws/WinDivert процессов параллельно — это вызовет BSOD
@@ -88,8 +159,13 @@ interface Strategy {
   family: StrategyFamily;
 }
 
-// Async/await для Tauri commands
-const strategies = await invoke<Strategy[]>('get_strategies');
+// Async/await для Tauri commands с проверкой готовности
+async function loadStrategies() {
+  const ready = await invoke<boolean>('is_backend_ready');
+  if (ready) {
+    return await invoke<Strategy[]>('get_strategies');
+  }
+}
 ```
 
 ## Naming Conventions
@@ -107,9 +183,11 @@ const strategies = await invoke<Strategy[]>('get_strategies');
 
 ## Testing Strategy
 
-- Unit тесты для core логики (scoring, parsing)
+- Unit тесты для core логики (scoring, parsing, models)
 - НЕ создавать тесты автоматически — только по запросу
+- Тесты должны искать реальные баги, а не подгоняться под код
 - Интеграционные тесты для process_runner
+- `#[ignore]` для тестов требующих реальные файлы/сеть
 
 ## Dependencies Policy
 
@@ -135,6 +213,21 @@ const strategies = await invoke<Strategy[]>('get_strategies');
 - Таймауты на все сетевые операции (max 5 сек)
 - Graceful shutdown для всех процессов
 - Не блокировать UI во время тестирования стратегий
+- AppState инициализация ~300-500ms — учитывать в UX
+
+## Common Bugs & Solutions
+
+### "0 / 0 services" или пустые данные при загрузке
+**Причина:** Race condition — фронтенд вызывает команду до готовности AppState
+**Решение:** Использовать `is_backend_ready` + retry логику
+
+### Svelte компонент не обновляется при навигации
+**Причина:** `onMount` не вызывается при client-side навигации в SvelteKit
+**Решение:** Использовать `$effect` вместо `onMount`
+
+### WebView2 ошибки при HMR
+**Причина:** WebView2 теряет соединение при hot reload
+**Решение:** Перезапустить `pnpm tauri dev`
 
 ## Reference Projects (thirdparty/)
 

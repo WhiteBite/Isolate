@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::{broadcast, RwLock};
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, warn};
 
 use crate::core::errors::{IsolateError, Result};
 use crate::core::models::{
@@ -21,7 +21,7 @@ use crate::core::models::{
     StrategyScore,
 };
 use crate::core::storage::Storage;
-use crate::core::strategy_engine::{LaunchMode, SharedStrategyEngine};
+use crate::core::strategy_engine::SharedStrategyEngine;
 
 // ============================================================================
 // Constants
@@ -345,11 +345,22 @@ impl Orchestrator {
             .find(|s| s.id == best.strategy_id)
             .ok_or_else(|| IsolateError::StrategyNotFound(best.strategy_id.clone()))?;
 
-        self.engine.start_global(strategy).await?;
+        // Определяем режим применения по типу движка
+        let is_vless = matches!(strategy.engine, EngineType::SingBox | EngineType::Xray);
+
+        if is_vless {
+            // VLESS применяем в SOCKS режиме
+            let port = self.engine.start_socks(strategy).await?;
+            info!(strategy_id = %best.strategy_id, port = port, "Applied VLESS strategy in SOCKS mode");
+        } else {
+            // Zapret применяем в GLOBAL режиме
+            self.engine.start_global(strategy).await?;
+            info!(strategy_id = %best.strategy_id, "Applied Zapret strategy in GLOBAL mode");
+        }
 
         // Сохраняем в кэш
         self.storage
-            .cache_strategy(&env_key, &best.strategy_id, best.score)?;
+            .cache_strategy(&env_key, &best.strategy_id, best.score).await?;
 
         self.emit_progress(
             OptimizationProgress::new(
@@ -376,7 +387,7 @@ impl Orchestrator {
         env_key: &str,
         strategies: &[Strategy],
     ) -> Result<Option<OptimizationResult>> {
-        if let Some(cached) = self.storage.get_cached_strategy(env_key)? {
+        if let Some(cached) = self.storage.get_cached_strategy(env_key).await? {
             // Проверяем, что стратегия всё ещё существует
             if let Some(strategy) = strategies.iter().find(|s| s.id == cached.strategy_id) {
                 info!(
@@ -534,8 +545,8 @@ impl Orchestrator {
                 .with_counts(idx as u32, total as u32),
             );
 
-            // Тестируем стратегию
-            match test_strategy_socks(&self.engine, strategy, services).await {
+            // Тестируем стратегию в GLOBAL-режиме (Zapret не поддерживает SOCKS)
+            match test_strategy_global(&self.engine, strategy, services).await {
                 Ok(score) => {
                     debug!(
                         strategy_id = %strategy.id,
@@ -640,14 +651,14 @@ impl Orchestrator {
 // Helper Functions
 // ============================================================================
 
-/// Тестирует стратегию в SOCKS-режиме
+/// Тестирует стратегию в SOCKS-режиме (для VLESS)
 async fn test_strategy_socks(
     engine: &SharedStrategyEngine,
     strategy: &Strategy,
     _services: &[String],
 ) -> Result<StrategyScore> {
     // Запускаем стратегию в SOCKS-режиме
-    let port = engine.start_socks(strategy).await?;
+    let _port = engine.start_socks(strategy).await?;
 
     // Даём время на инициализацию
     tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
@@ -665,6 +676,35 @@ async fn test_strategy_socks(
 
     // Останавливаем стратегию
     engine.stop_socks(&strategy.id).await?;
+
+    Ok(score)
+}
+
+/// Тестирует стратегию в GLOBAL-режиме (для Zapret)
+async fn test_strategy_global(
+    engine: &SharedStrategyEngine,
+    strategy: &Strategy,
+    _services: &[String],
+) -> Result<StrategyScore> {
+    // Запускаем стратегию в GLOBAL-режиме
+    engine.start_global(strategy).await?;
+
+    // Даём время на инициализацию
+    tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+
+    // TODO: Реализовать реальное тестирование доступности сервисов
+    // Пока возвращаем заглушку
+    let score = StrategyScore {
+        strategy_id: strategy.id.clone(),
+        success_rate: 0.8,
+        critical_success_rate: 1.0,
+        latency_avg: 100.0,
+        latency_jitter: 15.0,
+        score: 0.80,
+    };
+
+    // Останавливаем стратегию
+    engine.stop_global().await?;
 
     Ok(score)
 }

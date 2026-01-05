@@ -60,7 +60,7 @@ impl AppRouter {
             proxy_id: proxy_id.to_string(),
         };
 
-        self.storage.save_app_route(&route)?;
+        self.storage.save_app_route(&route).await?;
         info!(app_name = %app_name, app_path = %app_path, proxy_id = %proxy_id, "App route added");
 
         Ok(())
@@ -69,14 +69,14 @@ impl AppRouter {
     /// Remove an application route
     pub async fn remove_route(&self, app_path: &str) -> Result<()> {
         let app_path = Self::normalize_path(app_path);
-        self.storage.delete_app_route(&app_path)?;
+        self.storage.delete_app_route(&app_path).await?;
         info!(app_path = %app_path, "App route removed");
         Ok(())
     }
 
     /// Get all application routes
     pub async fn get_routes(&self) -> Result<Vec<AppRoute>> {
-        self.storage.get_app_routes()
+        self.storage.get_app_routes().await
     }
 
     /// Get list of installed applications (Windows)
@@ -456,7 +456,8 @@ mod tests {
 
     #[test]
     fn test_generate_rules() {
-        let storage = Arc::new(Storage::new().unwrap());
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let storage = Arc::new(rt.block_on(Storage::new()).unwrap());
         let router = AppRouter::new(storage);
 
         let routes = vec![

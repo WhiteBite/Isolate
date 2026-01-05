@@ -38,7 +38,7 @@ impl DomainRouter {
             proxy_id: proxy_id.to_string(),
         };
 
-        self.storage.save_domain_route(&route)?;
+        self.storage.save_domain_route(&route).await?;
         info!(domain = %domain, proxy_id = %proxy_id, "Domain route added");
         
         Ok(())
@@ -47,14 +47,14 @@ impl DomainRouter {
     /// Remove a domain route
     pub async fn remove_route(&self, domain: &str) -> Result<()> {
         let domain = Self::normalize_domain(domain);
-        self.storage.delete_domain_route(&domain)?;
+        self.storage.delete_domain_route(&domain).await?;
         info!(domain = %domain, "Domain route removed");
         Ok(())
     }
 
     /// Get all domain routes
     pub async fn get_routes(&self) -> Result<Vec<DomainRoute>> {
-        self.storage.get_domain_routes()
+        self.storage.get_domain_routes().await
     }
 
     /// Generate sing-box routing rules from domain routes
@@ -199,7 +199,8 @@ mod tests {
 
     #[test]
     fn test_generate_rules() {
-        let storage = Arc::new(Storage::new().unwrap());
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let storage = Arc::new(rt.block_on(Storage::new()).unwrap());
         let router = DomainRouter::new(storage);
 
         let routes = vec![

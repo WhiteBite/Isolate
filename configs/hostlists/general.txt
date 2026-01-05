@@ -1,41 +1,6 @@
-# Isolate General Hostlist
-# Commonly blocked domains for DPI bypass
-# Format: one domain per line
+# Cloudflare domains for ECH (Encrypted Client Hello) support
+# Source: zapret-discord-youtube project
 
-# === Discord ===
-dis.gd
-discord.app
-discord.co
-discord.com
-discord.design
-discord.dev
-discord.gift
-discord.gifts
-discord.gg
-discord.media
-discord.new
-discord.store
-discord.status
-discord-activities.com
-discordactivities.com
-discordapp.com
-discordapp.net
-discordcdn.com
-discordmerch.com
-discordpartygames.com
-discordsays.com
-discordsez.com
-discordstatus.com
-discord-attachments-uploads-prd.storage.googleapis.com
-
-# === Discord Extensions ===
-frankerfacez.com
-ffzap.com
-betterttv.net
-7tv.app
-7tv.io
-
-# === Cloudflare ECH ===
 cloudflare-ech.com
 encryptedsni.com
 cloudflareaccess.com
@@ -54,21 +19,40 @@ cloudflarestorage.com
 cloudflarestream.com
 cloudflaretest.com
 
-# === Telegram ===
-telegram.org
-telegram.me
-t.me
-telegram.dog
-telegra.ph
-telesco.pe
-tdesktop.com
-tg.dev
-tx.me
-web.telegram.org
-desktop.telegram.org
+# Discord domains
+# Core Discord domains
+dis.gd
+discord.app
+discord.co
+discord.com
+discord.design
+discord.dev
+discord.gift
+discord.gifts
+discord.gg
+discord.media
+discord.new
+discord.store
+discord.status
+discordapp.com
+discordapp.net
+discordcdn.com
+discordmerch.com
+discordstatus.com
 
-# === Other Services ===
-rutracker.org
-nnmclub.to
-spotify.com
-open.spotify.com
+# Discord activities and games
+discord-activities.com
+discordactivities.com
+discordpartygames.com
+discordsays.com
+discordsez.com
+
+# Discord storage
+discord-attachments-uploads-prd.storage.googleapis.com
+
+# Third-party Discord extensions (emotes, etc.)
+frankerfacez.com
+ffzap.com
+betterttv.net
+7tv.app
+7tv.io

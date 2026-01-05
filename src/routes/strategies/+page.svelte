@@ -3,24 +3,52 @@
   import { appStatus } from '$lib/stores';
 
   // Types
+  type Category = 'all' | 'youtube' | 'discord' | 'telegram' | 'general' | 'games' | 'custom';
+  type Label = 'recommended' | 'experimental' | 'stable' | null;
+
   interface Strategy {
     id: string;
     name: string;
     family: 'zapret' | 'vless' | 'custom';
+    category: Category;
     description: string;
     services: string[];
     score: number | null;
     lastTested: Date | null;
     isActive: boolean;
+    label: Label;
+    author: string;
   }
+
+  interface CategoryInfo {
+    id: Category;
+    name: string;
+    icon: string;
+  }
+
+  // Categories configuration
+  const categories: CategoryInfo[] = [
+    { id: 'all', name: 'Все', icon: '📋' },
+    { id: 'youtube', name: 'YouTube', icon: '📺' },
+    { id: 'discord', name: 'Discord', icon: '💬' },
+    { id: 'telegram', name: 'Telegram', icon: '✈️' },
+    { id: 'general', name: 'Общие', icon: '🌐' },
+    { id: 'games', name: 'Игры', icon: '🎮' },
+    { id: 'custom', name: 'Свои', icon: '⚙️' }
+  ];
+
+  // Family filter type
+  type FamilyFilter = 'all' | 'zapret' | 'vless';
 
   // State using Svelte 5 runes
   let strategies = $state<Strategy[]>([]);
-  let loading = $state(true);
+  let loading = $state(false);  // Start false, set true when loading
   let error = $state<string | null>(null);
   let searchQuery = $state('');
-  let filterFamily = $state<'all' | 'zapret' | 'vless' | 'custom'>('all');
+  let selectedCategory = $state<Category>('all');
+  let selectedFamily = $state<FamilyFilter>('all');
   let applyingStrategy = $state<string | null>(null);
+  let selectedStrategyDetails = $state<Strategy | null>(null);
 
   // Local store values
   let appStatusValue = $state<{isActive: boolean; currentStrategy: string | null; currentStrategyName: string | null}>({
@@ -34,15 +62,25 @@
     strategies.filter(s => {
       const matchesSearch = s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                            s.description.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesFamily = filterFamily === 'all' || s.family === filterFamily;
-      return matchesSearch && matchesFamily;
+      const matchesCategory = selectedCategory === 'all' || s.category === selectedCategory;
+      const matchesFamily = selectedFamily === 'all' || s.family === selectedFamily;
+      return matchesSearch && matchesCategory && matchesFamily;
     })
   );
 
+  // Count strategies by family
   let strategiesByFamily = $derived({
-    zapret: filteredStrategies.filter(s => s.family === 'zapret'),
-    vless: filteredStrategies.filter(s => s.family === 'vless'),
-    custom: filteredStrategies.filter(s => s.family === 'custom')
+    zapret: strategies.filter(s => s.family === 'zapret').length,
+    vless: strategies.filter(s => s.family === 'vless').length
+  });
+
+  let strategiesByCategory = $derived({
+    youtube: strategies.filter(s => s.category === 'youtube').length,
+    discord: strategies.filter(s => s.category === 'discord').length,
+    telegram: strategies.filter(s => s.category === 'telegram').length,
+    general: strategies.filter(s => s.category === 'general').length,
+    games: strategies.filter(s => s.category === 'games').length,
+    custom: strategies.filter(s => s.category === 'custom').length
   });
 
   function getDemoStrategies(): Strategy[] {
@@ -51,31 +89,79 @@
         id: 'discord-zapret-1',
         name: 'Discord Zapret Basic',
         family: 'zapret',
-        description: 'Базовая стратегия для Discord через Zapret',
+        category: 'discord',
+        description: 'Базовая стратегия для Discord через Zapret. Работает с голосовыми каналами и текстовыми чатами.',
         services: ['discord'],
         score: 85,
         lastTested: new Date(),
-        isActive: false
+        isActive: false,
+        label: 'recommended',
+        author: 'Isolate Team'
       },
       {
         id: 'youtube-zapret-1',
         name: 'YouTube Zapret',
         family: 'zapret',
-        description: 'Обход блокировки YouTube',
+        category: 'youtube',
+        description: 'Обход блокировки YouTube. Поддерживает просмотр видео и стримов.',
         services: ['youtube'],
         score: 78,
         lastTested: new Date(),
-        isActive: false
+        isActive: false,
+        label: 'stable',
+        author: 'Community'
       },
       {
         id: 'universal-vless-1',
         name: 'Universal VLESS',
         family: 'vless',
-        description: 'Универсальная VLESS стратегия для всех сервисов',
+        category: 'general',
+        description: 'Универсальная VLESS стратегия для всех сервисов. Высокая стабильность и скорость.',
         services: ['discord', 'youtube', 'telegram'],
         score: 95,
         lastTested: new Date(),
-        isActive: false
+        isActive: false,
+        label: 'recommended',
+        author: 'Isolate Team'
+      },
+      {
+        id: 'telegram-zapret-1',
+        name: 'Telegram Zapret',
+        family: 'zapret',
+        category: 'telegram',
+        description: 'Стратегия для Telegram. Поддерживает все функции мессенджера.',
+        services: ['telegram'],
+        score: 82,
+        lastTested: new Date(),
+        isActive: false,
+        label: 'stable',
+        author: 'Community'
+      },
+      {
+        id: 'games-vless-1',
+        name: 'Gaming VLESS',
+        family: 'vless',
+        category: 'games',
+        description: 'Оптимизированная стратегия для онлайн-игр с низким пингом.',
+        services: ['steam', 'epic', 'riot'],
+        score: 88,
+        lastTested: new Date(),
+        isActive: false,
+        label: 'experimental',
+        author: 'GameDev'
+      },
+      {
+        id: 'custom-user-1',
+        name: 'Custom Strategy',
+        family: 'custom',
+        category: 'custom',
+        description: 'Пользовательская стратегия с настраиваемыми параметрами.',
+        services: ['custom'],
+        score: null,
+        lastTested: null,
+        isActive: false,
+        label: null,
+        author: 'User'
       }
     ];
   }
@@ -115,11 +201,14 @@
           id: s.id,
           name: s.name,
           family: (s.engine === 'sing_box' ? 'vless' : s.engine) as 'zapret' | 'vless' | 'custom',
+          category: mapServiceToCategory(s.services),
           description: s.description || '',
           services: s.services || [],
           score: s.score,
           lastTested: s.last_tested ? new Date(s.last_tested) : null,
-          isActive: appStatusValue.currentStrategy === s.id
+          isActive: appStatusValue.currentStrategy === s.id,
+          label: s.label || null,
+          author: s.author || 'Unknown'
         }));
       } else {
         strategies = getDemoStrategies();
@@ -131,6 +220,17 @@
     } finally {
       loading = false;
     }
+  }
+
+  function mapServiceToCategory(services: string[]): Category {
+    if (!services || services.length === 0) return 'general';
+    const service = services[0].toLowerCase();
+    if (service.includes('youtube')) return 'youtube';
+    if (service.includes('discord')) return 'discord';
+    if (service.includes('telegram')) return 'telegram';
+    if (service.includes('steam') || service.includes('epic') || service.includes('riot') || service.includes('game')) return 'games';
+    if (service.includes('custom')) return 'custom';
+    return 'general';
   }
 
   async function applyStrategy(strategyId: string) {
@@ -151,7 +251,6 @@
         currentStrategyName: strategy?.name ?? null
       });
 
-      // Update local state
       strategies = strategies.map(s => ({
         ...s,
         isActive: s.id === strategyId
@@ -215,6 +314,14 @@
     }
   }
 
+  function showDetails(strategy: Strategy) {
+    selectedStrategyDetails = strategy;
+  }
+
+  function closeDetails() {
+    selectedStrategyDetails = null;
+  }
+
   function getFamilyColor(family: string): string {
     switch (family) {
       case 'zapret': return '#00d4ff';
@@ -224,12 +331,24 @@
     }
   }
 
-  function getFamilyIcon(family: string): string {
-    switch (family) {
-      case 'zapret': return 'M13 10V3L4 14h7v7l9-11h-7z';
-      case 'vless': return 'M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0';
-      case 'custom': return 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z';
-      default: return '';
+  function getCategoryColor(category: Category): string {
+    switch (category) {
+      case 'youtube': return '#ff0000';
+      case 'discord': return '#5865f2';
+      case 'telegram': return '#0088cc';
+      case 'general': return '#00d4ff';
+      case 'games': return '#9b59b6';
+      case 'custom': return '#ffaa00';
+      default: return '#a0a0a0';
+    }
+  }
+
+  function getLabelInfo(label: Label): { text: string; color: string; bg: string } {
+    switch (label) {
+      case 'recommended': return { text: 'Рекомендуется', color: '#00ff88', bg: '#00ff88' };
+      case 'experimental': return { text: 'Экспериментальная', color: '#ffaa00', bg: '#ffaa00' };
+      case 'stable': return { text: 'Стабильная', color: '#00d4ff', bg: '#00d4ff' };
+      default: return { text: '', color: '', bg: '' };
     }
   }
 
@@ -275,48 +394,86 @@
     {/if}
   </div>
 
-  <!-- Search and Filters -->
-  <div class="flex items-center gap-4">
-    <!-- Search -->
-    <div class="flex-1 relative">
-      <svg class="w-5 h-5 text-[#a0a0a0] absolute left-4 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-      </svg>
-      <input
-        type="text"
-        bind:value={searchQuery}
-        placeholder="Поиск стратегий..."
-        class="w-full bg-[#1a1f3a] text-white rounded-xl pl-12 pr-4 py-3 border border-[#2a2f4a] focus:border-[#00d4ff] focus:outline-none placeholder-[#a0a0a0]"
-      />
-    </div>
-
-    <!-- Family Filter -->
-    <div class="flex items-center gap-2 bg-[#1a1f3a] rounded-xl p-1 border border-[#2a2f4a]">
+  <!-- Category Tabs -->
+  <div class="flex flex-wrap gap-2">
+    {#each categories as cat}
       <button
-        onclick={() => filterFamily = 'all'}
-        class="px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 {filterFamily === 'all' ? 'bg-[#2a2f4a] text-white' : 'text-[#a0a0a0] hover:text-white'}"
+        onclick={() => selectedCategory = cat.id}
+        class="px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 flex items-center gap-2
+          {selectedCategory === cat.id 
+            ? 'bg-[#00d4ff] text-white shadow-lg shadow-[#00d4ff]/20' 
+            : 'bg-[#1a1f3a] text-[#a0a0a0] hover:bg-[#2a2f4a] hover:text-white border border-[#2a2f4a]'}"
+      >
+        <span class="text-base">{cat.icon}</span>
+        <span>{cat.name}</span>
+        {#if cat.id !== 'all'}
+          <span class="px-1.5 py-0.5 text-xs rounded-md {selectedCategory === cat.id ? 'bg-white/20' : 'bg-[#2a2f4a]'}">
+            {strategiesByCategory[cat.id] || 0}
+          </span>
+        {/if}
+      </button>
+    {/each}
+  </div>
+
+  <!-- Family Filter (Zapret/VLESS) -->
+  <div class="flex items-center gap-4">
+    <span class="text-[#a0a0a0] text-sm">Тип:</span>
+    <div class="flex gap-2 p-1 bg-[#0d1229] rounded-xl border border-[#2a2f4a]">
+      <button
+        onclick={() => selectedFamily = 'all'}
+        class="px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200
+          {selectedFamily === 'all' 
+            ? 'bg-[#2a2f4a] text-white' 
+            : 'text-[#a0a0a0] hover:text-white'}"
       >
         Все
       </button>
       <button
-        onclick={() => filterFamily = 'zapret'}
-        class="px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 {filterFamily === 'zapret' ? 'bg-[#00d4ff]/20 text-[#00d4ff]' : 'text-[#a0a0a0] hover:text-white'}"
+        onclick={() => selectedFamily = 'zapret'}
+        class="px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center gap-2
+          {selectedFamily === 'zapret' 
+            ? 'bg-[#00d4ff]/20 text-[#00d4ff]' 
+            : 'text-[#a0a0a0] hover:text-[#00d4ff]'}"
       >
+        <span class="w-2 h-2 rounded-full bg-[#00d4ff]"></span>
         Zapret
+        <span class="text-xs opacity-70">({strategiesByFamily.zapret})</span>
       </button>
       <button
-        onclick={() => filterFamily = 'vless'}
-        class="px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 {filterFamily === 'vless' ? 'bg-[#00ff88]/20 text-[#00ff88]' : 'text-[#a0a0a0] hover:text-white'}"
+        onclick={() => selectedFamily = 'vless'}
+        class="px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center gap-2
+          {selectedFamily === 'vless' 
+            ? 'bg-[#00ff88]/20 text-[#00ff88]' 
+            : 'text-[#a0a0a0] hover:text-[#00ff88]'}"
       >
+        <span class="w-2 h-2 rounded-full bg-[#00ff88]"></span>
         VLESS
-      </button>
-      <button
-        onclick={() => filterFamily = 'custom'}
-        class="px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 {filterFamily === 'custom' ? 'bg-[#ffaa00]/20 text-[#ffaa00]' : 'text-[#a0a0a0] hover:text-white'}"
-      >
-        Custom
+        <span class="text-xs opacity-70">({strategiesByFamily.vless})</span>
       </button>
     </div>
+  </div>
+
+  <!-- Search -->
+  <div class="relative group">
+    <svg class="w-5 h-5 text-[#a0a0a0] absolute left-4 top-1/2 -translate-y-1/2 transition-colors group-focus-within:text-[#00d4ff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+    </svg>
+    <input
+      type="text"
+      bind:value={searchQuery}
+      placeholder="Поиск по названию или описанию..."
+      class="w-full bg-[#0d1229] text-white rounded-xl pl-12 pr-12 py-3.5 border border-[#2a2f4a] focus:border-[#00d4ff] focus:outline-none focus:ring-1 focus:ring-[#00d4ff]/30 placeholder-[#a0a0a0]/70 transition-all"
+    />
+    {#if searchQuery}
+      <button
+        onclick={() => searchQuery = ''}
+        class="absolute right-4 top-1/2 -translate-y-1/2 p-1 text-[#a0a0a0] hover:text-white transition-colors"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    {/if}
   </div>
 
   <!-- Loading State -->
@@ -347,72 +504,100 @@
     </div>
   {:else}
     <!-- Strategies Grid -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
       {#each filteredStrategies as strategy}
+        {@const familyColor = getFamilyColor(strategy.family)}
         <div 
-          class="bg-[#1a1f3a] rounded-xl p-5 border transition-all duration-200 hover:border-[{getFamilyColor(strategy.family)}]/50 {strategy.isActive ? 'border-[#00ff88] ring-1 ring-[#00ff88]/20' : 'border-[#2a2f4a]'}"
+          class="group relative bg-gradient-to-br from-[#1a1f3a] to-[#0d1229] rounded-2xl p-5 border transition-all duration-300 hover:-translate-y-1
+            {strategy.isActive 
+              ? 'border-[#00ff88]/50 shadow-[0_0_30px_rgba(0,255,136,0.15)]' 
+              : 'border-[#2a2f4a] hover:border-[#00d4ff]/30 hover:shadow-[0_0_20px_rgba(0,212,255,0.1)]'}"
+          style="{strategy.isActive ? 'box-shadow: 0 0 40px rgba(0,255,136,0.2), inset 0 1px 0 rgba(0,255,136,0.1);' : ''}"
         >
-          <!-- Header -->
-          <div class="flex items-start justify-between mb-4">
-            <div class="flex items-center gap-3">
-              <div 
-                class="w-10 h-10 rounded-lg flex items-center justify-center"
-                style="background: {getFamilyColor(strategy.family)}20"
+          <!-- Glow effect for active strategy -->
+          {#if strategy.isActive}
+            <div class="absolute inset-0 rounded-2xl bg-gradient-to-br from-[#00ff88]/5 to-transparent pointer-events-none"></div>
+          {/if}
+          
+          <!-- Glass overlay on hover -->
+          <div class="absolute inset-0 rounded-2xl bg-gradient-to-br from-white/[0.02] to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
+          
+          <!-- Header with Category Badge -->
+          <div class="relative flex items-start justify-between mb-3">
+            <div class="flex items-center gap-2 flex-wrap">
+              <!-- Family Badge with glow -->
+              <span 
+                class="px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wide flex items-center gap-1.5"
+                style="background: {familyColor}15; color: {familyColor}; box-shadow: 0 0 10px {familyColor}20;"
               >
-                <svg class="w-5 h-5" style="color: {getFamilyColor(strategy.family)}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d={getFamilyIcon(strategy.family)}/>
-                </svg>
-              </div>
-              <div>
-                <h3 class="text-white font-semibold">{strategy.name}</h3>
+                <span class="w-1.5 h-1.5 rounded-full" style="background: {familyColor}; box-shadow: 0 0 6px {familyColor};"></span>
+                {strategy.family}
+              </span>
+              
+              <!-- Category Badge -->
+              <span 
+                class="px-2 py-1 rounded-lg text-xs font-medium flex items-center gap-1"
+                style="background: {getCategoryColor(strategy.category)}15; color: {getCategoryColor(strategy.category)}"
+              >
+                {categories.find(c => c.id === strategy.category)?.icon || '🌐'}
+              </span>
+              
+              <!-- Label Badge -->
+              {#if strategy.label}
+                {@const labelInfo = getLabelInfo(strategy.label)}
                 <span 
-                  class="text-xs font-medium px-2 py-0.5 rounded"
-                  style="background: {getFamilyColor(strategy.family)}20; color: {getFamilyColor(strategy.family)}"
+                  class="px-2 py-1 rounded-lg text-xs font-medium"
+                  style="background: {labelInfo.bg}12; color: {labelInfo.color}"
                 >
-                  {strategy.family.toUpperCase()}
+                  {labelInfo.text}
                 </span>
-              </div>
+              {/if}
             </div>
             
             {#if strategy.isActive}
-              <div class="flex items-center gap-1 px-2 py-1 bg-[#00ff88]/10 rounded-full">
-                <div class="w-2 h-2 rounded-full bg-[#00ff88] animate-pulse"></div>
-                <span class="text-[#00ff88] text-xs font-medium">Активна</span>
+              <div class="flex items-center gap-1.5 px-2.5 py-1 bg-[#00ff88]/15 rounded-full border border-[#00ff88]/30">
+                <div class="w-2 h-2 rounded-full bg-[#00ff88] animate-pulse shadow-[0_0_8px_#00ff88]"></div>
+                <span class="text-[#00ff88] text-xs font-semibold">Активна</span>
               </div>
             {/if}
           </div>
 
+          <!-- Title -->
+          <h3 class="relative text-white font-semibold text-lg mb-2 group-hover:text-[#00d4ff] transition-colors">{strategy.name}</h3>
+
           <!-- Description -->
-          <p class="text-[#a0a0a0] text-sm mb-4 line-clamp-2">{strategy.description}</p>
+          <p class="relative text-[#a0a0a0] text-sm mb-4 line-clamp-2 leading-relaxed">{strategy.description}</p>
 
-          <!-- Services -->
-          <div class="flex flex-wrap gap-1 mb-4">
-            {#each strategy.services as service}
-              <span class="px-2 py-1 bg-[#2a2f4a] text-[#a0a0a0] text-xs rounded">
-                {service}
-              </span>
-            {/each}
-          </div>
-
-          <!-- Score & Last Tested -->
-          <div class="flex items-center justify-between mb-4 text-sm">
+          <!-- Meta info row -->
+          <div class="relative flex items-center justify-between mb-4 py-3 px-3 bg-[#0a0e27]/50 rounded-xl border border-[#2a2f4a]/50">
+            <div class="flex items-center gap-2 text-sm">
+              <svg class="w-4 h-4 text-[#a0a0a0]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+              </svg>
+              <span class="text-[#a0a0a0]">{strategy.author}</span>
+            </div>
+            
             <div class="flex items-center gap-2">
-              <span class="text-[#a0a0a0]">Оценка:</span>
+              <span class="text-[#a0a0a0] text-sm">Оценка:</span>
               {#if strategy.score !== null}
-                <span class="font-mono font-bold" style="color: {getScoreColor(strategy.score)}">{strategy.score}%</span>
+                <span 
+                  class="font-mono font-bold text-sm px-2 py-0.5 rounded"
+                  style="color: {getScoreColor(strategy.score)}; background: {getScoreColor(strategy.score)}15;"
+                >
+                  {strategy.score}%
+                </span>
               {:else}
-                <span class="text-[#a0a0a0]">—</span>
+                <span class="text-[#a0a0a0] text-sm">—</span>
               {/if}
             </div>
-            <span class="text-[#a0a0a0] text-xs">{formatDate(strategy.lastTested)}</span>
           </div>
 
           <!-- Actions -->
-          <div class="flex gap-2">
+          <div class="relative flex gap-2">
             {#if strategy.isActive}
               <button
                 onclick={stopStrategy}
-                class="flex-1 px-4 py-2 bg-[#2a2f4a] hover:bg-[#3a3f5a] text-white rounded-lg text-sm font-medium transition-all duration-200"
+                class="flex-1 px-4 py-2.5 bg-[#2a2f4a] hover:bg-[#3a3f5a] text-white rounded-xl text-sm font-medium transition-all duration-200 border border-[#3a3f5a]"
               >
                 Отключить
               </button>
@@ -420,8 +605,7 @@
               <button
                 onclick={() => applyStrategy(strategy.id)}
                 disabled={applyingStrategy === strategy.id}
-                class="flex-1 px-4 py-2 text-white rounded-lg text-sm font-medium transition-all duration-200 disabled:opacity-50"
-                style="background: {getFamilyColor(strategy.family)}"
+                class="flex-1 px-4 py-2.5 bg-gradient-to-r from-[#00d4ff] to-[#00b8e0] hover:from-[#00b8e0] hover:to-[#0099cc] text-white rounded-xl text-sm font-semibold transition-all duration-200 disabled:opacity-50 shadow-lg shadow-[#00d4ff]/20 hover:shadow-[#00d4ff]/30"
               >
                 {#if applyingStrategy === strategy.id}
                   <svg class="w-4 h-4 animate-spin mx-auto" fill="none" viewBox="0 0 24 24">
@@ -433,13 +617,24 @@
                 {/if}
               </button>
             {/if}
+            
             <button
               onclick={() => testStrategy(strategy.id)}
-              class="px-4 py-2 bg-[#2a2f4a] hover:bg-[#3a3f5a] text-[#a0a0a0] hover:text-white rounded-lg text-sm transition-all duration-200"
+              class="px-3 py-2.5 bg-[#2a2f4a] hover:bg-[#3a3f5a] text-[#a0a0a0] hover:text-[#00d4ff] rounded-xl text-sm transition-all duration-200 border border-[#3a3f5a] hover:border-[#00d4ff]/30"
               title="Тестировать"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+            </button>
+            
+            <button
+              onclick={() => showDetails(strategy)}
+              class="px-3 py-2.5 bg-[#2a2f4a] hover:bg-[#3a3f5a] text-[#a0a0a0] hover:text-white rounded-xl text-sm transition-all duration-200 border border-[#3a3f5a]"
+              title="Детали"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
               </svg>
             </button>
           </div>
@@ -450,31 +645,150 @@
 
   <!-- Stats Footer -->
   {#if !loading && !error}
-    <div class="bg-[#1a1f3a] rounded-xl p-4 border border-[#2a2f4a]">
+    <div class="bg-gradient-to-r from-[#1a1f3a] to-[#0d1229] rounded-xl p-4 border border-[#2a2f4a]">
       <div class="flex items-center justify-between text-sm">
         <div class="flex items-center gap-6">
           <span class="text-[#a0a0a0]">
             Всего: <span class="text-white font-medium">{strategies.length}</span>
           </span>
           <span class="text-[#a0a0a0]">
-            Zapret: <span class="text-[#00d4ff] font-medium">{strategiesByFamily.zapret.length}</span>
+            Показано: <span class="text-white font-medium">{filteredStrategies.length}</span>
           </span>
-          <span class="text-[#a0a0a0]">
-            VLESS: <span class="text-[#00ff88] font-medium">{strategiesByFamily.vless.length}</span>
+          <span class="text-[#a0a0a0] flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-[#00d4ff]"></span>
+            Zapret: <span class="text-[#00d4ff] font-medium">{strategiesByFamily.zapret}</span>
           </span>
-          <span class="text-[#a0a0a0]">
-            Custom: <span class="text-[#ffaa00] font-medium">{strategiesByFamily.custom.length}</span>
+          <span class="text-[#a0a0a0] flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-[#00ff88]"></span>
+            VLESS: <span class="text-[#00ff88] font-medium">{strategiesByFamily.vless}</span>
           </span>
         </div>
         <a 
           href="/testing"
-          class="text-[#00d4ff] hover:underline flex items-center gap-1"
+          class="text-[#00d4ff] hover:text-[#00b8e0] flex items-center gap-1 transition-colors"
         >
           Тестирование
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
           </svg>
         </a>
+      </div>
+    </div>
+  {/if}
+
+  <!-- Details Modal -->
+  {#if selectedStrategyDetails}
+    <div 
+      class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      onclick={closeDetails}
+    >
+      <div 
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="strategy-details-title"
+        class="bg-[#1a1f3a] rounded-2xl p-6 max-w-lg w-full border border-[#2a2f4a] shadow-2xl"
+        onclick={(e) => e.stopPropagation()}
+      >
+        <!-- Modal Header -->
+        <div class="flex items-start justify-between mb-4">
+          <div>
+            <h2 id="strategy-details-title" class="text-xl font-bold text-white">{selectedStrategyDetails.name}</h2>
+            <div class="flex items-center gap-2 mt-2">
+              <span 
+                class="px-2.5 py-1 rounded-lg text-xs font-medium"
+                style="background: {getCategoryColor(selectedStrategyDetails.category)}20; color: {getCategoryColor(selectedStrategyDetails.category)}"
+              >
+                {categories.find(c => c.id === selectedStrategyDetails?.category)?.icon} {categories.find(c => c.id === selectedStrategyDetails?.category)?.name}
+              </span>
+              <span 
+                class="px-2 py-0.5 rounded text-xs font-medium"
+                style="background: {getFamilyColor(selectedStrategyDetails.family)}20; color: {getFamilyColor(selectedStrategyDetails.family)}"
+              >
+                {selectedStrategyDetails.family.toUpperCase()}
+              </span>
+            </div>
+          </div>
+          <button
+            onclick={closeDetails}
+            aria-label="Закрыть"
+            class="p-2 hover:bg-[#2a2f4a] rounded-lg transition-colors"
+          >
+            <svg class="w-5 h-5 text-[#a0a0a0]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Modal Content -->
+        <div class="space-y-4">
+          <div>
+            <h4 class="text-[#a0a0a0] text-sm mb-1">Описание</h4>
+            <p class="text-white">{selectedStrategyDetails.description}</p>
+          </div>
+          
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <h4 class="text-[#a0a0a0] text-sm mb-1">Автор</h4>
+              <p class="text-white">{selectedStrategyDetails.author}</p>
+            </div>
+            <div>
+              <h4 class="text-[#a0a0a0] text-sm mb-1">Оценка</h4>
+              {#if selectedStrategyDetails.score !== null}
+                <p class="font-mono font-bold" style="color: {getScoreColor(selectedStrategyDetails.score)}">{selectedStrategyDetails.score}%</p>
+              {:else}
+                <p class="text-[#a0a0a0]">Не тестировалась</p>
+              {/if}
+            </div>
+          </div>
+          
+          <div>
+            <h4 class="text-[#a0a0a0] text-sm mb-2">Сервисы</h4>
+            <div class="flex flex-wrap gap-2">
+              {#each selectedStrategyDetails.services as service}
+                <span class="px-3 py-1.5 bg-[#2a2f4a] text-white text-sm rounded-lg">
+                  {service}
+                </span>
+              {/each}
+            </div>
+          </div>
+          
+          <div>
+            <h4 class="text-[#a0a0a0] text-sm mb-1">Последнее тестирование</h4>
+            <p class="text-white">{formatDate(selectedStrategyDetails.lastTested)}</p>
+          </div>
+          
+          {#if selectedStrategyDetails.label}
+            {@const labelInfo = getLabelInfo(selectedStrategyDetails.label)}
+            <div class="p-3 rounded-lg" style="background: {labelInfo.bg}10; border: 1px solid {labelInfo.bg}30">
+              <span class="font-medium" style="color: {labelInfo.color}">{labelInfo.text}</span>
+            </div>
+          {/if}
+        </div>
+
+        <!-- Modal Actions -->
+        <div class="flex gap-3 mt-6">
+          {#if selectedStrategyDetails.isActive}
+            <button
+              onclick={() => { stopStrategy(); closeDetails(); }}
+              class="flex-1 px-4 py-3 bg-[#2a2f4a] hover:bg-[#3a3f5a] text-white rounded-xl font-medium transition-all duration-200"
+            >
+              Отключить
+            </button>
+          {:else}
+            <button
+              onclick={() => { if (selectedStrategyDetails) { applyStrategy(selectedStrategyDetails.id); closeDetails(); } }}
+              class="flex-1 px-4 py-3 bg-[#00d4ff] hover:bg-[#00b8e0] text-white rounded-xl font-medium transition-all duration-200"
+            >
+              Применить
+            </button>
+          {/if}
+          <button
+            onclick={() => { if (selectedStrategyDetails) { testStrategy(selectedStrategyDetails.id); closeDetails(); } }}
+            class="px-4 py-3 bg-[#2a2f4a] hover:bg-[#3a3f5a] text-white rounded-xl font-medium transition-all duration-200"
+          >
+            Тестировать
+          </button>
+        </div>
       </div>
     </div>
   {/if}

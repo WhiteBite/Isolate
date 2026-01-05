@@ -21,9 +21,9 @@
   };
 </script>
 
-<div class="bg-gray-800 rounded-xl border border-gray-700 shadow-lg">
+<div class="bg-[#1a1f3a] rounded-xl border border-[#2a2f4a] shadow-lg">
   {#if title}
-    <div class="px-4 py-3 border-b border-gray-700">
+    <div class="px-4 py-3 border-b border-[#2a2f4a]">
       <h3 class="text-lg font-semibold text-white">{title}</h3>
     </div>
   {/if}

@@ -54,6 +54,7 @@ pub fn run() {
         "Starting Isolate..."
     );
 
+    #[allow(unused_mut)]
     let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_updater::Builder::new().build());

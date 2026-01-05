@@ -311,7 +311,7 @@
 {#if showDetails && selectedPlugin}
   {@const contributions = getContributionsSummary(selectedPlugin)}
   
-  <Modal title={selectedPlugin.manifest.name} onclose={() => showDetails = false}>
+  <Modal open={showDetails} title={selectedPlugin.manifest.name} onclose={() => showDetails = false}>
     <div class="space-y-5">
       <!-- Header -->
       <div class="flex items-center gap-4">

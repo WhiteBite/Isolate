@@ -6,6 +6,8 @@
     size?: 'sm' | 'md' | 'lg';
     disabled?: boolean;
     loading?: boolean;
+    class?: string;
+    title?: string;
     onclick?: () => void;
     children?: Snippet;
   }
@@ -14,7 +16,9 @@
     variant = 'primary', 
     size = 'md', 
     disabled = false, 
-    loading = false, 
+    loading = false,
+    class: className = '',
+    title,
     onclick,
     children 
   }: Props = $props();
@@ -34,12 +38,13 @@
     lg: 'px-6 py-3 text-lg gap-2.5'
   };
 
-  const classes = $derived(`${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]}`);
+  const classes = $derived(`${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${className}`);
 </script>
 
 <button
   class={classes}
   disabled={disabled || loading}
+  {title}
   onclick={onclick}
 >
   {#if loading}

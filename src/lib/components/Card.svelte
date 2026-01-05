@@ -4,12 +4,14 @@
   interface Props {
     title?: string;
     padding?: 'none' | 'sm' | 'md' | 'lg';
+    class?: string;
     children?: Snippet;
   }
 
   let { 
     title,
     padding = 'md',
+    class: className = '',
     children 
   }: Props = $props();
 
@@ -21,7 +23,7 @@
   };
 </script>
 
-<div class="bg-[#1a1f3a] rounded-xl border border-[#2a2f4a] shadow-lg">
+<div class="bg-[#1a1f3a] rounded-xl border border-[#2a2f4a] shadow-lg {className}">
   {#if title}
     <div class="px-4 py-3 border-b border-[#2a2f4a]">
       <h3 class="text-lg font-semibold text-white">{title}</h3>

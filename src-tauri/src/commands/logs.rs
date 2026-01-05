@@ -46,7 +46,8 @@ pub async fn export_logs() -> Result<String, String> {
     
     // Get logs directory
     let logs_dir = crate::core::paths::get_logs_dir();
-    std::fs::create_dir_all(&logs_dir)
+    tokio::fs::create_dir_all(&logs_dir)
+        .await
         .map_err(|e| format!("Failed to create logs directory: {}", e))?;
     
     // Create filename with timestamp
@@ -55,7 +56,8 @@ pub async fn export_logs() -> Result<String, String> {
     let filepath = logs_dir.join(&filename);
     
     // Write logs
-    std::fs::write(&filepath, logs_content)
+    tokio::fs::write(&filepath, logs_content)
+        .await
         .map_err(|e| format!("Failed to write logs: {}", e))?;
     
     info!(path = %filepath.display(), "Logs exported");

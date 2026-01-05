@@ -42,7 +42,7 @@ impl Storage {
     pub async fn open(path: &PathBuf) -> Result<Self> {
         // Создаём директорию если не существует
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
+            tokio::fs::create_dir_all(parent).await?;
         }
 
         let conn = Connection::open(path)?;

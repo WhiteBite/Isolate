@@ -193,7 +193,7 @@ impl ConfigUpdater {
     async fn file_needs_update(&self, local_path: &PathBuf, _remote_sha: &str) -> bool {
         // Simple implementation: check file modification time
         // In production, store and compare SHA hashes
-        match std::fs::metadata(local_path) {
+        match tokio::fs::metadata(local_path).await {
             Ok(metadata) => {
                 if let Ok(modified) = metadata.modified() {
                     if let Ok(duration) = modified.elapsed() {
@@ -270,11 +270,11 @@ impl ConfigUpdater {
 
         // Ensure parent directory exists
         if let Some(parent) = local_path.parent() {
-            std::fs::create_dir_all(parent)?;
+            tokio::fs::create_dir_all(parent).await?;
         }
 
         // Write file
-        std::fs::write(&local_path, &content)?;
+        tokio::fs::write(&local_path, &content).await?;
 
         debug!(path = %local_path.display(), "Config file saved");
         Ok(())

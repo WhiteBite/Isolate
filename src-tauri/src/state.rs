@@ -142,7 +142,8 @@ impl AppState {
         
         // Создаём директорию плагинов если не существует
         if !plugins_dir.exists() {
-            std::fs::create_dir_all(&plugins_dir)
+            tokio::fs::create_dir_all(&plugins_dir)
+                .await
                 .map_err(|e| IsolateError::Config(format!("Failed to create plugins dir: {}", e)))?;
         }
         debug!(plugins_dir = %plugins_dir.display(), "Plugins directory configured");

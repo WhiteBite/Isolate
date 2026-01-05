@@ -227,9 +227,9 @@ impl ServiceRegistry {
         }
 
         let mut loaded_count = 0;
-        let entries = std::fs::read_dir(plugins_dir)?;
+        let mut entries = tokio::fs::read_dir(plugins_dir).await?;
 
-        for entry in entries.flatten() {
+        while let Some(entry) = entries.next_entry().await? {
             let path = entry.path();
 
             // Look for plugin directories containing plugin.json
@@ -259,7 +259,7 @@ impl ServiceRegistry {
 
     /// Load services from a single plugin.json file
     async fn load_plugin_services(&self, manifest_path: &Path) -> Result<usize, RegistryError> {
-        let content = std::fs::read_to_string(manifest_path)?;
+        let content = tokio::fs::read_to_string(manifest_path).await?;
         
         // Try new format first (service-checker type)
         if let Ok(manifest) = serde_json::from_str::<NewPluginManifest>(&content) {

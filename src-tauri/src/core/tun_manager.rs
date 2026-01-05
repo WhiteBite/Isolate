@@ -143,12 +143,14 @@ impl TunManager {
 
         // Ensure directory exists
         if let Some(parent) = config_path.parent() {
-            std::fs::create_dir_all(parent)
+            tokio::fs::create_dir_all(parent)
+                .await
                 .map_err(|e| IsolateError::Io(e.to_string()))?;
         }
 
         // Write config file
-        std::fs::write(&config_path, &config_content)
+        tokio::fs::write(&config_path, &config_content)
+            .await
             .map_err(|e| IsolateError::Io(e.to_string()))?;
 
         debug!(path = %config_path.display(), "TUN config written");
@@ -234,7 +236,7 @@ impl TunManager {
         // Clean up config file
         let config_path = self.get_config_path();
         if config_path.exists() {
-            if let Err(e) = std::fs::remove_file(&config_path) {
+            if let Err(e) = tokio::fs::remove_file(&config_path).await {
                 warn!(error = %e, "Failed to remove TUN config file");
             }
         }

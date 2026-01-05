@@ -36,15 +36,18 @@
     id: string;
     label: string;
     status: 'pending' | 'running' | 'done' | 'error';
+    error?: string;
   }
   let setupTasks = $state<SetupTask[]>([
     { id: 'binaries', label: 'Проверка компонентов', status: 'pending' },
+    { id: 'download', label: 'Загрузка компонентов', status: 'pending' },
     { id: 'configs', label: 'Загрузка конфигураций', status: 'pending' },
     { id: 'connection', label: 'Тестирование соединения', status: 'pending' },
   ]);
   let setupProgress = $state(0);
   let isSettingUp = $state(false);
   let setupComplete = $state(false);
+  let downloadProgress = $state<{ name: string; percent: number } | null>(null);
 
   // Derived states
   let canProceed = $derived(
@@ -168,54 +171,111 @@
     isSettingUp = true;
     setupProgress = 0;
     setupComplete = false;
+    downloadProgress = null;
     
     // Reset tasks
-    setupTasks = setupTasks.map(t => ({ ...t, status: 'pending' }));
+    setupTasks = setupTasks.map(t => ({ ...t, status: 'pending', error: undefined }));
     
-    const taskDurations = [1000, 1200, 1500]; // ms per task
-    
-    for (let i = 0; i < setupTasks.length; i++) {
-      // Mark current task as running
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      const { listen } = await import('@tauri-apps/api/event');
+      
+      // Task 1: Check binaries
       setupTasks = setupTasks.map((t, idx) => ({
         ...t,
-        status: idx === i ? 'running' : idx < i ? 'done' : 'pending'
+        status: idx === 0 ? 'running' : 'pending'
       }));
+      setupProgress = 5;
       
-      // Simulate task execution with progress animation
-      const duration = taskDurations[i];
-      const startProgress = (i / setupTasks.length) * 100;
-      const endProgress = ((i + 1) / setupTasks.length) * 100;
-      
-      // Animate progress smoothly
-      const steps = 20;
-      const stepDuration = duration / steps;
-      for (let s = 0; s <= steps; s++) {
-        await new Promise(r => setTimeout(r, stepDuration));
-        setupProgress = startProgress + ((endProgress - startProgress) * (s / steps));
-      }
-      
-      // Try to call actual Tauri commands
+      let checkResult: { missing: string[]; present: string[]; all_present: boolean };
       try {
-        const { invoke } = await import('@tauri-apps/api/core');
-        if (i === 0) {
-          await invoke('check_binaries').catch(() => {});
-        } else if (i === 1) {
-          // Configs are loaded automatically
-        } else if (i === 2) {
-          // Connection test
-        }
+        checkResult = await invoke('check_binaries');
       } catch (e) {
-        console.error('Setup task failed:', e);
+        checkResult = { missing: ['winws.exe', 'sing-box.exe'], present: [], all_present: false };
       }
       
-      // Mark task as done
       setupTasks = setupTasks.map((t, idx) => ({
         ...t,
-        status: idx <= i ? 'done' : 'pending'
+        status: idx === 0 ? 'done' : 'pending'
       }));
+      setupProgress = 15;
+      
+      // Task 2: Download missing binaries if needed
+      if (!checkResult.all_present && checkResult.missing.length > 0) {
+        setupTasks = setupTasks.map((t, idx) => ({
+          ...t,
+          status: idx === 1 ? 'running' : idx < 1 ? 'done' : 'pending'
+        }));
+        
+        // Listen for download progress events
+        const unlisten = await listen<{ binary_name: string; percentage: number; phase: string }>('binaries:progress', (event) => {
+          downloadProgress = {
+            name: event.payload.binary_name,
+            percent: event.payload.percentage
+          };
+          // Update progress bar (15-70% for download)
+          setupProgress = 15 + (event.payload.percentage * 0.55);
+        });
+        
+        try {
+          await invoke('download_binaries');
+          setupTasks = setupTasks.map((t, idx) => ({
+            ...t,
+            status: idx <= 1 ? 'done' : 'pending'
+          }));
+        } catch (e) {
+          console.error('Download failed:', e);
+          setupTasks = setupTasks.map((t, idx) => ({
+            ...t,
+            status: idx === 1 ? 'error' : idx < 1 ? 'done' : 'pending',
+            error: idx === 1 ? String(e) : undefined
+          }));
+          // Continue anyway - user can download manually later
+        } finally {
+          unlisten();
+          downloadProgress = null;
+        }
+      } else {
+        // Skip download task - mark as done
+        setupTasks = setupTasks.map((t, idx) => ({
+          ...t,
+          status: idx <= 1 ? 'done' : 'pending'
+        }));
+      }
+      setupProgress = 70;
+      
+      // Task 3: Load configs
+      setupTasks = setupTasks.map((t, idx) => ({
+        ...t,
+        status: idx === 2 ? 'running' : idx < 2 ? 'done' : 'pending'
+      }));
+      
+      await new Promise(r => setTimeout(r, 500)); // Brief pause for UX
+      
+      setupTasks = setupTasks.map((t, idx) => ({
+        ...t,
+        status: idx <= 2 ? 'done' : 'pending'
+      }));
+      setupProgress = 85;
+      
+      // Task 4: Test connection (optional)
+      setupTasks = setupTasks.map((t, idx) => ({
+        ...t,
+        status: idx === 3 ? 'running' : idx < 3 ? 'done' : 'pending'
+      }));
+      
+      await new Promise(r => setTimeout(r, 800)); // Brief pause for UX
+      
+      setupTasks = setupTasks.map((t, idx) => ({
+        ...t,
+        status: 'done'
+      }));
+      setupProgress = 100;
+      
+    } catch (e) {
+      console.error('Setup failed:', e);
     }
     
-    setupProgress = 100;
     isSettingUp = false;
     setupComplete = true;
   }
@@ -520,11 +580,18 @@
               <!-- Tasks List -->
               <div class="w-full max-w-sm space-y-3">
                 {#each setupTasks as task}
-                  <div class="flex items-center gap-3 p-3 rounded-xl bg-zinc-800/30 border border-white/5">
+                  <div class="flex items-center gap-3 p-3 rounded-xl bg-zinc-800/30 border border-white/5
+                              {task.status === 'error' ? 'border-red-500/30' : ''}">
                     {#if task.status === 'done'}
                       <div class="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
                         <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                    {:else if task.status === 'error'}
+                      <div class="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center">
+                        <svg class="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                         </svg>
                       </div>
                     {:else if task.status === 'running'}
@@ -536,11 +603,31 @@
                         <div class="w-2 h-2 rounded-full bg-zinc-600"></div>
                       </div>
                     {/if}
-                    <span class="text-sm font-medium
-                                 {task.status === 'done' ? 'text-emerald-400' : 
-                                  task.status === 'running' ? 'text-white' : 'text-zinc-500'}">
-                      {task.label}
-                    </span>
+                    <div class="flex-1 min-w-0">
+                      <span class="text-sm font-medium block
+                                   {task.status === 'done' ? 'text-emerald-400' : 
+                                    task.status === 'error' ? 'text-red-400' :
+                                    task.status === 'running' ? 'text-white' : 'text-zinc-500'}">
+                        {task.label}
+                      </span>
+                      {#if task.id === 'download' && task.status === 'running' && downloadProgress}
+                        <div class="mt-1">
+                          <div class="flex items-center justify-between text-xs text-zinc-500 mb-1">
+                            <span>{downloadProgress.name}</span>
+                            <span>{downloadProgress.percent}%</span>
+                          </div>
+                          <div class="h-1 bg-zinc-700 rounded-full overflow-hidden">
+                            <div 
+                              class="h-full bg-indigo-500 rounded-full transition-all duration-200"
+                              style="width: {downloadProgress.percent}%"
+                            ></div>
+                          </div>
+                        </div>
+                      {/if}
+                      {#if task.error}
+                        <span class="text-xs text-red-400/70 block mt-0.5 truncate">{task.error}</span>
+                      {/if}
+                    </div>
                   </div>
                 {/each}
               </div>

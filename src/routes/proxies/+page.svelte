@@ -351,8 +351,45 @@
     pasteLoading = true;
     try {
       const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('import_proxy_url', { url: pasteUrl });
-      toasts.success('Прокси импортирован');
+      
+      // Split by newlines and filter valid proxy URLs
+      const lines = pasteUrl.split(/[\r\n]+/).filter(line => {
+        const trimmed = line.trim();
+        return PROXY_URL_REGEX.test(trimmed);
+      });
+      
+      if (lines.length === 0) {
+        toasts.error('Не найдено прокси-ссылок');
+        return;
+      }
+      
+      if (lines.length === 1) {
+        // Single URL - simple import
+        await invoke('import_proxy_url', { url: lines[0].trim() });
+        toasts.success('Прокси импортирован');
+      } else {
+        // Multiple URLs - import each
+        let imported = 0;
+        let failed = 0;
+        
+        for (const line of lines) {
+          try {
+            await invoke('import_proxy_url', { url: line.trim() });
+            imported++;
+          } catch (e) {
+            console.error('[Paste] Failed to import:', line, e);
+            failed++;
+          }
+        }
+        
+        if (imported > 0) {
+          toasts.success(`Импортировано ${imported} прокси${failed > 0 ? `, ${failed} ошибок` : ''}`);
+        } else {
+          toasts.error('Не удалось импортировать ни одного прокси');
+          return;
+        }
+      }
+      
       showAddModal = false;
       pasteUrl = '';
       await loadProxies();
@@ -638,8 +675,8 @@
         <label class="block text-sm font-medium text-zinc-400 mb-2">Proxy URL</label>
         <textarea
           bind:value={pasteUrl}
-          placeholder="vless://... или vmess://... или ss://..."
-          rows="4"
+          placeholder="vless://...&#10;vmess://...&#10;ss://...&#10;&#10;Можно вставить несколько ссылок (каждая с новой строки)"
+          rows="6"
           class="w-full px-4 py-3 bg-zinc-900/60 border border-white/5 rounded-xl text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-white/10 focus:ring-1 focus:ring-white/5 font-mono text-sm resize-none transition-all duration-200"
         ></textarea>
         <p class="mt-2 text-xs text-zinc-500">Поддерживаются: VLESS, VMess, Shadowsocks, Trojan</p>

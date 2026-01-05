@@ -17,7 +17,7 @@
 //! stop_nodpi(&mut handle).await?;
 //! ```
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -272,10 +272,9 @@ pub fn build_winws_args_from_template(template: &LaunchTemplate) -> Vec<String> 
 /// - `hostlists/xxx.txt` -> full path to hostlists directory
 /// - `binaries/xxx` -> full path to binaries directory
 /// - Other args passed through unchanged
-fn resolve_template_path(arg: &str, binaries_dir: &PathBuf, hostlists_dir: &PathBuf) -> String {
+fn resolve_template_path(arg: &str, binaries_dir: &Path, hostlists_dir: &Path) -> String {
     // Handle --hostlist=path format
-    if arg.starts_with("--hostlist=") {
-        let path = &arg[11..]; // Remove "--hostlist="
+    if let Some(path) = arg.strip_prefix("--hostlist=") {
         let resolved = resolve_path_component(path, binaries_dir, hostlists_dir);
         return format!("--hostlist={}", resolved);
     }
@@ -296,12 +295,10 @@ fn resolve_template_path(arg: &str, binaries_dir: &PathBuf, hostlists_dir: &Path
 }
 
 /// Resolve a path component (hostlists/xxx or binaries/xxx)
-fn resolve_path_component(path: &str, binaries_dir: &PathBuf, hostlists_dir: &PathBuf) -> String {
-    if path.starts_with("hostlists/") {
-        let filename = &path[10..]; // Remove "hostlists/"
+fn resolve_path_component(path: &str, binaries_dir: &Path, hostlists_dir: &Path) -> String {
+    if let Some(filename) = path.strip_prefix("hostlists/") {
         hostlists_dir.join(filename).display().to_string()
-    } else if path.starts_with("binaries/") {
-        let filename = &path[9..]; // Remove "binaries/"
+    } else if let Some(filename) = path.strip_prefix("binaries/") {
         binaries_dir.join(filename).display().to_string()
     } else {
         // Assume it's a relative path from binaries dir
@@ -315,8 +312,7 @@ fn resolve_path_component(path: &str, binaries_dir: &PathBuf, hostlists_dir: &Pa
 pub fn get_binary_path_from_template(template: &LaunchTemplate) -> PathBuf {
     let binaries_dir = get_binaries_dir();
 
-    if template.binary.starts_with("binaries/") {
-        let filename = &template.binary[9..];
+    if let Some(filename) = template.binary.strip_prefix("binaries/") {
         binaries_dir.join(filename)
     } else {
         binaries_dir.join(&template.binary)
@@ -335,8 +331,7 @@ pub async fn verify_strategy_binaries(strategy: &Strategy) -> Result<()> {
     let binaries_dir = get_binaries_dir();
 
     for binary_path in &strategy.requirements.binaries {
-        let full_path = if binary_path.starts_with("binaries/") {
-            let filename = &binary_path[9..];
+        let full_path = if let Some(filename) = binary_path.strip_prefix("binaries/") {
             binaries_dir.join(filename)
         } else {
             binaries_dir.join(binary_path)
@@ -413,12 +408,12 @@ pub async fn start_nodpi(config: &NoDpiConfig) -> Result<NoDpiHandle> {
     );
 
     // Check WinDivert exclusivity
-    if config.engine.uses_windivert() {
-        if WINDIVERT_ACTIVE.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).is_err() {
-            return Err(IsolateError::Process(
-                "Another WinDivert-based engine is already running. Only one can run at a time to avoid BSOD!".to_string()
-            ));
-        }
+    if config.engine.uses_windivert()
+        && WINDIVERT_ACTIVE.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).is_err()
+    {
+        return Err(IsolateError::Process(
+            "Another WinDivert-based engine is already running. Only one can run at a time to avoid BSOD!".to_string()
+        ));
     }
 
     // Verify engine is available

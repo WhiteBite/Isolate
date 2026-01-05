@@ -160,7 +160,7 @@ impl DomainRouter {
             .unwrap_or(&domain);
 
         // Remove path if present
-        let domain = domain.split('/').next().unwrap_or(&domain);
+        let domain = domain.split('/').next().unwrap_or(domain);
 
         // Remove port if present
         let domain = domain.split(':').next().unwrap_or(domain);

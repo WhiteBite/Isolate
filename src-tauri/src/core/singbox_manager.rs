@@ -382,7 +382,7 @@ impl SingboxManager {
         ];
 
         // Generate DNS configuration (direct mode for SOCKS proxy)
-        let dns = generate_dns_config_with_mode(&[proxy.clone()], DnsMode::Direct);
+        let dns = generate_dns_config_with_mode(std::slice::from_ref(proxy), DnsMode::Direct);
 
         // Generate routing rules
         let route = generate_route_rules(domain_routes, app_routes, &proxy.id);
@@ -580,7 +580,7 @@ impl SingboxManager {
         ];
 
         // Generate DNS configuration with fake-ip for TUN mode
-        let dns = generate_dns_config_fakeip(&[proxy.clone()]);
+        let dns = generate_dns_config_fakeip(std::slice::from_ref(proxy));
 
         // Generate routing rules
         let route = generate_route_rules(domain_routes, app_routes, &proxy.id);
@@ -811,7 +811,7 @@ impl SingboxManager {
         }
 
         // Start with same port or allocate new one
-        let port = current_port.unwrap_or_else(|| 1080);
+        let port = current_port.unwrap_or(1080);
         self.start(config, port).await
     }
 }

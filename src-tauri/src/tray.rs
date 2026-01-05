@@ -47,7 +47,7 @@ pub enum TrayState {
 
 impl TrayState {
     /// Convert from string representation
-    pub fn from_str(s: &str) -> Self {
+    pub fn parse(s: &str) -> Self {
         match s.to_lowercase().as_str() {
             "active" => TrayState::Active,
             "optimizing" => TrayState::Optimizing,

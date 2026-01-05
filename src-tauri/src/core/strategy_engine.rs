@@ -110,8 +110,8 @@ impl PortManager {
     /// Выделяет свободный порт для стратегии
     fn allocate(&mut self, strategy_id: &str) -> Result<u16> {
         for port in SOCKS_PORT_START..(SOCKS_PORT_START + MAX_SOCKS_PORTS) {
-            if !self.allocated.contains_key(&port) {
-                self.allocated.insert(port, strategy_id.to_string());
+            if let std::collections::hash_map::Entry::Vacant(e) = self.allocated.entry(port) {
+                e.insert(strategy_id.to_string());
                 debug!(port, strategy_id, "Allocated SOCKS port");
                 return Ok(port);
             }

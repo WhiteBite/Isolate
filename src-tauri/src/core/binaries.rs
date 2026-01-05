@@ -239,7 +239,7 @@ pub fn extract_zip(
 
         // Check if we should extract this file
         let should_extract = match files_to_extract {
-            Some(files) => files.iter().any(|f| *f == file_name),
+            Some(files) => files.contains(&file_name),
             None => true,
         };
 

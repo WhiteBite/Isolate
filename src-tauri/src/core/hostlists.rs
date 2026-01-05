@@ -105,9 +105,9 @@ pub async fn load_hostlist(id: &str) -> Result<Hostlist> {
     let updated_at = metadata
         .modified()
         .ok()
-        .and_then(|t| {
+        .map(|t| {
             let datetime: chrono::DateTime<chrono::Utc> = t.into();
-            Some(datetime.to_rfc3339())
+            datetime.to_rfc3339()
         });
 
     debug!(id, domain_count = domains.len(), "Loaded hostlist");
@@ -167,7 +167,7 @@ pub async fn get_all_hostlists() -> Result<Vec<Hostlist>> {
     while let Some(entry) = entries.next_entry().await? {
         let path = entry.path();
 
-        if path.extension().map_or(false, |ext| ext == "txt") {
+        if path.extension().is_some_and(|ext| ext == "txt") {
             if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
                 match load_hostlist(stem).await {
                     Ok(hostlist) => hostlists.push(hostlist),

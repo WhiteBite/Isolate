@@ -99,7 +99,7 @@ impl AppState {
         debug!("Strategy engine created");
 
         // 5.5. Создаём Monitor
-        let monitor = Arc::new(Monitor::new(strategy_engine.clone().into()));
+        let monitor = Arc::new(Monitor::new(strategy_engine.clone()));
         debug!("Monitor created");
 
         // 5.6. Создаём TelemetryService

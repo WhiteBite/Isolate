@@ -45,7 +45,7 @@ pub async fn clear_system_proxy() -> Result<()> {
 pub async fn is_system_proxy_set() -> Result<bool> {
     #[cfg(windows)]
     {
-        return query_windows_proxy_enabled();
+        query_windows_proxy_enabled()
     }
     
     #[cfg(not(windows))]
@@ -56,7 +56,7 @@ pub async fn is_system_proxy_set() -> Result<bool> {
 pub async fn get_system_proxy() -> Result<Option<SystemProxyInfo>> {
     #[cfg(windows)]
     {
-        return query_windows_proxy_info();
+        query_windows_proxy_info()
     }
     
     #[cfg(not(windows))]

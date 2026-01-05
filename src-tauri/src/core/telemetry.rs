@@ -369,7 +369,7 @@ impl TelemetryService {
                     if parts.len() == 4
                         && parts
                             .iter()
-                            .all(|p| p.parse::<u8>().is_ok() || p.parse::<u16>().map_or(false, |n| n <= 255))
+                            .all(|p| p.parse::<u8>().is_ok() || p.parse::<u16>().is_ok_and(|n| n <= 255))
                     {
                         result.push_str("[IP]");
                         i = j;

@@ -25,9 +25,10 @@ use crate::core::paths::get_configs_dir;
 // ============================================================================
 
 /// VLESS transport type
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum TransportType {
+    #[default]
     Tcp,
     Ws {
         path: String,
@@ -40,12 +41,6 @@ pub enum TransportType {
         path: String,
         host: Option<String>,
     },
-}
-
-impl Default for TransportType {
-    fn default() -> Self {
-        Self::Tcp
-    }
 }
 
 /// VLESS flow type (for XTLS)

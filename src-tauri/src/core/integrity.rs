@@ -14,11 +14,10 @@ use thiserror::Error;
 /// Known binary hashes for verification
 /// Format: filename -> expected SHA-256 hash
 pub fn get_known_hashes() -> HashMap<&'static str, &'static str> {
-    let hashes = HashMap::new();
     // TODO: Add actual hashes when binaries are finalized
     // hashes.insert("winws.exe", "expected_sha256_hash_here");
     // hashes.insert("sing-box.exe", "expected_sha256_hash_here");
-    hashes
+    HashMap::new()
 }
 
 #[derive(Error, Debug)]

@@ -14,7 +14,7 @@ pub async fn update_tray(
 ) -> Result<(), String> {
     info!(state = %state, strategy = ?strategy_name, "Updating tray from frontend");
     
-    let tray_state = crate::tray::TrayState::from_str(&state);
+    let tray_state = crate::tray::TrayState::parse(&state);
     crate::tray::update_tray_state(&app, tray_state, strategy_name);
     
     Ok(())

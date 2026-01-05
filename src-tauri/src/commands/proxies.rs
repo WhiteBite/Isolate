@@ -207,7 +207,7 @@ pub async fn test_proxy(
                 proxy.uuid.clone().unwrap_or_default(),
             )
             .with_name(&proxy.name)
-            .with_id(&format!("test_{}", proxy.id))
+            .with_id(format!("test_{}", proxy.id))
             .with_sni(proxy.sni.clone().unwrap_or_else(|| proxy.server.clone()));
             
             let port = manager.allocate_port(10800).await;

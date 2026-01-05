@@ -485,7 +485,7 @@ impl StrategyLoader {
             let path = entry.path();
 
             // Only process .json files
-            if path.is_file() && path.extension().map_or(false, |ext| ext == "json") {
+            if path.is_file() && path.extension().is_some_and(|ext| ext == "json") {
                 match self.load_file(&path) {
                     Ok(strategy_file) => {
                         info!(

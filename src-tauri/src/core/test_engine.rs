@@ -522,10 +522,7 @@ async fn connect_via_socks5(
     stream.read_exact(&mut response).await?;
 
     if response[0] != 0x05 || response[1] != 0x00 {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            "SOCKS5 auth failed",
-        ));
+        return Err(std::io::Error::other("SOCKS5 auth failed"));
     }
 
     // SOCKS5 connect request

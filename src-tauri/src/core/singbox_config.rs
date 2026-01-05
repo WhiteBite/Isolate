@@ -924,7 +924,7 @@ pub fn generate_single_proxy_config(
     socks_port: u16,
 ) -> Result<Value> {
     generate_singbox_config(
-        &[proxy.clone()],
+        std::slice::from_ref(proxy),
         &[],
         &[],
         socks_port,

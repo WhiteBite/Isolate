@@ -38,7 +38,7 @@ use crate::core::strategy_loader::JsonStrategy;
 // ============================================================================
 
 /// Статус стратегии для домена
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum DomainStatus {
     /// Сейчас тестируется
@@ -48,13 +48,8 @@ pub enum DomainStatus {
     /// Не работает
     Failed,
     /// Ещё не тестировалась
+    #[default]
     Unknown,
-}
-
-impl Default for DomainStatus {
-    fn default() -> Self {
-        Self::Unknown
-    }
 }
 
 /// Информация о заблокированной стратегии для домена

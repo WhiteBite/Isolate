@@ -234,7 +234,7 @@ impl StrategyTester {
         
         // Парсим HTTP код
         let http_code: u16 = stdout.parse().unwrap_or(0);
-        let success = http_code >= 200 && http_code < 400;
+        let success = (200..400).contains(&http_code);
 
         debug!(
             domain,
@@ -315,7 +315,7 @@ impl StrategyTester {
         }
 
         // 2. Проверить блокировку без стратегии
-        let stats_before = self.get_stats().await.unwrap_or_else(|_| DpiStats {
+        let stats_before = self.get_stats().await.unwrap_or(DpiStats {
             total_packets: 0,
             blocked_sni: 0,
             blocked_http: 0,
@@ -381,7 +381,7 @@ impl StrategyTester {
         }
 
         let test_with = self.run_curl_test(&self.config.test_domain).await;
-        let stats_after = self.get_stats().await.unwrap_or_else(|_| DpiStats {
+        let stats_after = self.get_stats().await.unwrap_or(DpiStats {
             total_packets: 0,
             blocked_sni: 0,
             blocked_http: 0,

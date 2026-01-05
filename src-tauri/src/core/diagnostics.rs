@@ -334,12 +334,13 @@ fn build_client_hello(hostname: &str) -> Vec<u8> {
 
     // Wrap in Handshake message
     let handshake_len = client_hello.len();
-    let mut handshake = Vec::new();
-    handshake.push(0x01); // ClientHello
-    // Length (3 bytes)
-    handshake.push(((handshake_len >> 16) & 0xff) as u8);
-    handshake.push(((handshake_len >> 8) & 0xff) as u8);
-    handshake.push((handshake_len & 0xff) as u8);
+    let mut handshake = vec![
+        0x01, // ClientHello
+        // Length (3 bytes)
+        ((handshake_len >> 16) & 0xff) as u8,
+        ((handshake_len >> 8) & 0xff) as u8,
+        (handshake_len & 0xff) as u8,
+    ];
     handshake.extend_from_slice(&client_hello);
 
     // Wrap in TLS record

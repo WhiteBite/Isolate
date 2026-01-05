@@ -1,6 +1,7 @@
 <script lang="ts">
   import { browser } from '$app/environment';
   import { settings } from '$lib/stores';
+  import { get } from 'svelte/store';
 
   // Types
   type TabId = 'general' | 'routing' | 'advanced';
@@ -52,25 +53,23 @@
   ];
 
   // Initialize on component mount and navigation
+  let initialized = $state(false);
+  
   $effect(() => {
-    if (!browser) return;
+    if (!browser || initialized) return;
+    initialized = true;
     
     isTauri = '__TAURI__' in window || '__TAURI_INTERNALS__' in window;
 
-    // Subscribe to settings store
-    const unsubSettings = settings.subscribe(v => {
-      localSettings.autoStart = v.autoStart;
-      localSettings.minimizeToTray = v.minimizeToTray;
-      localSettings.blockQuic = v.blockQuic;
-    });
+    // Load initial settings from store (one-time)
+    const currentSettings = get(settings);
+    localSettings.autoStart = currentSettings.autoStart;
+    localSettings.minimizeToTray = currentSettings.minimizeToTray;
+    localSettings.blockQuic = currentSettings.blockQuic;
 
     if (isTauri) {
       loadSettings();
     }
-
-    return () => {
-      unsubSettings();
-    };
   });
 
   async function loadSettings(retries = 10) {

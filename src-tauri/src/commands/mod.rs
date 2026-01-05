@@ -330,13 +330,10 @@ pub async fn run_tests(
             }
             
             // Test connectivity through proxy
-            match test_proxy_for_service(&state, &proxy, service, timeout_secs).await {
-                Ok(latency) => {
-                    services_passed.push(service.id.clone());
-                    total_latency += latency;
-                    test_count += 1;
-                }
-                Err(_) => {}
+            if let Ok(latency) = test_proxy_for_service(&state, &proxy, service, timeout_secs).await {
+                services_passed.push(service.id.clone());
+                total_latency += latency;
+                test_count += 1;
             }
         }
         
@@ -413,13 +410,10 @@ pub async fn run_tests(
                 break;
             }
             
-            match test_service_direct(service, timeout_secs).await {
-                Ok(latency) => {
-                    services_passed.push(service.id.clone());
-                    total_latency += latency;
-                    test_count += 1;
-                }
-                Err(_) => {}
+            if let Ok(latency) = test_service_direct(service, timeout_secs).await {
+                services_passed.push(service.id.clone());
+                total_latency += latency;
+                test_count += 1;
             }
         }
         

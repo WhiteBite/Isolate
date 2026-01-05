@@ -46,6 +46,17 @@
 **Проблема:** Onboarding только проверял наличие бинарников, но не скачивал их при отсутствии
 **Решение:** Добавлен вызов `download_binaries` с прогрессом через Tauri events
 
+### ~~BUG-010: Diagnostics показывает фейковые данные~~ ✅ ИСПРАВЛЕНО
+**Файлы:** `src-tauri/src/commands/diagnostics.rs`, `src/routes/diagnostics/+page.svelte`
+**Проблема:** Фронтенд вызывал несуществующую команду `run_diagnostics`, падал в симуляцию с захардкоженными значениями
+**Решение:** Создана команда `run_diagnostics` которая реально проверяет:
+- Network: TCP connect к google.com:443 с измерением latency
+- DNS: резолв google.com с подсчётом адресов
+- WinDivert: наличие DLL/SYS файлов и версия
+- winws: наличие бинарника и работоспособность
+- sing-box: наличие и версия
+- Firewall: статус Windows Firewall
+
 ## Требуют проверки
 
 ### TODO-001: Проверить модальное окно "Добавить правило" на странице Routing

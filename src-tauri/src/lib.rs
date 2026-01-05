@@ -76,6 +76,7 @@ pub fn run() {
             commands::diagnose,
             commands::panic_reset,
             // Diagnostics commands
+            commands::run_diagnostics,
             commands::diagnose_dual_stack,
             commands::check_ipv6,
             // Settings commands

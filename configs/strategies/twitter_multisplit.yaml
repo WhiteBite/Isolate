@@ -1,0 +1,48 @@
+# Twitter/X Multisplit Strategy
+# Использует multi-split для обхода DPI на Twitter/X
+id: "zapret_twitter_multisplit"
+name: "Twitter Multisplit"
+description: "Стратегия с multi-split для Twitter/X"
+family: sni_frag
+engine: zapret
+
+mode_capabilities:
+  supports_socks: false
+  supports_global: true
+
+global_template:
+  binary: "binaries/winws.exe"
+  args:
+    # Twitter TCP 443
+    - "--wf-tcp=443"
+    - "--filter-tcp=443"
+    - "--hostlist=hostlists/twitter.txt"
+    - "--dpi-desync=multisplit"
+    - "--dpi-desync-split-pos=1,3"
+    - "--dpi-desync-split-seqovl=1"
+    - "--dpi-desync-split-seqovl-pattern=binaries/tls_clienthello_www_google_com.bin"
+    - "--dpi-desync-fooling=md5sig,badseq"
+    - "--dpi-desync-ttl=5"
+    - "--new"
+    # Twitter альтернативные порты (Cloudflare)
+    - "--filter-tcp=2053,2083,2087,2096,8443"
+    - "--hostlist=hostlists/twitter.txt"
+    - "--dpi-desync=multisplit"
+    - "--dpi-desync-split-pos=1,3"
+    - "--dpi-desync-fooling=md5sig"
+  env: {}
+  requires_admin: true
+
+requirements:
+  min_rights: "admin"
+  os:
+    - windows
+  binaries:
+    - "binaries/winws.exe"
+    - "binaries/WinDivert64.sys"
+    - "binaries/tls_clienthello_www_google_com.bin"
+
+weight_hint: 10
+services:
+  - twitter
+

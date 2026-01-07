@@ -1,0 +1,99 @@
+# General ALT11 Strategy
+# Использует fake,multisplit с max.ru TLS fingerprint
+id: "zapret_general_alt11"
+name: "General ALT11 (fake+multisplit max.ru)"
+description: "Стратегия с fake,multisplit и TLS fingerprint от max.ru. Комбинирует fake пакеты с multi-split."
+family: sni_frag
+engine: zapret
+label: alternative
+
+mode_capabilities:
+  supports_socks: false
+  supports_global: true
+
+global_template:
+  binary: "binaries/winws.exe"
+  args:
+    # WinDivert фильтры
+    - "--wf-tcp=80,443,2053,2083,2087,2096,8443"
+    - "--wf-udp=443,19294-19344,50000-50100"
+    # QUIC fake для общего списка
+    - "--filter-udp=443"
+    - "--hostlist=hostlists/general.txt"
+    - "--hostlist-exclude=hostlists/exclude.txt"
+    - "--ipset-exclude=hostlists/ipset-exclude.txt"
+    - "--dpi-desync=fake"
+    - "--dpi-desync-repeats=6"
+    - "--dpi-desync-fake-quic=binaries/quic_initial_www_google_com.bin"
+    - "--new"
+    # Discord voice/STUN с filter-l7
+    - "--filter-udp=19294-19344,50000-50100"
+    - "--filter-l7=discord,stun"
+    - "--dpi-desync=fake"
+    - "--dpi-desync-fake-discord=binaries/quic_initial_www_google_com.bin"
+    - "--dpi-desync-fake-stun=binaries/quic_initial_www_google_com.bin"
+    - "--dpi-desync-repeats=6"
+    - "--new"
+    # Discord media CDN с fake,multisplit и max.ru TLS
+    - "--filter-tcp=2053,2083,2087,2096,8443"
+    - "--hostlist-domains=discord.media"
+    - "--dpi-desync=fake,multisplit"
+    - "--dpi-desync-split-pos=1,midsld"
+    - "--dpi-desync-repeats=6"
+    - "--dpi-desync-fake-tls=binaries/tls_clienthello_max_ru.bin"
+    - "--new"
+    # Google/YouTube с fake,multisplit и max.ru TLS
+    - "--filter-tcp=443"
+    - "--hostlist=hostlists/google.txt"
+    - "--ip-id=zero"
+    - "--dpi-desync=fake,multisplit"
+    - "--dpi-desync-split-pos=1,midsld"
+    - "--dpi-desync-repeats=6"
+    - "--dpi-desync-fake-tls=binaries/tls_clienthello_max_ru.bin"
+    - "--new"
+    # TCP fake,multisplit с max.ru TLS для общего списка
+    - "--filter-tcp=80,443"
+    - "--hostlist=hostlists/general.txt"
+    - "--hostlist-exclude=hostlists/exclude.txt"
+    - "--ipset-exclude=hostlists/ipset-exclude.txt"
+    - "--dpi-desync=fake,multisplit"
+    - "--dpi-desync-split-pos=1,midsld"
+    - "--dpi-desync-repeats=6"
+    - "--dpi-desync-fake-tls=binaries/tls_clienthello_max_ru.bin"
+    - "--new"
+    # QUIC для ipset
+    - "--filter-udp=443"
+    - "--ipset=hostlists/ipset-all.txt"
+    - "--hostlist-exclude=hostlists/exclude.txt"
+    - "--ipset-exclude=hostlists/ipset-exclude.txt"
+    - "--dpi-desync=fake"
+    - "--dpi-desync-repeats=6"
+    - "--dpi-desync-fake-quic=binaries/quic_initial_www_google_com.bin"
+    - "--new"
+    # TCP для ipset с fake,multisplit и max.ru TLS
+    - "--filter-tcp=80,443"
+    - "--ipset=hostlists/ipset-all.txt"
+    - "--hostlist-exclude=hostlists/exclude.txt"
+    - "--ipset-exclude=hostlists/ipset-exclude.txt"
+    - "--dpi-desync=fake,multisplit"
+    - "--dpi-desync-split-pos=1,midsld"
+    - "--dpi-desync-repeats=6"
+    - "--dpi-desync-fake-tls=binaries/tls_clienthello_max_ru.bin"
+  env: {}
+  requires_admin: true
+
+requirements:
+  min_rights: "admin"
+  os:
+    - windows
+  binaries:
+    - "binaries/winws.exe"
+    - "binaries/WinDivert64.sys"
+    - "binaries/tls_clienthello_max_ru.bin"
+    - "binaries/quic_initial_www_google_com.bin"
+
+weight_hint: 5
+services:
+  - discord
+  - youtube
+  - general

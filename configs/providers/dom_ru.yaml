@@ -1,0 +1,28 @@
+# Дом.ру Provider Profile
+id: dom_ru
+name: Дом.ру
+description: Домашний интернет и ТВ
+dpi_type: ТСПУ + собственный DPI
+regions:
+  - Москва
+  - Санкт-Петербург
+  - Регионы России
+
+recommended_strategies:
+  - zapret_general_fake_tls        # Первый приоритет для Дом.ру
+  - zapret_general_multisplit      # Альтернатива
+  - zapret_general_fake_tls_auto_alt3  # Для сложных случаев
+  - zapret_general_alt6            # Резервная
+
+notes: |
+  Дом.ру использует ТСПУ с дополнительным собственным DPI.
+  
+  Рекомендации:
+  1. Fake TLS стратегии обычно работают лучше
+  2. Multisplit как альтернатива
+  3. В некоторых регионах DPI более агрессивный
+  
+  Особенности:
+  - Собственный DPI может требовать специфичные настройки
+  - QUIC блокируется полностью
+  - Рекомендуется включить Block QUIC

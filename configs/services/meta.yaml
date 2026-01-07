@@ -1,0 +1,54 @@
+# Meta Platforms Service Definition (Instagram, Facebook, WhatsApp)
+id: "meta"
+name: "Meta (Instagram, Facebook, WhatsApp)"
+enabled_by_default: true
+critical: false
+
+tests:
+  # Instagram
+  - type: https_head
+    url: "https://www.instagram.com"
+    timeout_ms: 5000
+
+  - type: tcp_connect
+    host: "instagram.com"
+    port: 443
+    timeout_ms: 3000
+
+  - type: dns
+    domain: "instagram.com"
+    timeout_ms: 3000
+
+  # Facebook
+  - type: https_head
+    url: "https://www.facebook.com"
+    timeout_ms: 5000
+
+  - type: tcp_connect
+    host: "facebook.com"
+    port: 443
+    timeout_ms: 3000
+
+  - type: dns
+    domain: "facebook.com"
+    timeout_ms: 3000
+
+  # WhatsApp
+  - type: https_head
+    url: "https://web.whatsapp.com"
+    timeout_ms: 5000
+
+  - type: tcp_connect
+    host: "whatsapp.com"
+    port: 443
+    timeout_ms: 3000
+
+  - type: tcp_connect
+    host: "web.whatsapp.com"
+    port: 443
+    timeout_ms: 3000
+
+  - type: dns
+    domain: "whatsapp.com"
+    timeout_ms: 3000
+

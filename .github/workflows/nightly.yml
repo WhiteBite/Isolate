@@ -1,0 +1,387 @@
+name: Nightly Build
+
+on:
+  schedule:
+    # Каждую ночь в 2:00 UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      skip_cache:
+        description: 'Skip Rust cache'
+        required: false
+        type: boolean
+        default: false
+      force_build:
+        description: 'Force build even without new commits'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check-changes:
+    name: Check for new commits
+    runs-on: ubuntu-latest
+    outputs:
+      should_build: ${{ steps.check.outputs.should_build }}
+      commit_count: ${{ steps.check.outputs.commit_count }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Check for commits in last 24 hours
+        id: check
+        run: |
+          # Force build if manually triggered with force_build
+          if [ "${{ inputs.force_build }}" = "true" ]; then
+            echo "should_build=true" >> $GITHUB_OUTPUT
+            echo "commit_count=forced" >> $GITHUB_OUTPUT
+            echo "🔨 Force build requested"
+            exit 0
+          fi
+          
+          # Check commits in last 24 hours
+          SINCE=$(date -d '24 hours ago' --iso-8601=seconds)
+          COMMIT_COUNT=$(git log --since="$SINCE" --oneline | wc -l)
+          
+          echo "commit_count=$COMMIT_COUNT" >> $GITHUB_OUTPUT
+          
+          if [ "$COMMIT_COUNT" -gt 0 ]; then
+            echo "should_build=true" >> $GITHUB_OUTPUT
+            echo "✅ Found $COMMIT_COUNT new commits in last 24 hours"
+          else
+            echo "should_build=false" >> $GITHUB_OUTPUT
+            echo "⏭️ No new commits in last 24 hours, skipping build"
+          fi
+
+  build:
+    name: Build Windows x64
+    runs-on: windows-latest
+    needs: check-changes
+    if: needs.check-changes.outputs.should_build == 'true'
+    timeout-minutes: 45
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Get build info
+        id: info
+        shell: bash
+        run: |
+          BUILD_DATE=$(date +'%Y%m%d')
+          BUILD_DATE_DASH=$(date +'%Y-%m-%d')
+          BUILD_DATETIME=$(date +'%Y-%m-%d %H:%M UTC')
+          NIGHTLY_VERSION="0.1.0-nightly.${BUILD_DATE}"
+          TAG_NAME="nightly-${BUILD_DATE_DASH}"
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          
+          echo "date=$BUILD_DATE" >> $GITHUB_OUTPUT
+          echo "date_dash=$BUILD_DATE_DASH" >> $GITHUB_OUTPUT
+          echo "datetime=$BUILD_DATETIME" >> $GITHUB_OUTPUT
+          echo "version=$NIGHTLY_VERSION" >> $GITHUB_OUTPUT
+          echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
+          echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
+          
+          echo "📅 Nightly build: $BUILD_DATETIME"
+          echo "📦 Version: $NIGHTLY_VERSION"
+          echo "🏷️ Tag: $TAG_NAME"
+      
+      - name: Update version in Cargo.toml
+        shell: bash
+        run: |
+          VERSION="${{ steps.info.outputs.version }}"
+          sed -i "s/^version = \".*\"/version = \"$VERSION\"/" src-tauri/Cargo.toml
+          echo "Updated Cargo.toml version to $VERSION"
+          grep "^version" src-tauri/Cargo.toml
+      
+      - name: Update version in package.json
+        shell: bash
+        run: |
+          VERSION="${{ steps.info.outputs.version }}"
+          sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" package.json
+          echo "Updated package.json version to $VERSION"
+          grep "version" package.json | head -1
+      
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 9
+          
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+          
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        
+      - name: Rust cache
+        if: ${{ !inputs.skip_cache }}
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          cache-on-failure: true
+          shared-key: nightly
+          
+      - name: Install dependencies
+        run: pnpm install
+      
+      - name: Build Tauri app (NSIS + MSI)
+        run: pnpm tauri build
+        env:
+          # Nightly builds без подписи для автообновлений
+          TAURI_SIGNING_PRIVATE_KEY: ""
+      
+      - name: Smoke test - verify binary starts
+        shell: pwsh
+        run: |
+          Write-Host "Running smoke tests on nightly build..."
+          
+          $exePath = "src-tauri/target/release/Isolate.exe"
+          
+          if (-not (Test-Path $exePath)) {
+            Write-Error "Binary not found at $exePath"
+            exit 1
+          }
+          
+          Write-Host "Binary found: $exePath"
+          Write-Host "File size: $((Get-Item $exePath).Length / 1MB) MB"
+          
+          # Test: --version flag
+          Write-Host "`n=== Version check ==="
+          $versionOutput = & $exePath --version 2>&1
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Version check failed"
+            exit 1
+          }
+          Write-Host "Version: $versionOutput"
+          
+          # Test: --smoke-test flag
+          Write-Host "`n=== Smoke test ==="
+          $smokeOutput = & $exePath --smoke-test 2>&1
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Smoke test failed"
+            exit 1
+          }
+          Write-Host $smokeOutput
+          
+          Write-Host "`n✅ Nightly build smoke tests passed!"
+      
+      - name: Prepare artifacts
+        id: artifacts
+        shell: pwsh
+        run: |
+          $buildDate = "${{ steps.info.outputs.date_dash }}"
+          $version = "${{ steps.info.outputs.version }}"
+          $artifactDir = "nightly-artifacts"
+          New-Item -ItemType Directory -Force -Path $artifactDir
+          
+          # Copy and rename NSIS installer
+          $nsisPath = "src-tauri/target/release/bundle/nsis"
+          if (Test-Path $nsisPath) {
+            Get-ChildItem "$nsisPath/*.exe" | ForEach-Object {
+              $newName = "Isolate-nightly-$buildDate-setup.exe"
+              Copy-Item $_.FullName "$artifactDir/$newName"
+              Write-Host "Prepared: $newName"
+            }
+          }
+          
+          # Copy MSI installers
+          $msiPath = "src-tauri/target/release/bundle/msi"
+          if (Test-Path $msiPath) {
+            Get-ChildItem "$msiPath/*.msi" | ForEach-Object {
+              # Extract locale from filename (e.g., _en-US.msi)
+              if ($_.Name -match '_([a-z]{2}-[A-Z]{2})\.msi$') {
+                $locale = $Matches[1]
+                $newName = "Isolate-nightly-$buildDate-$locale.msi"
+              } else {
+                $newName = "Isolate-nightly-$buildDate.msi"
+              }
+              Copy-Item $_.FullName "$artifactDir/$newName"
+              Write-Host "Prepared: $newName"
+            }
+          }
+          
+          # Copy standalone exe
+          $exePath = "src-tauri/target/release/Isolate.exe"
+          if (Test-Path $exePath) {
+            $newName = "Isolate-nightly-$buildDate-standalone.exe"
+            Copy-Item $exePath "$artifactDir/$newName"
+            Write-Host "Prepared: $newName"
+          }
+          
+          # Generate checksums
+          Get-ChildItem "$artifactDir/*.exe", "$artifactDir/*.msi" | ForEach-Object {
+            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+            "$hash  $($_.Name)" | Add-Content "$artifactDir/checksums.txt"
+          }
+          
+          Write-Host "`n=== Artifacts ==="
+          Get-ChildItem $artifactDir
+          
+          Write-Host "`n=== Checksums ==="
+          Get-Content "$artifactDir/checksums.txt"
+      
+      - name: Generate release notes
+        id: notes
+        shell: bash
+        run: |
+          BUILD_DATE="${{ steps.info.outputs.date_dash }}"
+          VERSION="${{ steps.info.outputs.version }}"
+          SHORT_SHA="${{ steps.info.outputs.short_sha }}"
+          DATETIME="${{ steps.info.outputs.datetime }}"
+          
+          # Get commits since last nightly tag
+          PREV_NIGHTLY=$(git tag -l 'nightly-*' --sort=-creatordate | head -1)
+          
+          if [ -n "$PREV_NIGHTLY" ]; then
+            echo "📝 Changes since $PREV_NIGHTLY:"
+            COMMITS=$(git log --pretty=format:"- %s (%h)" "$PREV_NIGHTLY"..HEAD --no-merges 2>/dev/null | head -20 || echo "")
+          else
+            echo "📝 Recent commits:"
+            COMMITS=$(git log --pretty=format:"- %s (%h)" --no-merges -20 2>/dev/null || echo "")
+          fi
+          
+          cat > release_notes.md << NOTES_EOF
+          ## 🌙 Isolate Nightly — ${BUILD_DATE}
+          
+          **Version:** \`${VERSION}\`  
+          **Commit:** \`${SHORT_SHA}\`  
+          **Built:** ${DATETIME}
+          
+          > ⚠️ **Nightly builds are for testing only** — may contain bugs and breaking changes.
+          
+          ### ✨ Changes
+          
+          ${COMMITS:-"- No changes since last nightly"}
+          
+          ---
+          
+          ### 📥 Downloads
+          
+          | File | Description |
+          |------|-------------|
+          | \`Isolate-nightly-${BUILD_DATE}-setup.exe\` | **Recommended** — NSIS installer |
+          | \`Isolate-nightly-${BUILD_DATE}-en-US.msi\` | MSI package (English) |
+          | \`Isolate-nightly-${BUILD_DATE}-ru-RU.msi\` | MSI package (Russian) |
+          | \`Isolate-nightly-${BUILD_DATE}-standalone.exe\` | Portable executable |
+          
+          ### 🔧 Installation
+          
+          1. Download \`Isolate-nightly-${BUILD_DATE}-setup.exe\`
+          2. Run installer (may require "Run anyway" in SmartScreen)
+          3. Follow installation wizard
+          
+          ### ⚠️ Notes
+          
+          - Nightly builds are **unsigned** — Windows SmartScreen will show a warning
+          - These builds are automatically deleted after **7 days**
+          - For stable releases, see [Releases](../../releases)
+          
+          ---
+          
+          <details>
+          <summary>🔐 Checksums (SHA256)</summary>
+          
+          \`\`\`
+          NOTES_EOF
+          
+          if [ -f nightly-artifacts/checksums.txt ]; then
+            cat nightly-artifacts/checksums.txt >> release_notes.md
+          fi
+          
+          cat >> release_notes.md << 'FOOTER_EOF'
+          ```
+          
+          </details>
+          FOOTER_EOF
+          
+          echo "✅ Release notes generated"
+      
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Isolate-nightly-${{ steps.info.outputs.date_dash }}
+          path: nightly-artifacts/
+          retention-days: 7
+          if-no-files-found: error
+      
+      - name: Delete existing nightly tag (if exists)
+        shell: bash
+        run: |
+          TAG="${{ steps.info.outputs.tag }}"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Deleting existing tag $TAG"
+            git push origin --delete "$TAG" || true
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.info.outputs.tag }}
+          name: "🌙 Nightly ${{ steps.info.outputs.date_dash }}"
+          body_path: release_notes.md
+          draft: false
+          prerelease: true
+          fail_on_unmatched_files: false
+          files: |
+            nightly-artifacts/*.exe
+            nightly-artifacts/*.msi
+            nightly-artifacts/checksums.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Summary
+        shell: bash
+        run: |
+          BUILD_DATE="${{ steps.info.outputs.date_dash }}"
+          VERSION="${{ steps.info.outputs.version }}"
+          TAG="${{ steps.info.outputs.tag }}"
+          
+          echo "## 🌙 Nightly Build — $BUILD_DATE" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** \`$VERSION\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Tag:** \`$TAG\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| File | Description |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|-------------|" >> $GITHUB_STEP_SUMMARY
+          echo "| \`Isolate-nightly-$BUILD_DATE-setup.exe\` | NSIS Installer |" >> $GITHUB_STEP_SUMMARY
+          echo "| \`Isolate-nightly-$BUILD_DATE-*.msi\` | MSI Packages |" >> $GITHUB_STEP_SUMMARY
+          echo "| \`Isolate-nightly-$BUILD_DATE-standalone.exe\` | Portable |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔗 Links" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- [GitHub Release](../../releases/tag/$TAG)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "⚠️ **Nightly builds are for testing only** — may be unstable." >> $GITHUB_STEP_SUMMARY
+
+  skip-notification:
+    name: Skip notification
+    runs-on: ubuntu-latest
+    needs: check-changes
+    if: needs.check-changes.outputs.should_build == 'false'
+    
+    steps:
+      - name: Summary
+        run: |
+          echo "## ⏭️ Nightly Build Skipped" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "No new commits in the last 24 hours." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "To force a build, use **workflow_dispatch** with \`force_build: true\`" >> $GITHUB_STEP_SUMMARY

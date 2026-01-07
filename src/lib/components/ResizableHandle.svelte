@@ -7,8 +7,8 @@
 
   let { disabled = false }: Props = $props();
 
-  // Get context from parent group
-  const ctx = getContext<{
+  // Get context from parent group (with HMR safety)
+  type HandleGroupContext = {
     direction: () => 'horizontal' | 'vertical';
     startResize: (handleIndex: number, event: MouseEvent | TouchEvent) => void;
     handleKeyboardResize: (handleIndex: number, event: KeyboardEvent) => void;
@@ -16,7 +16,14 @@
     isDragging: () => boolean;
     activeHandleIndex: () => number | null;
     panelOrder: () => string[];
-  }>('resizable-panel-group');
+  };
+  
+  let ctx: HandleGroupContext | undefined;
+  try {
+    ctx = getContext<HandleGroupContext>('resizable-panel-group');
+  } catch {
+    // HMR may cause lifecycle_outside_component error
+  }
 
   let handleRef = $state<HTMLElement | null>(null);
   let handleIndex = $state(0);
@@ -54,11 +61,12 @@
     // Double-click to reset to default sizes (could be implemented)
   }
 
-  const direction = ctx?.direction() ?? 'horizontal';
+  let direction = $derived(ctx?.direction() ?? 'horizontal');
   const isActive = $derived(ctx?.activeHandleIndex() === handleIndex && ctx?.isDragging());
 </script>
 
-<!-- svelte-ignore a11y_no_noninteractive_tabindex a11y_no_noninteractive_element_interactions -->
+<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <div
   bind:this={handleRef}
   data-resizable-handle

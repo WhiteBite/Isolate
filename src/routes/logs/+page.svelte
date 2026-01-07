@@ -1,5 +1,6 @@
 <script lang="ts">
   import { browser } from '$app/environment';
+  import { page } from '$app/stores';
   import Spinner from '$lib/components/Spinner.svelte';
   import { logs, filteredLogs, logFilters, logSources, type LogEntry, type LogLevel } from '$lib/stores/logs';
 
@@ -16,14 +17,63 @@
   let filteredLogsValue = $state<LogEntry[]>([]);
   let sourcesValue = $state<string[]>([]);
 
+  // Virtual scrolling state
+  const ITEM_HEIGHT = 32; // Height of each log row in pixels
+  const BUFFER_SIZE = 10; // Extra items to render above/below viewport
+  let containerRef: HTMLDivElement | undefined = $state();
+  let scrollTop = $state(0);
+  let containerHeight = $state(600);
+
+  // Calculate visible range for virtual scrolling
+  let virtualScrollData = $derived(() => {
+    const totalItems = filteredLogsValue.length;
+    const totalHeight = totalItems * ITEM_HEIGHT;
+    
+    const startIndex = Math.max(0, Math.floor(scrollTop / ITEM_HEIGHT) - BUFFER_SIZE);
+    const visibleCount = Math.ceil(containerHeight / ITEM_HEIGHT) + BUFFER_SIZE * 2;
+    const endIndex = Math.min(totalItems, startIndex + visibleCount);
+    
+    const visibleItems = filteredLogsValue.slice(startIndex, endIndex);
+    const offsetY = startIndex * ITEM_HEIGHT;
+    
+    return {
+      totalHeight,
+      visibleItems,
+      offsetY,
+      startIndex,
+      endIndex,
+      totalItems
+    };
+  });
+
+  // Use virtualization only when we have many items
+  const VIRTUALIZATION_THRESHOLD = 200;
+  let useVirtualization = $derived(filteredLogsValue.length > VIRTUALIZATION_THRESHOLD);
+
   const levelOptions: { value: LogLevel | 'all'; label: string; color: string }[] = [
-    { value: 'all', label: 'Все', color: 'text-zinc-400' },
-    { value: 'error', label: 'Ошибки', color: 'text-red-400' },
-    { value: 'warn', label: 'Предупреждения', color: 'text-amber-400' },
-    { value: 'info', label: 'Информация', color: 'text-cyan-400' },
-    { value: 'debug', label: 'Отладка', color: 'text-zinc-500' },
-    { value: 'success', label: 'Успех', color: 'text-emerald-400' }
+    { value: 'all', label: 'All', color: 'text-zinc-400' },
+    { value: 'error', label: 'Errors', color: 'text-red-400' },
+    { value: 'warn', label: 'Warnings', color: 'text-amber-400' },
+    { value: 'info', label: 'Info', color: 'text-cyan-400' },
+    { value: 'debug', label: 'Debug', color: 'text-zinc-500' },
+    { value: 'success', label: 'Success', color: 'text-emerald-400' }
   ];
+
+  // Read source filter from URL query params on load
+  $effect(() => {
+    if (!browser) return;
+    
+    const unsubPage = page.subscribe(($page) => {
+      const sourceParam = $page.url.searchParams.get('source');
+      if (sourceParam) {
+        sourceFilter = sourceParam;
+      }
+    });
+    
+    return () => {
+      unsubPage();
+    };
+  });
 
   // Subscribe to stores
   $effect(() => {
@@ -61,9 +111,37 @@
       const container = document.getElementById('logs-container');
       if (container) {
         container.scrollTop = container.scrollHeight;
+        scrollTop = container.scrollTop;
       }
     });
   }
+
+  function handleScroll(e: Event) {
+    const target = e.target as HTMLDivElement;
+    scrollTop = target.scrollTop;
+    
+    // Update container height on scroll (in case of resize)
+    if (target.clientHeight !== containerHeight) {
+      containerHeight = target.clientHeight;
+    }
+  }
+
+  // Initialize container height
+  $effect(() => {
+    if (containerRef) {
+      containerHeight = containerRef.clientHeight;
+      
+      // Set up resize observer
+      const resizeObserver = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          containerHeight = entry.contentRect.height;
+        }
+      });
+      resizeObserver.observe(containerRef);
+      
+      return () => resizeObserver.disconnect();
+    }
+  });
 
   function clearLogs() {
     clearing = true;
@@ -76,7 +154,6 @@
     exporting = true;
 
     try {
-      // Format logs for export
       const exportData = logsValue.map(log => ({
         timestamp: log.timestamp.toISOString(),
         level: log.level,
@@ -121,11 +198,12 @@
   }
 
   function formatTimestamp(date: Date): string {
-    return date.toLocaleTimeString('ru-RU', { 
+    return date.toLocaleTimeString('en-US', { 
       hour: '2-digit', 
       minute: '2-digit', 
       second: '2-digit',
-      fractionalSecondDigits: 3
+      fractionalSecondDigits: 3,
+      hour12: false
     });
   }
 </script>
@@ -134,8 +212,8 @@
   <!-- Header -->
   <div class="flex items-center justify-between">
     <div>
-      <h1 class="text-3xl font-bold text-white">Логи</h1>
-      <p class="text-zinc-500 mt-1">Журнал событий приложения</p>
+      <h1 class="text-3xl font-bold text-white">Logs</h1>
+      <p class="text-zinc-500 mt-1">Application event journal</p>
     </div>
     
     <div class="flex items-center gap-3">
@@ -153,16 +231,15 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
           </svg>
         {/if}
-        <span>Очистить</span>
+        <span>Clear</span>
       </button>
       
       <button
         onclick={exportLogs}
         disabled={exporting || logsValue.length === 0}
         class="flex items-center gap-2 px-4 py-2.5 
-               bg-gradient-to-r from-cyan-500 to-indigo-500 hover:from-cyan-400 hover:to-indigo-400
-               disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl font-medium transition-all
-               shadow-lg shadow-cyan-500/20"
+               bg-indigo-500 hover:bg-indigo-600
+               disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl font-medium transition-all"
       >
         {#if exporting}
           <Spinner size="sm" />
@@ -171,21 +248,22 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
         {/if}
-        <span>Экспортировать</span>
+        <span>Export</span>
       </button>
     </div>
   </div>
 
   <!-- Filters -->
-  <div class="bg-zinc-900/50 backdrop-blur-sm rounded-2xl p-4 border border-white/5">
+  <div class="bg-black/20 backdrop-blur-sm rounded-2xl p-4 border border-white/10">
     <div class="flex flex-wrap items-center gap-4">
       <!-- Level Filter -->
       <div class="flex items-center gap-2">
-        <label class="text-zinc-500 text-sm">Уровень:</label>
+        <label for="log-level" class="text-zinc-500 text-sm">Level:</label>
         <select
+          id="log-level"
           bind:value={levelFilter}
-          class="bg-zinc-800/50 border border-white/5 text-white rounded-lg px-3 py-2 text-sm 
-                 focus:ring-cyan-500 focus:border-cyan-500 focus:outline-none"
+          class="bg-black/20 border border-white/10 text-white rounded-lg px-3 py-2 text-sm 
+                 focus:border-indigo-500 focus:outline-none transition-colors"
         >
           {#each levelOptions as option}
             <option value={option.value}>{option.label}</option>
@@ -195,13 +273,14 @@
 
       <!-- Source Filter -->
       <div class="flex items-center gap-2">
-        <label class="text-zinc-500 text-sm">Модуль:</label>
+        <label for="log-module" class="text-zinc-500 text-sm">Module:</label>
         <select
+          id="log-module"
           bind:value={sourceFilter}
-          class="bg-zinc-800/50 border border-white/5 text-white rounded-lg px-3 py-2 text-sm 
-                 focus:ring-cyan-500 focus:border-cyan-500 focus:outline-none"
+          class="bg-black/20 border border-white/10 text-white rounded-lg px-3 py-2 text-sm 
+                 focus:border-indigo-500 focus:outline-none transition-colors"
         >
-          <option value="all">Все</option>
+          <option value="all">All</option>
           {#each sourcesValue as source}
             <option value={source}>{source}</option>
           {/each}
@@ -217,21 +296,21 @@
           <input
             type="text"
             bind:value={searchQuery}
-            placeholder="Поиск..."
-            class="w-full bg-zinc-800/50 border border-white/5 text-white rounded-lg pl-10 pr-4 py-2 text-sm 
-                   focus:ring-cyan-500 focus:border-cyan-500 focus:outline-none placeholder-zinc-500"
+            placeholder="Search..."
+            class="w-full bg-black/20 border border-white/10 text-white rounded-lg pl-10 pr-4 py-2 text-sm 
+                   focus:border-indigo-500 focus:outline-none placeholder-zinc-500 transition-colors"
           />
         </div>
       </div>
 
       <!-- Auto-scroll Toggle -->
-      <label class="flex items-center gap-2 cursor-pointer px-3 py-2 rounded-lg hover:bg-zinc-800/30 transition-colors">
+      <label class="flex items-center gap-2 cursor-pointer px-3 py-2 rounded-lg hover:bg-white/5 transition-colors">
         <input
           type="checkbox"
           bind:checked={autoScroll}
-          class="w-4 h-4 rounded bg-zinc-700 border-zinc-600 text-cyan-500 focus:ring-cyan-500 focus:ring-offset-zinc-900"
+          class="w-4 h-4 rounded bg-zinc-700 border-zinc-600 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-zinc-900"
         />
-        <span class="text-zinc-400 text-sm">Автопрокрутка</span>
+        <span class="text-zinc-400 text-sm">Auto-scroll</span>
       </label>
     </div>
   </div>
@@ -239,6 +318,8 @@
   <!-- Logs Container -->
   <div 
     id="logs-container"
+    bind:this={containerRef}
+    onscroll={handleScroll}
     class="flex-1 bg-black/30 backdrop-blur-sm rounded-2xl border border-white/5 overflow-hidden"
   >
     {#if filteredLogsValue.length === 0}
@@ -248,26 +329,67 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
         </div>
-        <p class="text-lg font-medium text-zinc-400">Нет логов</p>
-        <p class="text-sm mt-1">Логи появятся здесь при работе приложения</p>
+        <p class="text-lg font-medium text-zinc-400">No logs</p>
+        <p class="text-sm mt-1">Logs will appear here as the application runs</p>
+      </div>
+    {:else if useVirtualization}
+      <!-- Virtual scrolling for large lists -->
+      <div 
+        class="h-full overflow-y-auto p-4 font-mono text-xs"
+        style="position: relative;"
+      >
+        <!-- Spacer to maintain scroll height -->
+        <div style="height: {virtualScrollData().totalHeight}px; position: relative;">
+          <!-- Visible items positioned absolutely -->
+          <div style="position: absolute; top: {virtualScrollData().offsetY}px; left: 0; right: 0;">
+            {#each virtualScrollData().visibleItems as log, i (log.id)}
+              <div 
+                class="flex items-start gap-3 py-1.5 px-3 rounded-lg hover:bg-white/5 transition-colors"
+                style="height: {ITEM_HEIGHT}px;"
+              >
+                <!-- Timestamp -->
+                <span class="text-zinc-600 shrink-0 tabular-nums">
+                  {formatTimestamp(log.timestamp)}
+                </span>
+                
+                <!-- Level Badge -->
+                <span class="shrink-0 px-1.5 py-0.5 text-xs font-medium rounded border {getLevelBadgeClass(log.level)} flex items-center gap-1">
+                  <span>{getLevelIcon(log.level)}</span>
+                  {log.level.toUpperCase()}
+                </span>
+                
+                <!-- Source -->
+                <span class="text-cyan-400/70 shrink-0">
+                  [{log.source}]
+                </span>
+                
+                <!-- Message -->
+                <span class="text-zinc-300 break-all leading-relaxed truncate">
+                  {log.message}
+                </span>
+              </div>
+            {/each}
+          </div>
+        </div>
       </div>
     {:else}
-      <div class="h-full overflow-y-auto p-4 font-mono text-sm space-y-1">
+      <!-- Regular rendering for small lists -->
+      <div class="h-full overflow-y-auto p-4 font-mono text-xs">
         {#each filteredLogsValue as log (log.id)}
-          <div class="flex items-start gap-3 py-2 px-3 rounded-lg hover:bg-white/5 transition-colors group">
+          <div class="flex items-start gap-3 py-1.5 px-3 rounded-lg hover:bg-white/5 transition-colors">
             <!-- Timestamp -->
-            <span class="text-zinc-600 shrink-0 text-xs mt-0.5 tabular-nums">
+            <span class="text-zinc-600 shrink-0 tabular-nums">
               {formatTimestamp(log.timestamp)}
             </span>
             
             <!-- Level Badge -->
-            <span class="shrink-0 px-2 py-0.5 text-xs font-medium rounded border {getLevelBadgeClass(log.level)} flex items-center gap-1">
+            <span class="shrink-0 px-1.5 py-0.5 text-xs font-medium rounded border {getLevelBadgeClass(log.level)} flex items-center gap-1">
               <span>{getLevelIcon(log.level)}</span>
               {log.level.toUpperCase()}
             </span>
             
             <!-- Source -->
-            <span class="text-cyan-400/70 shrink-0 text-xs mt-0.5">
+            <span class="text-cyan-400/70 shrink-0">
               [{log.source}]
             </span>
             
@@ -284,17 +406,20 @@
   <!-- Status Bar -->
   <div class="flex items-center justify-between text-sm text-zinc-500">
     <span>
-      {filteredLogsValue.length} из {logsValue.length} записей
+      {filteredLogsValue.length} of {logsValue.length} entries
+      {#if useVirtualization}
+        <span class="text-zinc-600 ml-2">(virtualized)</span>
+      {/if}
     </span>
     <div class="flex items-center gap-4">
       {#if levelFilter !== 'all'}
         <span class="px-2 py-1 rounded bg-zinc-800/50 text-xs">
-          Фильтр: {levelFilter.toUpperCase()}
+          Filter: {levelFilter.toUpperCase()}
         </span>
       {/if}
       {#if sourceFilter !== 'all'}
         <span class="px-2 py-1 rounded bg-zinc-800/50 text-xs">
-          Модуль: {sourceFilter}
+          Module: {sourceFilter}
         </span>
       {/if}
     </div>

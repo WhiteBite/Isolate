@@ -4,9 +4,105 @@ use std::sync::Arc;
 use tauri::State;
 use tracing::info;
 
+use super::validation::validate_domain;
 use crate::core::app_routing::InstalledApp;
+use crate::core::errors::{IsolateError, TypedResultExt};
 use crate::core::models::{AppRoute, DomainRoute};
+use crate::core::storage::RoutingRule;
 use crate::state::AppState;
+
+// ============================================================================
+// High-Level Routing Rules Commands
+// ============================================================================
+
+/// Get all routing rules
+#[tauri::command]
+pub async fn get_routing_rules(state: State<'_, Arc<AppState>>) -> Result<Vec<RoutingRule>, String> {
+    info!("Getting routing rules");
+    state
+        .storage
+        .get_routing_rules()
+        .await
+        .storage_context("Failed to get routing rules")
+        .map_err(|e: IsolateError| e.to_string())
+}
+
+/// Add a new routing rule
+#[tauri::command]
+pub async fn add_routing_rule(
+    state: State<'_, Arc<AppState>>,
+    rule: RoutingRule,
+) -> Result<RoutingRule, String> {
+    info!(id = %rule.id, name = %rule.name, "Adding routing rule");
+    state
+        .storage
+        .add_routing_rule(&rule)
+        .await
+        .storage_context("Failed to add routing rule")
+        .map_err(|e: IsolateError| e.to_string())?;
+    Ok(rule)
+}
+
+/// Update an existing routing rule
+#[tauri::command]
+pub async fn update_routing_rule(
+    state: State<'_, Arc<AppState>>,
+    rule: RoutingRule,
+) -> Result<(), String> {
+    info!(id = %rule.id, name = %rule.name, "Updating routing rule");
+    state
+        .storage
+        .update_routing_rule(&rule)
+        .await
+        .storage_context("Failed to update routing rule")
+        .map_err(|e: IsolateError| e.to_string())
+}
+
+/// Delete a routing rule
+#[tauri::command]
+pub async fn delete_routing_rule(
+    state: State<'_, Arc<AppState>>,
+    rule_id: String,
+) -> Result<(), String> {
+    info!(rule_id = %rule_id, "Deleting routing rule");
+    state
+        .storage
+        .delete_routing_rule(&rule_id)
+        .await
+        .storage_context("Failed to delete routing rule")
+        .map_err(|e: IsolateError| e.to_string())
+}
+
+/// Reorder routing rules
+#[tauri::command]
+pub async fn reorder_routing_rules(
+    state: State<'_, Arc<AppState>>,
+    rule_ids: Vec<String>,
+) -> Result<(), String> {
+    info!(count = rule_ids.len(), "Reordering routing rules");
+    state
+        .storage
+        .reorder_routing_rules(&rule_ids)
+        .await
+        .storage_context("Failed to reorder routing rules")
+        .map_err(|e: IsolateError| e.to_string())
+}
+
+/// Toggle routing rule enabled state
+#[tauri::command]
+pub async fn toggle_routing_rule(
+    state: State<'_, Arc<AppState>>,
+    rule_id: String,
+    enabled: bool,
+) -> Result<(), String> {
+    info!(rule_id = %rule_id, enabled, "Toggling routing rule");
+    state
+        .storage
+        .toggle_routing_rule(&rule_id, enabled)
+        .await
+        .storage_context("Failed to toggle routing rule")
+        .map_err(|e: IsolateError| e.to_string())
+}
 
 // ============================================================================
 // Domain Routing Commands
@@ -20,7 +116,8 @@ pub async fn get_domain_routes(state: State<'_, Arc<AppState>>) -> Result<Vec<Do
         .domain_router
         .get_routes()
         .await
-        .map_err(|e| format!("Failed to get domain routes: {}", e))
+        .storage_context("Failed to get domain routes")
+        .map_err(|e: IsolateError| e.to_string())
 }
 
 /// Add a domain route
@@ -30,12 +127,16 @@ pub async fn add_domain_route(
     domain: String,
     proxy_id: String,
 ) -> Result<(), String> {
+    // Validate domain format
+    validate_domain(&domain).map_err(|e| e.to_string())?;
+    
     info!(domain = %domain, proxy_id = %proxy_id, "Adding domain route");
     state
         .domain_router
         .add_route(&domain, &proxy_id)
         .await
-        .map_err(|e| format!("Failed to add domain route: {}", e))
+        .storage_context("Failed to add domain route")
+        .map_err(|e: IsolateError| e.to_string())
 }
 
 /// Remove a domain route
@@ -49,7 +150,8 @@ pub async fn remove_domain_route(
         .domain_router
         .remove_route(&domain)
         .await
-        .map_err(|e| format!("Failed to remove domain route: {}", e))
+        .storage_context("Failed to remove domain route")
+        .map_err(|e: IsolateError| e.to_string())
 }
 
 // ============================================================================
@@ -64,7 +166,8 @@ pub async fn get_app_routes(state: State<'_, Arc<AppState>>) -> Result<Vec<AppRo
         .app_router
         .get_routes()
         .await
-        .map_err(|e| format!("Failed to get app routes: {}", e))
+        .storage_context("Failed to get app routes")
+        .map_err(|e: IsolateError| e.to_string())
 }
 
 /// Add an app route
@@ -80,7 +183,8 @@ pub async fn add_app_route(
         .app_router
         .add_route(&app_name, &app_path, &proxy_id)
         .await
-        .map_err(|e| format!("Failed to add app route: {}", e))
+        .storage_context("Failed to add app route")
+        .map_err(|e: IsolateError| e.to_string())
 }
 
 /// Remove an app route
@@ -94,7 +198,8 @@ pub async fn remove_app_route(
         .app_router
         .remove_route(&app_path)
         .await
-        .map_err(|e| format!("Failed to remove app route: {}", e))
+        .storage_context("Failed to remove app route")
+        .map_err(|e: IsolateError| e.to_string())
 }
 
 /// Get list of installed applications (Windows)
@@ -107,5 +212,6 @@ pub async fn get_installed_apps(
         .app_router
         .get_installed_apps()
         .await
-        .map_err(|e| format!("Failed to get installed apps: {}", e))
+        .storage_context("Failed to get installed apps")
+        .map_err(|e: IsolateError| e.to_string())
 }

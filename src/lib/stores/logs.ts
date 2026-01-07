@@ -1,4 +1,4 @@
-import { writable, derived } from 'svelte/store';
+import { writable, derived, get } from 'svelte/store';
 
 export type LogLevel = 'error' | 'warn' | 'info' | 'debug' | 'success';
 
@@ -106,3 +106,15 @@ export const logSources = derived(logs, ($logs) => {
   const sources = new Set($logs.map(log => log.source));
   return Array.from(sources).sort();
 });
+
+// Helper function to get logs by source (for use outside of Svelte components)
+export function getLogsBySource(source: string): LogEntry[] {
+  return get(logs).filter(log => log.source === source);
+}
+
+// Create a derived store for a specific source
+export function createSourceLogsStore(source: string) {
+  return derived(logs, ($logs) => {
+    return $logs.filter(log => log.source === source);
+  });
+}

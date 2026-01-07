@@ -2,6 +2,11 @@
 //!
 //! Captures tracing logs and stores them in memory for frontend display.
 //! Supports filtering by level, module, and search text.
+//!
+//! NOTE: LogCaptureLayer is prepared for future log streaming to frontend.
+
+// Public API for log capture
+#![allow(dead_code)]
 
 use parking_lot::RwLock;
 use std::collections::VecDeque;

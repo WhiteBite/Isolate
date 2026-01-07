@@ -1,29 +1,52 @@
 //! Configuration loader for Isolate
 //!
 //! Loads and validates YAML configs for strategies and services.
+//!
+//! NOTE: Some functions are prepared for future config management features.
+
+// Public API for configuration loading
+#![allow(dead_code)]
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 use tokio::fs;
+use tokio::sync::RwLock;
 use tracing::{debug, error, info, warn};
 
 use crate::core::errors::{IsolateError, Result};
 use crate::core::models::{Service, Strategy};
 
+/// Cached data with timestamp
+#[derive(Debug)]
+struct CachedData<T> {
+    data: T,
+    loaded_at: Instant,
+}
+
 /// Configuration manager for loading strategies and services
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct ConfigManager {
     strategies_dir: PathBuf,
     services_dir: PathBuf,
+    /// Cache for strategies
+    strategies_cache: RwLock<Option<CachedData<HashMap<String, Strategy>>>>,
+    /// Cache for services
+    services_cache: RwLock<Option<CachedData<HashMap<String, Service>>>>,
 }
 
 impl ConfigManager {
+    /// Cache TTL (60 seconds)
+    const CACHE_TTL: Duration = Duration::from_secs(60);
+
     /// Create a new ConfigManager with specified directories
     pub fn new(strategies_dir: PathBuf, services_dir: PathBuf) -> Self {
         Self {
             strategies_dir,
             services_dir,
+            strategies_cache: RwLock::new(None),
+            services_cache: RwLock::new(None),
         }
     }
 
@@ -32,16 +55,46 @@ impl ConfigManager {
         Self {
             strategies_dir: base_dir.join("configs").join("strategies"),
             services_dir: base_dir.join("configs").join("services"),
+            strategies_cache: RwLock::new(None),
+            services_cache: RwLock::new(None),
         }
     }
 
-    /// Load all strategies from the strategies directory
+    /// Load all strategies from the strategies directory (with caching)
     pub async fn load_strategies(&self) -> Result<HashMap<String, Strategy>> {
-        info!(dir = ?self.strategies_dir, "Loading strategies");
+        // Check cache first
+        {
+            let cache = self.strategies_cache.read().await;
+            if let Some(ref cached) = *cache {
+                if cached.loaded_at.elapsed() < Self::CACHE_TTL {
+                    debug!("Using cached strategies");
+                    return Ok(cached.data.clone());
+                }
+            }
+        }
+
+        // Load from disk
+        let strategies = self.load_strategies_from_disk().await?;
+
+        // Update cache
+        {
+            let mut cache = self.strategies_cache.write().await;
+            *cache = Some(CachedData {
+                data: strategies.clone(),
+                loaded_at: Instant::now(),
+            });
+        }
+
+        Ok(strategies)
+    }
+
+    /// Load strategies from disk (internal, no caching)
+    async fn load_strategies_from_disk(&self) -> Result<HashMap<String, Strategy>> {
+        info!(dir = ?self.strategies_dir, "Loading strategies from disk");
 
         let mut strategies = HashMap::new();
 
-        if !self.strategies_dir.exists() {
+        if !tokio::fs::try_exists(&self.strategies_dir).await.unwrap_or(false) {
             warn!(dir = ?self.strategies_dir, "Strategies directory does not exist");
             return Ok(strategies);
         }
@@ -145,13 +198,41 @@ impl ConfigManager {
         Ok(())
     }
 
-    /// Load all services from the services directory
+    /// Load all services from the services directory (with caching)
     pub async fn load_services(&self) -> Result<HashMap<String, Service>> {
-        info!(dir = ?self.services_dir, "Loading services");
+        // Check cache first
+        {
+            let cache = self.services_cache.read().await;
+            if let Some(ref cached) = *cache {
+                if cached.loaded_at.elapsed() < Self::CACHE_TTL {
+                    debug!("Using cached services");
+                    return Ok(cached.data.clone());
+                }
+            }
+        }
+
+        // Load from disk
+        let services = self.load_services_from_disk().await?;
+
+        // Update cache
+        {
+            let mut cache = self.services_cache.write().await;
+            *cache = Some(CachedData {
+                data: services.clone(),
+                loaded_at: Instant::now(),
+            });
+        }
+
+        Ok(services)
+    }
+
+    /// Load services from disk (internal, no caching)
+    async fn load_services_from_disk(&self) -> Result<HashMap<String, Service>> {
+        info!(dir = ?self.services_dir, "Loading services from disk");
 
         let mut services = HashMap::new();
 
-        if !self.services_dir.exists() {
+        if !tokio::fs::try_exists(&self.services_dir).await.unwrap_or(false) {
             warn!(dir = ?self.services_dir, "Services directory does not exist");
             return Ok(services);
         }
@@ -237,10 +318,20 @@ impl ConfigManager {
     pub async fn reload(&self) -> Result<(HashMap<String, Strategy>, HashMap<String, Service>)> {
         info!("Reloading all configurations");
 
+        // Invalidate cache before reloading
+        self.invalidate_cache().await;
+
         let strategies = self.load_strategies().await?;
         let services = self.load_services().await?;
 
         Ok((strategies, services))
+    }
+
+    /// Invalidate all caches (call after hot reload or config changes)
+    pub async fn invalidate_cache(&self) {
+        *self.strategies_cache.write().await = None;
+        *self.services_cache.write().await = None;
+        info!("Config cache invalidated");
     }
 }
 
@@ -731,19 +822,6 @@ mod tests {
     }
 
     #[test]
-    fn test_config_manager_clone() {
-        let manager = ConfigManager::new(
-            PathBuf::from("/strategies"),
-            PathBuf::from("/services"),
-        );
-
-        let cloned = manager.clone();
-
-        assert_eq!(cloned.strategies_dir, manager.strategies_dir);
-        assert_eq!(cloned.services_dir, manager.services_dir);
-    }
-
-    #[test]
     fn test_config_manager_debug() {
         let manager = ConfigManager::new(
             PathBuf::from("/strategies"),
@@ -754,5 +832,28 @@ mod tests {
         assert!(debug_str.contains("ConfigManager"));
         assert!(debug_str.contains("strategies_dir"));
         assert!(debug_str.contains("services_dir"));
+    }
+
+    #[tokio::test]
+    async fn test_invalidate_cache() {
+        let manager = ConfigManager::new(
+            PathBuf::from("/nonexistent/strategies"),
+            PathBuf::from("/nonexistent/services"),
+        );
+
+        // Load to populate cache
+        let _ = manager.load_strategies().await;
+        let _ = manager.load_services().await;
+
+        // Invalidate
+        manager.invalidate_cache().await;
+
+        // Verify cache is empty
+        let strategies_cache = manager.strategies_cache.read().await;
+        assert!(strategies_cache.is_none());
+        drop(strategies_cache);
+
+        let services_cache = manager.services_cache.read().await;
+        assert!(services_cache.is_none());
     }
 }

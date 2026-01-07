@@ -1,0 +1,17 @@
+# IP Set Sources Configuration
+# Sources for downloading IP address lists for DPI bypass
+# Priority: lower number = higher priority (tried first)
+
+- id: zapret
+  name: Zapret IP List
+  url: https://raw.githubusercontent.com/bol-van/zapret/master/ipset/zapret-ip.txt
+  description: IP addresses from zapret project (bol-van)
+  enabled: true
+  priority: 1
+
+- id: antifilter
+  name: Antifilter All You Need
+  url: https://antifilter.download/list/allyouneed.lst
+  description: Comprehensive IP list from antifilter.download
+  enabled: true
+  priority: 2

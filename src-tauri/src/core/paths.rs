@@ -6,6 +6,8 @@
 //! ВАЖНО: Все функции для путей к бинарникам должны использоваться ТОЛЬКО из этого модуля!
 //! НЕ дублировать get_singbox_path, get_winws_path и т.д. в других модулях!
 
+#![allow(dead_code)] // Public paths API
+
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
@@ -27,7 +29,7 @@ pub fn is_dev_mode() -> bool {
 /// Нам нужен родительский каталог (корень проекта)
 fn get_project_root() -> PathBuf {
     PROJECT_ROOT.get_or_init(|| {
-        let current = std::env::current_dir().expect("Failed to get current directory");
+        let current = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
         
         // Если мы в src-tauri, поднимаемся на уровень выше
         if current.ends_with("src-tauri") {
@@ -87,7 +89,7 @@ fn get_app_exe_dir() -> PathBuf {
         .ok()
         .and_then(|p| p.parent().map(|p| p.to_path_buf()))
         .unwrap_or_else(|| {
-            std::env::current_dir().expect("Failed to get current directory")
+            std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
         })
 }
 
@@ -103,7 +105,7 @@ pub fn get_app_data_dir() -> PathBuf {
         get_app_exe_dir().join("data")
     } else {
         dirs::config_dir()
-            .expect("Failed to get config directory")
+            .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")))
             .join("Isolate")
     }
 }
@@ -169,6 +171,163 @@ pub fn get_database_path() -> PathBuf {
 }
 
 // ============================================================================
+// LOG ROTATION
+// ============================================================================
+
+/// Максимальное количество файлов логов оркестратора
+pub const MAX_ORCHESTRA_LOGS: usize = 10;
+
+/// Ротация логов оркестратора
+///
+/// Удаляет старые файлы логов, если их количество превышает MAX_ORCHESTRA_LOGS.
+/// Файлы сортируются по времени модификации, самые старые удаляются первыми.
+///
+/// # Arguments
+/// * `logs_dir` - Директория с логами
+///
+/// # Returns
+/// * `Ok(deleted_count)` - Количество удалённых файлов
+/// * `Err` - Ошибка при работе с файловой системой
+pub fn rotate_orchestra_logs(logs_dir: &PathBuf) -> std::io::Result<usize> {
+    use std::fs;
+    
+    // Получаем список файлов логов оркестратора
+    let mut log_files: Vec<_> = fs::read_dir(logs_dir)?
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| {
+            entry.file_name()
+                .to_string_lossy()
+                .starts_with("orchestra_")
+        })
+        .collect();
+    
+    // Сортируем по времени модификации (старые первые)
+    log_files.sort_by_key(|entry| {
+        entry.metadata()
+            .and_then(|m| m.modified())
+            .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
+    });
+    
+    let mut deleted_count = 0;
+    
+    // Удаляем старые если превышен лимит
+    while log_files.len() >= MAX_ORCHESTRA_LOGS {
+        if let Some(oldest) = log_files.first() {
+            let path = oldest.path();
+            tracing::info!(
+                file = %path.display(),
+                "Removing old orchestra log"
+            );
+            fs::remove_file(&path)?;
+            log_files.remove(0);
+            deleted_count += 1;
+        }
+    }
+    
+    Ok(deleted_count)
+}
+
+/// Асинхронная ротация логов оркестратора
+///
+/// Асинхронная версия `rotate_orchestra_logs` для использования в async контексте.
+pub async fn rotate_orchestra_logs_async(logs_dir: &PathBuf) -> std::io::Result<usize> {
+    use tokio::fs;
+    
+    // Получаем список файлов логов оркестратора
+    let mut entries = fs::read_dir(logs_dir).await?;
+    let mut log_files: Vec<(std::path::PathBuf, std::time::SystemTime)> = Vec::new();
+    
+    while let Some(entry) = entries.next_entry().await? {
+        let file_name = entry.file_name();
+        if file_name.to_string_lossy().starts_with("orchestra_") {
+            let modified = entry.metadata().await
+                .and_then(|m| m.modified())
+                .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+            log_files.push((entry.path(), modified));
+        }
+    }
+    
+    // Сортируем по времени модификации (старые первые)
+    log_files.sort_by_key(|(_, modified)| *modified);
+    
+    let mut deleted_count = 0;
+    
+    // Удаляем старые если превышен лимит
+    while log_files.len() >= MAX_ORCHESTRA_LOGS {
+        if let Some((path, _)) = log_files.first() {
+            tracing::info!(
+                file = %path.display(),
+                "Removing old orchestra log"
+            );
+            fs::remove_file(&path).await?;
+            log_files.remove(0);
+            deleted_count += 1;
+        }
+    }
+    
+    Ok(deleted_count)
+}
+
+/// Создаёт путь к новому файлу лога оркестратора с timestamp
+///
+/// Формат: `orchestra_YYYY-MM-DD_HH-MM-SS.log`
+///
+/// # Arguments
+/// * `logs_dir` - Директория для логов
+///
+/// # Returns
+/// Путь к новому файлу лога
+pub fn create_orchestra_log_path(logs_dir: &PathBuf) -> PathBuf {
+    let timestamp = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S");
+    let filename = format!("orchestra_{}.log", timestamp);
+    logs_dir.join(filename)
+}
+
+/// Создаёт новый файл лога оркестратора с автоматической ротацией
+///
+/// 1. Выполняет ротацию старых логов
+/// 2. Создаёт путь к новому файлу с timestamp
+///
+/// # Arguments
+/// * `logs_dir` - Директория для логов
+///
+/// # Returns
+/// * `Ok(PathBuf)` - Путь к новому файлу лога
+/// * `Err` - Ошибка при ротации или создании
+pub fn create_orchestra_log_file(logs_dir: &PathBuf) -> std::io::Result<PathBuf> {
+    // Создаём директорию если не существует
+    std::fs::create_dir_all(logs_dir)?;
+    
+    // Сначала ротируем старые логи
+    let deleted = rotate_orchestra_logs(logs_dir)?;
+    if deleted > 0 {
+        tracing::info!(deleted_count = deleted, "Rotated old orchestra logs");
+    }
+    
+    // Создаём путь к новому файлу
+    let path = create_orchestra_log_path(logs_dir);
+    
+    Ok(path)
+}
+
+/// Асинхронная версия создания файла лога с ротацией
+pub async fn create_orchestra_log_file_async(logs_dir: &PathBuf) -> std::io::Result<PathBuf> {
+    // Создаём директорию если не существует
+    tokio::fs::create_dir_all(logs_dir).await?;
+    
+    // Сначала ротируем старые логи
+    let deleted = rotate_orchestra_logs_async(logs_dir).await?;
+    if deleted > 0 {
+        tracing::info!(deleted_count = deleted, "Rotated old orchestra logs");
+    }
+    
+    // Создаём путь к новому файлу
+    let path = create_orchestra_log_path(logs_dir);
+    
+    Ok(path)
+}
+
+// ============================================================================
 // ПУТИ К БИНАРНИКАМ - ЕДИНСТВЕННОЕ МЕСТО ОПРЕДЕЛЕНИЯ!
 // НЕ дублировать эти функции в других модулях!
 // ============================================================================
@@ -203,14 +362,14 @@ pub fn get_winws_path() -> PathBuf {
     }
 }
 
-/// Создаёт все необходимые директории приложения
-pub fn ensure_dirs_exist() -> std::io::Result<()> {
-    std::fs::create_dir_all(get_app_data_dir())?;
-    std::fs::create_dir_all(get_binaries_dir())?;
-    std::fs::create_dir_all(get_hostlists_dir())?;
-    std::fs::create_dir_all(get_configs_dir())?;
-    std::fs::create_dir_all(get_logs_dir())?;
-    std::fs::create_dir_all(get_plugins_dir())?;
+/// Создаёт все необходимые директории приложения (async)
+pub async fn ensure_dirs_exist() -> std::io::Result<()> {
+    tokio::fs::create_dir_all(get_app_data_dir()).await?;
+    tokio::fs::create_dir_all(get_binaries_dir()).await?;
+    tokio::fs::create_dir_all(get_hostlists_dir()).await?;
+    tokio::fs::create_dir_all(get_configs_dir()).await?;
+    tokio::fs::create_dir_all(get_logs_dir()).await?;
+    tokio::fs::create_dir_all(get_plugins_dir()).await?;
     Ok(())
 }
 
@@ -369,5 +528,43 @@ mod tests {
         assert!(get_configs_dir().ends_with("configs"));
         assert!(get_logs_dir().ends_with("logs"));
         assert!(get_plugins_dir().ends_with("plugins"));
+    }
+
+    #[test]
+    fn test_max_orchestra_logs_constant() {
+        assert_eq!(MAX_ORCHESTRA_LOGS, 10);
+    }
+
+    #[test]
+    fn test_create_orchestra_log_path_format() {
+        let logs_dir = PathBuf::from("/tmp/logs");
+        let path = create_orchestra_log_path(&logs_dir);
+        
+        let filename = path.file_name().unwrap().to_string_lossy();
+        assert!(filename.starts_with("orchestra_"), "Filename should start with 'orchestra_'");
+        assert!(filename.ends_with(".log"), "Filename should end with '.log'");
+        
+        // Проверяем формат даты в имени файла
+        // orchestra_YYYY-MM-DD_HH-MM-SS.log
+        let name_without_ext = filename.trim_end_matches(".log");
+        let parts: Vec<&str> = name_without_ext.split('_').collect();
+        assert!(parts.len() >= 3, "Filename should have date and time parts");
+    }
+
+    #[test]
+    fn test_rotate_orchestra_logs_empty_dir() {
+        use std::fs;
+        
+        // Создаём временную директорию
+        let temp_dir = std::env::temp_dir().join(format!("isolate_test_{}", std::process::id()));
+        let _ = fs::create_dir_all(&temp_dir);
+        
+        // Ротация пустой директории должна вернуть 0
+        let result = rotate_orchestra_logs(&temp_dir);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 0);
+        
+        // Очистка
+        let _ = fs::remove_dir_all(&temp_dir);
     }
 }

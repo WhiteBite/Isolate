@@ -39,21 +39,21 @@
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
-    class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+    class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-950/90 backdrop-blur-xl"
     onclick={handleBackdropClick}
   >
     <div
-      class="relative w-full max-w-lg bg-[#1a1f3a] rounded-xl border border-[#2a2f4a] shadow-2xl"
+      class="relative w-full max-w-lg bg-zinc-900/95 rounded-2xl border border-white/5 shadow-2xl shadow-black/50"
       role="dialog"
       aria-modal="true"
       aria-labelledby={title ? 'modal-title' : undefined}
     >
       {#if title}
-        <div class="flex items-center justify-between px-6 py-4 border-b border-[#2a2f4a]">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-white/5">
           <h2 id="modal-title" class="text-lg font-semibold text-white">{title}</h2>
           <button
             onclick={handleClose}
-            class="p-1 text-[#a0a0a0] hover:text-white rounded-lg hover:bg-[#2a2f4a] transition-colors"
+            class="p-1.5 text-zinc-500 hover:text-white rounded-lg hover:bg-white/5 transition-colors"
             aria-label="Close modal"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -64,7 +64,7 @@
       {:else}
         <button
           onclick={handleClose}
-          class="absolute top-4 right-4 p-1 text-[#a0a0a0] hover:text-white rounded-lg hover:bg-[#2a2f4a] transition-colors"
+          class="absolute top-4 right-4 p-1.5 text-zinc-500 hover:text-white rounded-lg hover:bg-white/5 transition-colors"
           aria-label="Close modal"
         >
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

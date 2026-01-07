@@ -2,6 +2,11 @@
 //!
 //! Manages lists of domains for different services (Discord, YouTube, etc.)
 //! Hostlists are stored as plain text files with one domain per line.
+//!
+//! NOTE: Some functions are prepared for future hostlist management features.
+
+// Public API for hostlist management
+#![allow(dead_code)]
 
 use std::collections::HashSet;
 use std::path::PathBuf;

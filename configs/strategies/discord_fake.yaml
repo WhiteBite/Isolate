@@ -2,9 +2,10 @@
 # Использует fake пакеты для обхода DPI на Discord voice/media
 id: "zapret_discord_fake"
 name: "Discord Fake"
-description: "Стратегия с fake пакетами для Discord голосовых каналов и медиа"
+description: "Стратегия с fake пакетами для Discord голосовых каналов и медиа. Использует filter-l7 для точного определения Discord трафика."
 family: sni_frag
 engine: zapret
+label: specialized
 
 mode_capabilities:
   supports_socks: false
@@ -13,27 +14,29 @@ mode_capabilities:
 global_template:
   binary: "binaries/winws.exe"
   args:
-    # QUIC fake для Discord
+    # WinDivert фильтры для Discord
     - "--wf-tcp=443,2053,2083,2087,2096,8443"
     - "--wf-udp=443,19294-19344,50000-50100"
     # Discord QUIC
     - "--filter-udp=443"
     - "--hostlist=hostlists/discord.txt"
+    - "--hostlist-exclude=hostlists/exclude.txt"
+    - "--ipset-exclude=hostlists/ipset-exclude.txt"
     - "--dpi-desync=fake"
     - "--dpi-desync-repeats=6"
     - "--dpi-desync-fake-quic=binaries/quic_initial_www_google_com.bin"
     - "--new"
-    # Discord voice/STUN (UDP порты 19294-19344, 50000-50100)
+    # Discord voice/STUN (UDP порты 19294-19344, 50000-50100) с filter-l7
     - "--filter-udp=19294-19344,50000-50100"
+    - "--filter-l7=discord,stun"
     - "--dpi-desync=fake"
-    - "--dpi-desync-any-protocol"
-    - "--dpi-desync-cutoff=d3"
+    - "--dpi-desync-fake-discord=binaries/quic_initial_www_google_com.bin"
+    - "--dpi-desync-fake-stun=binaries/quic_initial_www_google_com.bin"
     - "--dpi-desync-repeats=6"
-    - "--dpi-desync-fake-quic=binaries/quic_initial_www_google_com.bin"
     - "--new"
     # Discord media CDN (альтернативные порты)
     - "--filter-tcp=2053,2083,2087,2096,8443"
-    - "--hostlist=hostlists/discord.txt"
+    - "--hostlist-domains=discord.media"
     - "--dpi-desync=fake"
     - "--dpi-desync-repeats=6"
     - "--dpi-desync-fooling=ts"
@@ -42,6 +45,8 @@ global_template:
     # Discord TCP 443
     - "--filter-tcp=443"
     - "--hostlist=hostlists/discord.txt"
+    - "--hostlist-exclude=hostlists/exclude.txt"
+    - "--ipset-exclude=hostlists/ipset-exclude.txt"
     - "--dpi-desync=fake"
     - "--dpi-desync-repeats=6"
     - "--dpi-desync-fooling=ts"

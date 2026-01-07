@@ -1,0 +1,36 @@
+# Google Services Definition
+id: "google"
+name: "Google Services"
+enabled_by_default: true
+critical: true
+
+tests:
+  - type: https_head
+    url: "https://www.google.com"
+    timeout_ms: 5000
+
+  - type: https_head
+    url: "https://www.googleapis.com"
+    timeout_ms: 5000
+
+  - type: https_head
+    url: "https://mail.google.com"
+    timeout_ms: 5000
+
+  - type: tcp_connect
+    host: "www.google.com"
+    port: 443
+    timeout_ms: 3000
+
+  - type: tcp_connect
+    host: "drive.google.com"
+    port: 443
+    timeout_ms: 3000
+
+  - type: dns
+    domain: "www.google.com"
+    timeout_ms: 3000
+
+  - type: dns
+    domain: "googleapis.com"
+    timeout_ms: 3000

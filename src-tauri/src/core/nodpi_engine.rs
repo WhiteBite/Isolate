@@ -17,6 +17,8 @@
 //! stop_nodpi(&mut handle).await?;
 //! ```
 
+#![allow(dead_code)] // Public NoDPI engine API
+
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -39,6 +41,73 @@ use crate::core::process_runner::{ManagedProcess, ProcessConfig};
 /// CRITICAL: Only one WinDivert process can run at a time!
 static WINDIVERT_ACTIVE: AtomicBool = AtomicBool::new(false);
 
+// ============================================================================
+// RAII Guard for WinDivert Flag
+// ============================================================================
+
+/// RAII guard that automatically releases the WinDivert flag when dropped.
+/// This ensures the flag is reset even if the process crashes or panics.
+///
+/// # Usage
+/// ```rust,ignore
+/// let guard = WinDivertGuard::acquire()?;
+/// // ... do work with WinDivert ...
+/// // Flag is automatically released when guard goes out of scope
+/// ```
+#[derive(Debug)]
+pub struct WinDivertGuard {
+    /// Whether this guard owns the flag (for move semantics)
+    active: bool,
+}
+
+impl WinDivertGuard {
+    /// Attempt to acquire the WinDivert flag atomically.
+    /// Returns `Ok(WinDivertGuard)` if successful, `Err` if already active.
+    pub fn acquire() -> Result<Self> {
+        match WINDIVERT_ACTIVE.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst) {
+            Ok(_) => {
+                debug!("WinDivert guard acquired");
+                Ok(Self { active: true })
+            }
+            Err(_) => Err(IsolateError::Process(
+                "Another WinDivert-based engine is already running. Only one can run at a time to avoid BSOD!".to_string()
+            )),
+        }
+    }
+
+    /// Manually release the guard without dropping.
+    /// After calling this, the guard will not release the flag on drop.
+    pub fn release(&mut self) {
+        if self.active {
+            WINDIVERT_ACTIVE.store(false, Ordering::SeqCst);
+            self.active = false;
+            debug!("WinDivert guard released manually");
+        }
+    }
+
+    /// Transfer ownership of the guard (for moving into handles).
+    /// The original guard will no longer release the flag on drop.
+    pub fn take(&mut self) -> Self {
+        let taken = Self { active: self.active };
+        self.active = false;
+        taken
+    }
+
+    /// Check if this guard is active (owns the flag).
+    pub fn is_active(&self) -> bool {
+        self.active
+    }
+}
+
+impl Drop for WinDivertGuard {
+    fn drop(&mut self) {
+        if self.active {
+            WINDIVERT_ACTIVE.store(false, Ordering::SeqCst);
+            debug!("WinDivert guard released on drop");
+        }
+    }
+}
+
 /// Default graceful shutdown timeout in milliseconds
 const SHUTDOWN_TIMEOUT_MS: u64 = 3000;
 
@@ -46,6 +115,20 @@ const SHUTDOWN_TIMEOUT_MS: u64 = 3000;
 const ZAPRET_LAUNCH_DELAY_MS: u64 = 2500;
 
 /// Global mutex for sequential Zapret launches
+///
+/// ## Lock Ordering
+///
+/// Этот lock захватывается ВНУТРИ `strategy_engine::zapret_lock`.
+/// Порядок: strategy_engine::zapret_lock → ZAPRET_LAUNCH_LOCK
+///
+/// НИКОГДА не захватывать этот lock напрямую из кода, который уже держит
+/// другие lock'и из strategy_engine, кроме zapret_lock.
+///
+/// ## Назначение
+///
+/// Обеспечивает задержку между запусками WinDivert для стабильности драйвера.
+/// Даже если strategy_engine::zapret_lock уже гарантирует последовательность,
+/// этот lock добавляет дополнительную защиту на уровне nodpi_engine.
 static ZAPRET_LAUNCH_LOCK: once_cell::sync::Lazy<Arc<Mutex<()>>> =
     once_cell::sync::Lazy::new(|| Arc::new(Mutex::new(())));
 
@@ -154,14 +237,14 @@ pub async fn detect_available_engines() -> Vec<NoDpiEngine> {
 
     // Check for Zapret/winws
     let winws_path = binaries_dir.join("winws.exe");
-    if winws_path.exists() {
+    if tokio::fs::try_exists(&winws_path).await.unwrap_or(false) {
         debug!("Found Zapret engine: {}", winws_path.display());
         available.push(NoDpiEngine::Zapret);
     }
 
     // Check for Flowseal
     let flowseal_path = binaries_dir.join("flowseal.exe");
-    if flowseal_path.exists() {
+    if tokio::fs::try_exists(&flowseal_path).await.unwrap_or(false) {
         debug!("Found Flowseal engine: {}", flowseal_path.display());
         available.push(NoDpiEngine::Flowseal);
     }
@@ -178,24 +261,23 @@ pub async fn get_engines_info() -> Vec<EngineInfo> {
     let binaries_dir = get_binaries_dir();
     let engines = [NoDpiEngine::Zapret, NoDpiEngine::Flowseal];
 
-    engines
-        .into_iter()
-        .map(|engine| {
-            let binary_path = binaries_dir.join(engine.binary_name());
-            let available = binary_path.exists();
-            EngineInfo {
-                engine,
-                binary_path,
-                available,
-            }
-        })
-        .collect()
+    let mut result = Vec::new();
+    for engine in engines {
+        let binary_path = binaries_dir.join(engine.binary_name());
+        let available = tokio::fs::try_exists(&binary_path).await.unwrap_or(false);
+        result.push(EngineInfo {
+            engine,
+            binary_path,
+            available,
+        });
+    }
+    result
 }
 
 /// Check if a specific engine is available
 pub async fn is_engine_available(engine: &NoDpiEngine) -> bool {
     let binary_path = get_binaries_dir().join(engine.binary_name());
-    binary_path.exists()
+    tokio::fs::try_exists(&binary_path).await.unwrap_or(false)
 }
 
 /// Build command-line arguments for winws from configuration
@@ -256,14 +338,78 @@ fn build_engine_args(config: &NoDpiConfig) -> Vec<String> {
 /// # Returns
 /// * `Vec<String>` - Resolved command line arguments
 pub fn build_winws_args_from_template(template: &LaunchTemplate) -> Vec<String> {
+    build_winws_args_from_template_with_mode(template, None)
+}
+
+/// Build winws command line from Strategy's LaunchTemplate with WinDivert mode
+///
+/// Converts template args with path resolution for hostlists and binaries,
+/// and optionally adds mode-specific flags (--autottl, --autohostlist).
+///
+/// # Arguments
+/// * `template` - LaunchTemplate from strategy YAML
+/// * `mode` - Optional WinDivert mode to apply
+///
+/// # Returns
+/// * `Vec<String>` - Resolved command line arguments
+pub fn build_winws_args_from_template_with_mode(
+    template: &LaunchTemplate,
+    mode: Option<crate::core::models::WinDivertMode>,
+) -> Vec<String> {
     let binaries_dir = get_binaries_dir();
     let hostlists_dir = get_hostlists_dir();
 
-    template
+    let mut args: Vec<String> = template
         .args
         .iter()
         .map(|arg| resolve_template_path(arg, &binaries_dir, &hostlists_dir))
-        .collect()
+        .collect();
+    
+    // Add mode-specific flag if provided
+    if let Some(windivert_mode) = mode {
+        if let Some(flag) = windivert_mode.to_winws_flag() {
+            // Only add if not already present
+            if !args.iter().any(|a| a == flag) {
+                args.push(flag.to_string());
+            }
+        }
+    }
+    
+    args
+}
+
+/// Build winws command line arguments with WinDivert mode and extra hostlist
+///
+/// This version adds an additional hostlist for DPI bypass domains from routing rules.
+///
+/// # Arguments
+/// * `template` - Launch template with args
+/// * `mode` - Optional WinDivert mode to apply
+/// * `extra_hostlist` - Optional path to additional hostlist (for dpi-bypass routing rules)
+///
+/// # Returns
+/// * `Vec<String>` - Resolved command line arguments
+pub fn build_winws_args_with_extra_hostlist(
+    template: &LaunchTemplate,
+    mode: Option<crate::core::models::WinDivertMode>,
+    extra_hostlist: Option<&Path>,
+) -> Vec<String> {
+    let mut args = build_winws_args_from_template_with_mode(template, mode);
+    
+    // Add extra hostlist if provided (for dpi-bypass routing rules)
+    if let Some(hostlist_path) = extra_hostlist {
+        let hostlist_arg = format!("--hostlist={}", hostlist_path.display());
+        // Only add if not already present
+        if !args.iter().any(|a| a.starts_with("--hostlist=") && a.contains(&hostlist_path.display().to_string())) {
+            args.push(hostlist_arg);
+            debug!(
+                hostlist = %hostlist_path.display(),
+                "Added extra hostlist for DPI bypass routing rules"
+            );
+        }
+    }
+    
+    args
 }
 
 /// Resolve paths in template argument
@@ -357,6 +503,8 @@ pub struct NoDpiHandle {
     process_id: String,
     /// Strategy ID (if started from strategy)
     pub strategy_id: Option<String>,
+    /// RAII guard for WinDivert flag - automatically releases on drop
+    windivert_guard: Option<WinDivertGuard>,
 }
 
 impl NoDpiHandle {
@@ -376,7 +524,15 @@ impl NoDpiHandle {
 
     /// Stop the NoDPI process gracefully
     pub async fn stop(&mut self) -> Result<()> {
-        stop_nodpi_internal(&self.process_id, &self.config.engine).await
+        let result = stop_nodpi_internal(&self.process_id).await;
+        
+        // Release WinDivert guard (flag will be reset)
+        if let Some(ref mut guard) = self.windivert_guard {
+            guard.release();
+        }
+        self.windivert_guard = None;
+        
+        result
     }
 
     /// Get the managed process reference
@@ -388,12 +544,40 @@ impl NoDpiHandle {
     pub fn process_id(&self) -> &str {
         &self.process_id
     }
+    
+    /// Check if this handle owns the WinDivert flag
+    pub fn owns_windivert(&self) -> bool {
+        self.windivert_guard.as_ref().map(|g| g.is_active()).unwrap_or(false)
+    }
+}
+
+impl Drop for NoDpiHandle {
+    fn drop(&mut self) {
+        // WinDivert guard will be automatically released via its own Drop impl
+        if self.windivert_guard.is_some() {
+            debug!(
+                process_id = %self.process_id,
+                "NoDpiHandle dropped, WinDivert guard will be released"
+            );
+        }
+    }
 }
 
 /// Start a NoDPI strategy with the given configuration
 ///
 /// CRITICAL: Only ONE winws/WinDivert process can run at a time!
 /// Attempting to start a second WinDivert-based engine will return an error.
+///
+/// ## Lock Ordering
+///
+/// To prevent guard leaks, preconditions are checked BEFORE acquiring the guard:
+/// 1. Verify engine is available (binary exists)
+/// 2. Build paths and arguments
+/// 3. **Acquire WinDivertGuard** (only after preconditions pass)
+/// 4. Spawn process
+///
+/// This ordering ensures the guard is only held during the critical section,
+/// and is never leaked if preconditions fail.
 ///
 /// # Arguments
 /// * `config` - NoDPI configuration to use
@@ -407,28 +591,38 @@ pub async fn start_nodpi(config: &NoDpiConfig) -> Result<NoDpiHandle> {
         config.name, config.engine
     );
 
-    // Check WinDivert exclusivity
-    if config.engine.uses_windivert()
-        && WINDIVERT_ACTIVE.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).is_err()
-    {
-        return Err(IsolateError::Process(
-            "Another WinDivert-based engine is already running. Only one can run at a time to avoid BSOD!".to_string()
-        ));
-    }
+    // ========================================================================
+    // PRECONDITION CHECKS - BEFORE acquiring guard
+    // ========================================================================
 
-    // Verify engine is available
+    // Verify engine is available BEFORE acquiring guard
     if !is_engine_available(&config.engine).await {
-        if config.engine.uses_windivert() {
-            WINDIVERT_ACTIVE.store(false, Ordering::SeqCst);
-        }
         return Err(IsolateError::Process(format!(
             "Engine binary not found: {}",
             config.engine.binary_name()
         )));
     }
 
+    // Build paths and arguments (no side effects, safe to do early)
     let binary_path = get_binaries_dir().join(config.engine.binary_name());
     let args = build_engine_args(config);
+
+    debug!(
+        "Preconditions passed for engine: {} - binary exists at {}",
+        config.engine,
+        binary_path.display()
+    );
+
+    // ========================================================================
+    // CRITICAL SECTION - Acquire guard ONLY after preconditions
+    // ========================================================================
+
+    // Acquire WinDivert guard using RAII pattern - ONLY after preconditions pass
+    let mut windivert_guard = if config.engine.uses_windivert() {
+        Some(WinDivertGuard::acquire()?)
+    } else {
+        None
+    };
 
     debug!(
         "Starting {} with args: {:?}",
@@ -453,13 +647,11 @@ pub async fn start_nodpi(config: &NoDpiConfig) -> Result<NoDpiHandle> {
                 config: config.clone(),
                 process_id,
                 strategy_id: None,
+                windivert_guard: windivert_guard.take().map(|mut g| g.take()),
             })
         }
         Err(e) => {
-            // Release WinDivert lock on failure
-            if config.engine.uses_windivert() {
-                WINDIVERT_ACTIVE.store(false, Ordering::SeqCst);
-            }
+            // Guard will be automatically released on drop
             error!("Failed to start NoDPI engine: {}", e);
             Err(e)
         }
@@ -481,6 +673,44 @@ pub async fn start_nodpi(config: &NoDpiConfig) -> Result<NoDpiHandle> {
 /// * `Ok(NoDpiHandle)` - Handle to the running process
 /// * `Err(IsolateError)` - Failed to start
 pub async fn start_nodpi_from_strategy(strategy: &Strategy, use_global: bool) -> Result<NoDpiHandle> {
+    start_nodpi_from_strategy_with_mode(strategy, use_global, None).await
+}
+
+/// Start NoDPI engine from a Strategy definition with WinDivert mode
+///
+/// This is the main entry point for starting Zapret strategies from YAML configs.
+/// Handles path resolution, binary verification, and sequential launch locking.
+///
+/// CRITICAL: Zapret strategies MUST be launched sequentially with delay!
+///
+/// ## Lock Ordering
+///
+/// To prevent guard leaks, preconditions are checked BEFORE acquiring locks:
+/// 1. Verify strategy engine type
+/// 2. Get template
+/// 3. **Verify all binaries exist** (precondition)
+/// 4. **Build paths and verify binary** (precondition)
+/// 5. Acquire ZAPRET_LAUNCH_LOCK
+/// 6. Sleep for WinDivert stability delay
+/// 7. **Acquire WinDivertGuard** (only after all preconditions pass)
+/// 8. Spawn process
+///
+/// This ordering ensures the guard is only held during the critical section,
+/// and is never leaked if preconditions fail.
+///
+/// # Arguments
+/// * `strategy` - Strategy definition loaded from YAML
+/// * `use_global` - Whether to use global_template (true) or socks_template (false)
+/// * `windivert_mode` - Optional WinDivert operation mode (autottl, autohostlist)
+///
+/// # Returns
+/// * `Ok(NoDpiHandle)` - Handle to the running process
+/// * `Err(IsolateError)` - Failed to start
+pub async fn start_nodpi_from_strategy_with_mode(
+    strategy: &Strategy,
+    use_global: bool,
+    windivert_mode: Option<crate::core::models::WinDivertMode>,
+) -> Result<NoDpiHandle> {
     // Verify this is a Zapret strategy
     if strategy.engine != ModelEngine::Zapret {
         return Err(IsolateError::Config(format!(
@@ -507,9 +737,38 @@ pub async fn start_nodpi_from_strategy(strategy: &Strategy, use_global: bool) ->
     };
 
     info!(
-        "Starting Zapret strategy: {} ({})",
-        strategy.name, strategy.id
+        "Starting Zapret strategy: {} ({}) with mode: {:?}",
+        strategy.name, strategy.id, windivert_mode
     );
+
+    // ========================================================================
+    // PRECONDITION CHECKS - BEFORE acquiring any locks or guards
+    // ========================================================================
+
+    // Verify required binaries exist BEFORE acquiring guard
+    verify_strategy_binaries(strategy).await?;
+
+    // Build paths and verify binary exists BEFORE acquiring guard
+    let binary_path = get_binary_path_from_template(template);
+    if !tokio::fs::try_exists(&binary_path).await.unwrap_or(false) {
+        return Err(IsolateError::Process(format!(
+            "winws binary not found: {}",
+            binary_path.display()
+        )));
+    }
+
+    // Build command line (no side effects, safe to do early)
+    let args = build_winws_args_from_template_with_mode(template, windivert_mode);
+
+    debug!(
+        "Preconditions passed for strategy: {} - binary exists at {}",
+        strategy.id,
+        binary_path.display()
+    );
+
+    // ========================================================================
+    // CRITICAL SECTION - Acquire locks and guards ONLY after preconditions
+    // ========================================================================
 
     // Acquire sequential launch lock
     let _lock = ZAPRET_LAUNCH_LOCK.lock().await;
@@ -518,22 +777,9 @@ pub async fn start_nodpi_from_strategy(strategy: &Strategy, use_global: bool) ->
     // Add delay for WinDivert stability
     tokio::time::sleep(Duration::from_millis(ZAPRET_LAUNCH_DELAY_MS)).await;
 
-    // Check WinDivert exclusivity
-    if WINDIVERT_ACTIVE.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).is_err() {
-        return Err(IsolateError::Process(
-            "Another WinDivert-based engine is already running. Stop it first!".to_string()
-        ));
-    }
-
-    // Verify required binaries
-    if let Err(e) = verify_strategy_binaries(strategy).await {
-        WINDIVERT_ACTIVE.store(false, Ordering::SeqCst);
-        return Err(e);
-    }
-
-    // Build command line
-    let binary_path = get_binary_path_from_template(template);
-    let args = build_winws_args_from_template(template);
+    // Acquire WinDivert guard using RAII pattern - ONLY after all preconditions pass
+    let mut windivert_guard = WinDivertGuard::acquire()?;
+    debug!("Acquired WinDivert guard for strategy: {}", strategy.id);
 
     debug!(
         "Starting winws: {} with {} args",
@@ -541,15 +787,6 @@ pub async fn start_nodpi_from_strategy(strategy: &Strategy, use_global: bool) ->
         args.len()
     );
     debug!("Args: {:?}", args);
-
-    // Verify binary exists
-    if !binary_path.exists() {
-        WINDIVERT_ACTIVE.store(false, Ordering::SeqCst);
-        return Err(IsolateError::Process(format!(
-            "winws binary not found: {}",
-            binary_path.display()
-        )));
-    }
 
     // Create process config
     let process_config = ProcessConfig::new(binary_path.clone(), args)
@@ -579,10 +816,162 @@ pub async fn start_nodpi_from_strategy(strategy: &Strategy, use_global: bool) ->
                 config,
                 process_id,
                 strategy_id: Some(strategy.id.clone()),
+                windivert_guard: Some(windivert_guard.take()),
             })
         }
         Err(e) => {
-            WINDIVERT_ACTIVE.store(false, Ordering::SeqCst);
+            // Guard will be automatically released on drop
+            error!("Failed to start Zapret strategy '{}': {}", strategy.id, e);
+            Err(e)
+        }
+    }
+}
+
+/// Start a Zapret strategy with WinDivert mode and extra hostlist for DPI bypass routing rules
+///
+/// This version supports adding an additional hostlist from routing rules with action "dpi-bypass".
+///
+/// ## Lock Ordering
+///
+/// To prevent guard leaks, preconditions are checked BEFORE acquiring locks:
+/// 1. Verify strategy engine type
+/// 2. Get template
+/// 3. **Verify all binaries exist** (precondition)
+/// 4. **Build paths and verify binary** (precondition)
+/// 5. Acquire ZAPRET_LAUNCH_LOCK
+/// 6. Sleep for WinDivert stability delay
+/// 7. **Acquire WinDivertGuard** (only after all preconditions pass)
+/// 8. Spawn process
+///
+/// This ordering ensures the guard is only held during the critical section,
+/// and is never leaked if preconditions fail.
+///
+/// # Arguments
+/// * `strategy` - Strategy to start
+/// * `use_global` - Use global template (true) or socks template (false)
+/// * `windivert_mode` - Optional WinDivert mode (autottl, autohostlist)
+/// * `extra_hostlist` - Optional path to additional hostlist for dpi-bypass domains
+///
+/// # Returns
+/// * `Ok(NoDpiHandle)` - Handle to the running process
+/// * `Err(IsolateError)` - Failed to start
+pub async fn start_nodpi_from_strategy_with_extra_hostlist(
+    strategy: &Strategy,
+    use_global: bool,
+    windivert_mode: Option<crate::core::models::WinDivertMode>,
+    extra_hostlist: Option<&Path>,
+) -> Result<NoDpiHandle> {
+    // Verify this is a Zapret strategy
+    if strategy.engine != ModelEngine::Zapret {
+        return Err(IsolateError::Config(format!(
+            "Strategy '{}' is not a Zapret strategy (engine: {:?})",
+            strategy.id, strategy.engine
+        )));
+    }
+
+    // Get the appropriate template
+    let template = if use_global {
+        strategy.global_template.as_ref().ok_or_else(|| {
+            IsolateError::Config(format!(
+                "Strategy '{}' has no global_template",
+                strategy.id
+            ))
+        })?
+    } else {
+        strategy.socks_template.as_ref().ok_or_else(|| {
+            IsolateError::Config(format!(
+                "Strategy '{}' has no socks_template",
+                strategy.id
+            ))
+        })?
+    };
+
+    info!(
+        "Starting Zapret strategy: {} ({}) with mode: {:?}, extra_hostlist: {:?}",
+        strategy.name, strategy.id, windivert_mode, extra_hostlist.map(|p| p.display().to_string())
+    );
+
+    // ========================================================================
+    // PRECONDITION CHECKS - BEFORE acquiring any locks or guards
+    // ========================================================================
+
+    // Verify required binaries exist BEFORE acquiring guard
+    verify_strategy_binaries(strategy).await?;
+
+    // Build paths and verify binary exists BEFORE acquiring guard
+    let binary_path = get_binary_path_from_template(template);
+    if !tokio::fs::try_exists(&binary_path).await.unwrap_or(false) {
+        return Err(IsolateError::Process(format!(
+            "winws binary not found: {}",
+            binary_path.display()
+        )));
+    }
+
+    // Build command line (no side effects, safe to do early)
+    let args = build_winws_args_with_extra_hostlist(template, windivert_mode, extra_hostlist);
+
+    debug!(
+        "Preconditions passed for strategy: {} - binary exists at {}",
+        strategy.id,
+        binary_path.display()
+    );
+
+    // ========================================================================
+    // CRITICAL SECTION - Acquire locks and guards ONLY after preconditions
+    // ========================================================================
+
+    // Acquire sequential launch lock
+    let _lock = ZAPRET_LAUNCH_LOCK.lock().await;
+    debug!("Acquired Zapret launch lock for strategy: {}", strategy.id);
+
+    // Add delay for WinDivert stability
+    tokio::time::sleep(Duration::from_millis(ZAPRET_LAUNCH_DELAY_MS)).await;
+
+    // Acquire WinDivert guard using RAII pattern - ONLY after all preconditions pass
+    let mut windivert_guard = WinDivertGuard::acquire()?;
+    debug!("Acquired WinDivert guard for strategy: {}", strategy.id);
+
+    debug!(
+        "Starting winws: {} with {} args (extra_hostlist: {:?})",
+        binary_path.display(),
+        args.len(),
+        extra_hostlist.is_some()
+    );
+    debug!("Args: {:?}", args);
+
+    // Create process config
+    let process_config = ProcessConfig::new(binary_path.clone(), args)
+        .with_admin(template.requires_admin)
+        .with_working_dir(get_binaries_dir());
+
+    // Spawn process using global runner
+    let process_id = format!("zapret-{}", strategy.id);
+
+    match global_runner::spawn(&process_id, process_config).await {
+        Ok(_) => {
+            info!(
+                "Zapret strategy started: {} (process_id: {}, extra_hostlist: {:?})",
+                strategy.name, process_id, extra_hostlist.is_some()
+            );
+
+            // Create NoDpiConfig for the handle
+            let config = NoDpiConfig {
+                id: strategy.id.clone(),
+                name: strategy.name.clone(),
+                engine: NoDpiEngine::Zapret,
+                params: template.args.clone(),
+                hostlist: extra_hostlist.map(|p| p.display().to_string()),
+            };
+
+            Ok(NoDpiHandle {
+                config,
+                process_id,
+                strategy_id: Some(strategy.id.clone()),
+                windivert_guard: Some(windivert_guard.take()),
+            })
+        }
+        Err(e) => {
+            // Guard will be automatically released on drop
             error!("Failed to start Zapret strategy '{}': {}", strategy.id, e);
             Err(e)
         }
@@ -605,21 +994,10 @@ pub async fn stop_nodpi_strategy(handle: &mut NoDpiHandle) -> Result<()> {
 }
 
 /// Internal function to stop a NoDPI process
-async fn stop_nodpi_internal(
-    process_id: &str,
-    engine: &NoDpiEngine,
-) -> Result<()> {
+async fn stop_nodpi_internal(process_id: &str) -> Result<()> {
     info!("Stopping NoDPI process: {}", process_id);
-
-    let result = global_runner::stop(process_id).await;
-
-    // Release WinDivert lock
-    if engine.uses_windivert() {
-        WINDIVERT_ACTIVE.store(false, Ordering::SeqCst);
-        debug!("Released WinDivert lock");
-    }
-
-    result
+    global_runner::stop(process_id).await
+    // Note: WinDivert flag is released by the guard in NoDpiHandle
 }
 
 /// Stop a NoDPI process using its handle
@@ -639,6 +1017,8 @@ pub async fn stop_nodpi(handle: &mut NoDpiHandle) -> Result<()> {
 /// Stop a NoDPI process by killing the child directly
 ///
 /// Alternative stop method when you have direct access to the Child process.
+/// NOTE: This does NOT release the WinDivert guard - use NoDpiHandle.stop() instead
+/// when possible for proper cleanup.
 ///
 /// # Arguments
 /// * `child` - Mutable reference to the child process
@@ -665,8 +1045,6 @@ pub async fn stop_nodpi_child(child: &mut Child) -> Result<()> {
     match timeout(Duration::from_millis(SHUTDOWN_TIMEOUT_MS), child.wait()).await {
         Ok(Ok(status)) => {
             info!("NoDPI process terminated gracefully: {:?}", status);
-            // Release WinDivert lock
-            WINDIVERT_ACTIVE.store(false, Ordering::SeqCst);
             Ok(())
         }
         Ok(Err(e)) => {
@@ -692,9 +1070,6 @@ async fn force_kill_child(child: &mut Child) -> Result<()> {
     let _ = child.wait().await;
     info!("NoDPI process force killed");
 
-    // Release WinDivert lock
-    WINDIVERT_ACTIVE.store(false, Ordering::SeqCst);
-
     Ok(())
 }
 
@@ -711,7 +1086,7 @@ pub async fn load_hostlist(name: &str) -> Result<Vec<String>> {
 
     debug!("Loading hostlist: {}", hostlist_path.display());
 
-    if !hostlist_path.exists() {
+    if !tokio::fs::try_exists(&hostlist_path).await.unwrap_or(false) {
         return Err(IsolateError::Config(format!(
             "Hostlist not found: {}",
             name
@@ -739,7 +1114,7 @@ pub async fn load_hostlist(name: &str) -> Result<Vec<String>> {
 pub async fn list_hostlists() -> Result<Vec<String>> {
     let hostlists_dir = get_hostlists_dir();
 
-    if !hostlists_dir.exists() {
+    if !tokio::fs::try_exists(&hostlists_dir).await.unwrap_or(false) {
         return Ok(Vec::new());
     }
 
@@ -935,4 +1310,296 @@ mod tests {
         reset_windivert_flag();
         assert!(!is_windivert_active());
     }
+
+    // ========================================================================
+    // Guard Leak Prevention Tests
+    // ========================================================================
+
+    /// Test that WinDivertGuard is NOT leaked when binary doesn't exist
+    ///
+    /// This test verifies the fix for the guard leak bug where the guard
+    /// was acquired before checking if the binary exists.
+    #[tokio::test]
+    async fn test_start_nodpi_no_guard_leak_on_missing_binary() {
+        // Reset flag to known state
+        reset_windivert_flag();
+        assert!(!is_windivert_active(), "Flag should start as false");
+
+        // Create config for non-existent engine
+        let config = NoDpiConfig {
+            id: "test-missing".to_string(),
+            name: "Test Missing Binary".to_string(),
+            engine: NoDpiEngine::Custom("nonexistent_binary_12345.exe".to_string()),
+            params: vec!["--test".to_string()],
+            hostlist: None,
+        };
+
+        // Attempt to start - should fail because binary doesn't exist
+        let result = start_nodpi(&config).await;
+
+        // Should return error
+        assert!(result.is_err(), "Should fail when binary doesn't exist");
+        
+        // CRITICAL: Flag should NOT be set (guard should not have been acquired)
+        assert!(
+            !is_windivert_active(),
+            "WinDivert flag should NOT be set when precondition fails"
+        );
+    }
+
+    /// Test that WinDivertGuard is properly acquired when binary exists
+    #[tokio::test]
+    async fn test_windivert_guard_acquire_and_release() {
+        reset_windivert_flag();
+        assert!(!is_windivert_active());
+
+        // Test guard acquisition
+        {
+            let guard = WinDivertGuard::acquire();
+            assert!(guard.is_ok(), "Should acquire guard when flag is false");
+            assert!(is_windivert_active(), "Flag should be set after acquire");
+            
+            let guard = guard.unwrap();
+            assert!(guard.is_active(), "Guard should be active");
+        } // Guard dropped here
+
+        // Flag should be released after guard is dropped
+        assert!(
+            !is_windivert_active(),
+            "Flag should be released when guard is dropped"
+        );
+    }
+
+    /// Test that second guard acquisition fails when first is active
+    #[tokio::test]
+    async fn test_windivert_guard_prevents_concurrent_acquisition() {
+        reset_windivert_flag();
+
+        let _guard1 = WinDivertGuard::acquire().expect("First guard should succeed");
+        assert!(is_windivert_active());
+
+        // Second acquisition should fail
+        let guard2 = WinDivertGuard::acquire();
+        assert!(
+            guard2.is_err(),
+            "Second guard acquisition should fail while first is active"
+        );
+        
+        // Verify error message mentions BSOD prevention
+        let err_msg = format!("{}", guard2.unwrap_err());
+        assert!(
+            err_msg.contains("already running") || err_msg.contains("BSOD"),
+            "Error should mention concurrent execution prevention"
+        );
+    }
+
+    /// Test guard manual release
+    #[tokio::test]
+    async fn test_windivert_guard_manual_release() {
+        reset_windivert_flag();
+
+        let mut guard = WinDivertGuard::acquire().expect("Should acquire guard");
+        assert!(is_windivert_active());
+        assert!(guard.is_active());
+
+        // Manual release
+        guard.release();
+        assert!(!is_windivert_active(), "Flag should be released");
+        assert!(!guard.is_active(), "Guard should be inactive");
+
+        // Dropping should not release again (idempotent)
+        drop(guard);
+        assert!(!is_windivert_active());
+    }
+
+    /// Test guard take (transfer ownership)
+    #[tokio::test]
+    async fn test_windivert_guard_take() {
+        reset_windivert_flag();
+
+        let mut guard1 = WinDivertGuard::acquire().expect("Should acquire guard");
+        assert!(guard1.is_active());
+        assert!(is_windivert_active());
+
+        // Transfer ownership
+        let guard2 = guard1.take();
+        assert!(!guard1.is_active(), "Original guard should be inactive");
+        assert!(guard2.is_active(), "Taken guard should be active");
+        assert!(is_windivert_active(), "Flag should still be set");
+
+        // Drop original guard - should NOT release flag
+        drop(guard1);
+        assert!(is_windivert_active(), "Flag should still be set after dropping original");
+
+        // Drop taken guard - should release flag
+        drop(guard2);
+        assert!(!is_windivert_active(), "Flag should be released after dropping taken guard");
+    }
+
+    /// Test that verify_strategy_binaries fails before guard acquisition
+    ///
+    /// This test uses a mock strategy with missing binaries to ensure
+    /// the guard is never acquired when preconditions fail.
+    #[tokio::test]
+    async fn test_strategy_missing_binary_no_guard_leak() {
+        use crate::core::models::{Strategy, StrategyEngine, LaunchTemplate, Requirements};
+
+        reset_windivert_flag();
+
+        // Create a strategy with a non-existent binary
+        let strategy = Strategy {
+            id: "test-missing-binary".to_string(),
+            name: "Test Missing Binary".to_string(),
+            description: "Test strategy with missing binary".to_string(),
+            engine: StrategyEngine::Zapret,
+            family: crate::core::models::StrategyFamily::Universal,
+            requirements: Requirements {
+                binaries: vec!["binaries/nonexistent_winws_12345.exe".to_string()],
+                hostlists: vec![],
+            },
+            global_template: Some(LaunchTemplate {
+                binary: "binaries/nonexistent_winws_12345.exe".to_string(),
+                args: vec!["--test".to_string()],
+                requires_admin: true,
+            }),
+            socks_template: None,
+            metadata: Default::default(),
+        };
+
+        // Attempt to start - should fail during binary verification
+        let result = start_nodpi_from_strategy_with_mode(&strategy, true, None).await;
+
+        // Should return error
+        assert!(result.is_err(), "Should fail when binary doesn't exist");
+        
+        // CRITICAL: Flag should NOT be set (guard should not have been acquired)
+        assert!(
+            !is_windivert_active(),
+            "WinDivert flag should NOT be set when binary verification fails"
+        );
+    }
+
+    /// Test that invalid strategy engine type fails before guard acquisition
+    #[tokio::test]
+    async fn test_invalid_strategy_engine_no_guard_leak() {
+        use crate::core::models::{Strategy, StrategyEngine, Requirements};
+
+        reset_windivert_flag();
+
+        // Create a VLESS strategy (not Zapret)
+        let strategy = Strategy {
+            id: "test-vless".to_string(),
+            name: "Test VLESS".to_string(),
+            description: "VLESS strategy".to_string(),
+            engine: StrategyEngine::Vless, // Wrong engine type!
+            family: crate::core::models::StrategyFamily::Universal,
+            requirements: Requirements {
+                binaries: vec![],
+                hostlists: vec![],
+            },
+            global_template: None,
+            socks_template: None,
+            metadata: Default::default(),
+        };
+
+        // Attempt to start as Zapret - should fail immediately
+        let result = start_nodpi_from_strategy_with_mode(&strategy, true, None).await;
+
+        // Should return error about wrong engine type
+        assert!(result.is_err(), "Should fail for non-Zapret strategy");
+        
+        let err_msg = format!("{}", result.unwrap_err());
+        assert!(
+            err_msg.contains("not a Zapret strategy"),
+            "Error should mention wrong engine type"
+        );
+        
+        // CRITICAL: Flag should NOT be set (guard should not have been acquired)
+        assert!(
+            !is_windivert_active(),
+            "WinDivert flag should NOT be set when engine type check fails"
+        );
+    }
+
+    /// Test that missing template fails before guard acquisition
+    #[tokio::test]
+    async fn test_missing_template_no_guard_leak() {
+        use crate::core::models::{Strategy, StrategyEngine, Requirements};
+
+        reset_windivert_flag();
+
+        // Create a Zapret strategy without global_template
+        let strategy = Strategy {
+            id: "test-no-template".to_string(),
+            name: "Test No Template".to_string(),
+            description: "Strategy without template".to_string(),
+            engine: StrategyEngine::Zapret,
+            family: crate::core::models::StrategyFamily::Universal,
+            requirements: Requirements {
+                binaries: vec![],
+                hostlists: vec![],
+            },
+            global_template: None, // Missing!
+            socks_template: None,
+            metadata: Default::default(),
+        };
+
+        // Attempt to start with global template - should fail
+        let result = start_nodpi_from_strategy_with_mode(&strategy, true, None).await;
+
+        // Should return error about missing template
+        assert!(result.is_err(), "Should fail when template is missing");
+        
+        let err_msg = format!("{}", result.unwrap_err());
+        assert!(
+            err_msg.contains("no global_template"),
+            "Error should mention missing template"
+        );
+        
+        // CRITICAL: Flag should NOT be set (guard should not have been acquired)
+        assert!(
+            !is_windivert_active(),
+            "WinDivert flag should NOT be set when template check fails"
+        );
+    }
+
+    /// Test concurrent guard acquisition attempts
+    ///
+    /// Simulates multiple threads trying to acquire the guard simultaneously.
+    /// Only one should succeed.
+    #[tokio::test]
+    async fn test_concurrent_guard_acquisition() {
+        use tokio::task;
+
+        reset_windivert_flag();
+
+        let mut handles = Vec::new();
+        for i in 0..10 {
+            let handle = task::spawn(async move {
+                let result = WinDivertGuard::acquire();
+                if result.is_ok() {
+                    // Hold the guard briefly
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+                (i, result.is_ok())
+            });
+            handles.push(handle);
+        }
+
+        let mut results = Vec::new();
+        for handle in handles {
+            results.push(handle.await.unwrap());
+        }
+
+        // Exactly one should have succeeded
+        let success_count = results.iter().filter(|(_, success)| *success).count();
+        assert_eq!(
+            success_count, 1,
+            "Exactly one concurrent acquisition should succeed"
+        );
+
+        // Flag should be released after all tasks complete
+        assert!(!is_windivert_active(), "Flag should be released after test");
+    }
 }
+

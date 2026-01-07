@@ -15,25 +15,38 @@
         "test:e2e:headed": "playwright test --headed",
         "test:e2e:debug": "playwright test --debug",
         "test:e2e:report": "playwright show-report",
-        "tauri": "tauri"
+        "test:e2e:tauri": "wdio run ./wdio.conf.ts",
+        "test:e2e:tauri:watch": "wdio run ./wdio.conf.ts --watch",
+        "tauri": "tauri",
+        "postinstall": "pwsh -ExecutionPolicy Bypass -File scripts/download-binaries.ps1",
+        "download-binaries": "pwsh -ExecutionPolicy Bypass -File scripts/download-binaries.ps1",
+        "download-binaries:force": "pwsh -ExecutionPolicy Bypass -File scripts/download-binaries.ps1 -Force"
     },
     "devDependencies": {
         "@playwright/test": "^1.48.0",
         "@sveltejs/adapter-static": "^3.0.0",
         "@sveltejs/kit": "^2.0.0",
-        "@sveltejs/vite-plugin-svelte": "^4.0.0",
+        "@sveltejs/vite-plugin-svelte": "^6.2.2",
         "@tauri-apps/cli": "^2.0.0",
+        "@testing-library/svelte": "^5.3.1",
+        "@types/mocha": "^10.0.10",
         "@types/node": "^22.0.0",
         "autoprefixer": "^10.4.0",
+        "happy-dom": "^20.0.11",
         "postcss": "^8.4.0",
         "svelte": "^5.0.0",
         "svelte-check": "^4.0.0",
         "tailwindcss": "^3.4.0",
         "typescript": "^5.0.0",
         "vite": "^6.0.0",
-        "vitest": "^2.0.0"
+        "vitest": "^4.0.16"
     },
     "dependencies": {
-        "@tauri-apps/api": "^2.0.0"
+        "@tauri-apps/api": "^2.0.0",
+        "@tauri-apps/plugin-dialog": "^2.4.2",
+        "@tauri-apps/plugin-fs": "^2.4.4",
+        "@tauri-apps/plugin-shell": "^2.0.0",
+        "@types/qrcode": "^1.5.6",
+        "qrcode": "^1.5.4"
     }
 }

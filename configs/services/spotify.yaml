@@ -1,0 +1,38 @@
+# Spotify Service Definition
+id: "spotify"
+name: "Spotify"
+enabled_by_default: true
+critical: false
+
+tests:
+  - type: https_head
+    url: "https://open.spotify.com"
+    timeout_ms: 5000
+
+  - type: https_head
+    url: "https://api.spotify.com"
+    timeout_ms: 5000
+
+  - type: tcp_connect
+    host: "spotify.com"
+    port: 443
+    timeout_ms: 3000
+
+  - type: tcp_connect
+    host: "open.spotify.com"
+    port: 443
+    timeout_ms: 3000
+
+  - type: tcp_connect
+    host: "spclient.wg.spotify.com"
+    port: 443
+    timeout_ms: 3000
+
+  - type: dns
+    domain: "spotify.com"
+    timeout_ms: 3000
+
+  - type: dns
+    domain: "open.spotify.com"
+    timeout_ms: 3000
+

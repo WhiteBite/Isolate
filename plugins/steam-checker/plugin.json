@@ -1,0 +1,39 @@
+{
+  "id": "steam-checker",
+  "name": "Steam Checker",
+  "version": "1.0.0",
+  "author": "Isolate Team",
+  "description": "Добавляет проверку доступности Steam",
+  "type": "service-checker",
+  "icon": "🎮",
+  "service": {
+    "id": "steam",
+    "name": "Steam",
+    "icon": "🎮",
+    "category": "gaming",
+    "description": "Игровая платформа и магазин от Valve",
+    "endpoints": [
+      {
+        "id": "store",
+        "name": "Steam Store",
+        "url": "https://store.steampowered.com/",
+        "method": "HEAD"
+      },
+      {
+        "id": "community",
+        "name": "Steam Community",
+        "url": "https://steamcommunity.com/",
+        "method": "HEAD"
+      },
+      {
+        "id": "cdn",
+        "name": "Steam CDN",
+        "url": "https://cdn.cloudflare.steamstatic.com/",
+        "method": "HEAD"
+      }
+    ]
+  },
+  "permissions": {
+    "http": ["steampowered.com", "steamcommunity.com", "*.steamstatic.com"]
+  }
+}

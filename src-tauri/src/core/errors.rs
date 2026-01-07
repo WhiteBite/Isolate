@@ -2,6 +2,11 @@
 //!
 //! Unified error handling for the entire application.
 //! All errors are serializable for Tauri IPC communication.
+//!
+//! NOTE: Some extension traits are prepared for future error handling patterns.
+
+// Public API for error handling
+#![allow(dead_code)]
 
 use serde::Serialize;
 use thiserror::Error;
@@ -178,6 +183,121 @@ impl From<&str> for IsolateError {
 
 /// Type alias for Result with IsolateError
 pub type Result<T> = std::result::Result<T, IsolateError>;
+
+// ==================== Context extension trait ====================
+
+/// Extension trait for adding context to Results
+pub trait ResultExt<T> {
+    /// Add context to an error
+    fn context<C: Into<String>>(self, context: C) -> Result<T>;
+    
+    /// Add context lazily (only evaluated on error)
+    fn with_context<C: Into<String>, F: FnOnce() -> C>(self, f: F) -> Result<T>;
+}
+
+impl<T, E: std::fmt::Display> ResultExt<T> for std::result::Result<T, E> {
+    fn context<C: Into<String>>(self, context: C) -> Result<T> {
+        self.map_err(|e| IsolateError::Other(format!("{}: {}", context.into(), e)))
+    }
+    
+    fn with_context<C: Into<String>, F: FnOnce() -> C>(self, f: F) -> Result<T> {
+        self.map_err(|e| IsolateError::Other(format!("{}: {}", f().into(), e)))
+    }
+}
+
+/// Extension trait for adding typed context to Results
+pub trait TypedResultExt<T> {
+    /// Add network context to an error
+    fn network_context<C: Into<String>>(self, context: C) -> Result<T>;
+    
+    /// Add IO context to an error
+    fn io_context<C: Into<String>>(self, context: C) -> Result<T>;
+    
+    /// Add config context to an error
+    fn config_context<C: Into<String>>(self, context: C) -> Result<T>;
+    
+    /// Add storage context to an error
+    fn storage_context<C: Into<String>>(self, context: C) -> Result<T>;
+    
+    /// Add process context to an error
+    fn process_context<C: Into<String>>(self, context: C) -> Result<T>;
+    
+    /// Add tauri context to an error
+    fn tauri_context<C: Into<String>>(self, context: C) -> Result<T>;
+    
+    /// Add strategy context to an error
+    fn strategy_context<C: Into<String>>(self, context: C) -> Result<T>;
+    
+    /// Add system proxy context to an error
+    fn system_proxy_context<C: Into<String>>(self, context: C) -> Result<T>;
+}
+
+impl<T, E: std::fmt::Display> TypedResultExt<T> for std::result::Result<T, E> {
+    fn network_context<C: Into<String>>(self, context: C) -> Result<T> {
+        self.map_err(|e| IsolateError::Network(format!("{}: {}", context.into(), e)))
+    }
+    
+    fn io_context<C: Into<String>>(self, context: C) -> Result<T> {
+        self.map_err(|e| IsolateError::Io(format!("{}: {}", context.into(), e)))
+    }
+    
+    fn config_context<C: Into<String>>(self, context: C) -> Result<T> {
+        self.map_err(|e| IsolateError::Config(format!("{}: {}", context.into(), e)))
+    }
+    
+    fn storage_context<C: Into<String>>(self, context: C) -> Result<T> {
+        self.map_err(|e| IsolateError::Storage(format!("{}: {}", context.into(), e)))
+    }
+    
+    fn process_context<C: Into<String>>(self, context: C) -> Result<T> {
+        self.map_err(|e| IsolateError::Process(format!("{}: {}", context.into(), e)))
+    }
+    
+    fn tauri_context<C: Into<String>>(self, context: C) -> Result<T> {
+        self.map_err(|e| IsolateError::Tauri(format!("{}: {}", context.into(), e)))
+    }
+    
+    fn strategy_context<C: Into<String>>(self, context: C) -> Result<T> {
+        self.map_err(|e| IsolateError::Strategy(format!("{}: {}", context.into(), e)))
+    }
+    
+    fn system_proxy_context<C: Into<String>>(self, context: C) -> Result<T> {
+        self.map_err(|e| IsolateError::SystemProxy(format!("{}: {}", context.into(), e)))
+    }
+}
+
+/// Extension trait for Option to convert to IsolateError
+pub trait OptionExt<T> {
+    /// Convert None to IsolateError with message
+    fn ok_or_error<C: Into<String>>(self, msg: C) -> Result<T>;
+    
+    /// Convert None to IsolateError::StrategyNotFound
+    fn ok_or_strategy_not_found<C: Into<String>>(self, id: C) -> Result<T>;
+    
+    /// Convert None to IsolateError::Config
+    fn ok_or_config_error<C: Into<String>>(self, msg: C) -> Result<T>;
+    
+    /// Convert None to IsolateError::Validation
+    fn ok_or_validation_error<C: Into<String>>(self, msg: C) -> Result<T>;
+}
+
+impl<T> OptionExt<T> for Option<T> {
+    fn ok_or_error<C: Into<String>>(self, msg: C) -> Result<T> {
+        self.ok_or_else(|| IsolateError::Other(msg.into()))
+    }
+    
+    fn ok_or_strategy_not_found<C: Into<String>>(self, id: C) -> Result<T> {
+        self.ok_or_else(|| IsolateError::StrategyNotFound(id.into()))
+    }
+    
+    fn ok_or_config_error<C: Into<String>>(self, msg: C) -> Result<T> {
+        self.ok_or_else(|| IsolateError::Config(msg.into()))
+    }
+    
+    fn ok_or_validation_error<C: Into<String>>(self, msg: C) -> Result<T> {
+        self.ok_or_else(|| IsolateError::Validation(msg.into()))
+    }
+}
 
 // ==================== Helper constructors ====================
 

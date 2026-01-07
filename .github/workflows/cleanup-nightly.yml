@@ -1,0 +1,172 @@
+name: Cleanup Nightly Releases
+
+on:
+  schedule:
+    # Каждый день в 4:00 UTC (после nightly build в 2:00)
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+    inputs:
+      retention_days:
+        description: 'Keep releases newer than N days'
+        required: false
+        type: number
+        default: 7
+      dry_run:
+        description: 'Dry run (do not delete)'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    name: Cleanup old nightly releases
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Get retention settings
+        id: settings
+        run: |
+          RETENTION_DAYS="${{ inputs.retention_days || 7 }}"
+          DRY_RUN="${{ inputs.dry_run || 'false' }}"
+          CUTOFF_DATE=$(date -d "$RETENTION_DAYS days ago" +%Y-%m-%d)
+          
+          echo "retention_days=$RETENTION_DAYS" >> $GITHUB_OUTPUT
+          echo "dry_run=$DRY_RUN" >> $GITHUB_OUTPUT
+          echo "cutoff_date=$CUTOFF_DATE" >> $GITHUB_OUTPUT
+          
+          echo "📅 Retention: $RETENTION_DAYS days"
+          echo "📅 Cutoff date: $CUTOFF_DATE"
+          echo "🔍 Dry run: $DRY_RUN"
+      
+      - name: Find and delete old nightly releases
+        id: cleanup
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const retentionDays = parseInt('${{ steps.settings.outputs.retention_days }}');
+            const dryRun = '${{ steps.settings.outputs.dry_run }}' === 'true';
+            const cutoffDate = new Date('${{ steps.settings.outputs.cutoff_date }}');
+            
+            console.log(`🔍 Looking for nightly releases older than ${retentionDays} days (before ${cutoffDate.toISOString().split('T')[0]})`);
+            console.log(`🔍 Dry run: ${dryRun}`);
+            
+            // Get all releases
+            const releases = await github.paginate(github.rest.repos.listReleases, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100
+            });
+            
+            // Filter nightly releases
+            const nightlyReleases = releases.filter(r => r.tag_name.startsWith('nightly-'));
+            console.log(`📦 Found ${nightlyReleases.length} nightly releases total`);
+            
+            // Find old releases to delete
+            const toDelete = [];
+            const toKeep = [];
+            
+            for (const release of nightlyReleases) {
+              const releaseDate = new Date(release.created_at);
+              
+              if (releaseDate < cutoffDate) {
+                toDelete.push({
+                  id: release.id,
+                  tag: release.tag_name,
+                  name: release.name,
+                  date: releaseDate.toISOString().split('T')[0]
+                });
+              } else {
+                toKeep.push({
+                  tag: release.tag_name,
+                  date: releaseDate.toISOString().split('T')[0]
+                });
+              }
+            }
+            
+            console.log(`\n📋 Releases to keep (${toKeep.length}):`);
+            toKeep.forEach(r => console.log(`  ✅ ${r.tag} (${r.date})`));
+            
+            console.log(`\n🗑️ Releases to delete (${toDelete.length}):`);
+            toDelete.forEach(r => console.log(`  ❌ ${r.tag} (${r.date})`));
+            
+            // Delete old releases and their tags
+            let deletedCount = 0;
+            let errorCount = 0;
+            
+            for (const release of toDelete) {
+              if (dryRun) {
+                console.log(`[DRY RUN] Would delete: ${release.tag}`);
+                continue;
+              }
+              
+              try {
+                // Delete release
+                await github.rest.repos.deleteRelease({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  release_id: release.id
+                });
+                console.log(`✅ Deleted release: ${release.tag}`);
+                
+                // Delete tag
+                try {
+                  await github.rest.git.deleteRef({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    ref: `tags/${release.tag}`
+                  });
+                  console.log(`✅ Deleted tag: ${release.tag}`);
+                } catch (tagError) {
+                  console.log(`⚠️ Could not delete tag ${release.tag}: ${tagError.message}`);
+                }
+                
+                deletedCount++;
+              } catch (error) {
+                console.error(`❌ Failed to delete ${release.tag}: ${error.message}`);
+                errorCount++;
+              }
+            }
+            
+            // Set outputs
+            core.setOutput('deleted_count', deletedCount);
+            core.setOutput('kept_count', toKeep.length);
+            core.setOutput('error_count', errorCount);
+            core.setOutput('dry_run', dryRun);
+            
+            return {
+              deleted: deletedCount,
+              kept: toKeep.length,
+              errors: errorCount,
+              dryRun: dryRun
+            };
+      
+      - name: Summary
+        run: |
+          DELETED="${{ steps.cleanup.outputs.deleted_count }}"
+          KEPT="${{ steps.cleanup.outputs.kept_count }}"
+          ERRORS="${{ steps.cleanup.outputs.error_count }}"
+          DRY_RUN="${{ steps.cleanup.outputs.dry_run }}"
+          RETENTION="${{ steps.settings.outputs.retention_days }}"
+          
+          echo "## 🧹 Nightly Cleanup Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "⚠️ **DRY RUN** — no releases were actually deleted" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "| Metric | Count |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| 🗑️ Deleted | $DELETED |" >> $GITHUB_STEP_SUMMARY
+          echo "| ✅ Kept | $KEPT |" >> $GITHUB_STEP_SUMMARY
+          echo "| ❌ Errors | $ERRORS |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Retention policy:** $RETENTION days" >> $GITHUB_STEP_SUMMARY

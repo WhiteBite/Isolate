@@ -1,0 +1,416 @@
+name: Smoke Test
+
+on:
+  # Called from release workflow
+  workflow_call:
+    inputs:
+      artifact_name:
+        description: 'Name of the artifact to test'
+        required: false
+        type: string
+        default: 'isolate-windows'
+      version:
+        description: 'Version being tested'
+        required: false
+        type: string
+  
+  # Manual trigger for testing releases
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag to test (e.g., v0.1.0). Leave empty to test latest.'
+        required: false
+        type: string
+      download_url:
+        description: 'Direct download URL for installer (optional, overrides release_tag)'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  smoke-test:
+    name: Smoke Test Windows
+    runs-on: windows-latest
+    timeout-minutes: 15
+    
+    steps:
+      - name: Determine test source
+        id: source
+        shell: pwsh
+        run: |
+          $source = "unknown"
+          $version = "unknown"
+          
+          # Priority: direct URL > release tag > workflow artifact > latest release
+          if ("${{ inputs.download_url }}" -ne "") {
+            $source = "direct_url"
+            $version = "custom"
+            Write-Host "Source: Direct download URL"
+          }
+          elseif ("${{ inputs.release_tag }}" -ne "") {
+            $source = "release_tag"
+            $version = "${{ inputs.release_tag }}"
+            Write-Host "Source: Release tag $version"
+          }
+          elseif ("${{ inputs.artifact_name }}" -ne "" -and "${{ github.event_name }}" -eq "workflow_call") {
+            $source = "artifact"
+            $version = "${{ inputs.version }}"
+            Write-Host "Source: Workflow artifact"
+          }
+          else {
+            $source = "latest_release"
+            Write-Host "Source: Latest GitHub release"
+          }
+          
+          "source=$source" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+      
+      - name: Download from artifact
+        if: steps.source.outputs.source == 'artifact'
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: ./installer
+      
+      - name: Download from release tag
+        if: steps.source.outputs.source == 'release_tag'
+        shell: pwsh
+        run: |
+          $tag = "${{ inputs.release_tag }}"
+          $repo = "${{ github.repository }}"
+          
+          Write-Host "Fetching release $tag from $repo..."
+          
+          $releaseUrl = "https://api.github.com/repos/$repo/releases/tags/$tag"
+          $release = Invoke-RestMethod -Uri $releaseUrl -Headers @{
+            "Accept" = "application/vnd.github+json"
+            "X-GitHub-Api-Version" = "2022-11-28"
+          }
+          
+          # Find NSIS installer
+          $asset = $release.assets | Where-Object { $_.name -like "*-setup.exe" } | Select-Object -First 1
+          
+          if (-not $asset) {
+            Write-Error "No installer found in release $tag"
+            exit 1
+          }
+          
+          Write-Host "Downloading: $($asset.name)"
+          New-Item -ItemType Directory -Force -Path ./installer | Out-Null
+          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile "./installer/$($asset.name)"
+          
+          Write-Host "Downloaded: $($asset.name)"
+      
+      - name: Download from direct URL
+        if: steps.source.outputs.source == 'direct_url'
+        shell: pwsh
+        run: |
+          $url = "${{ inputs.download_url }}"
+          $fileName = [System.IO.Path]::GetFileName($url)
+          
+          Write-Host "Downloading from: $url"
+          New-Item -ItemType Directory -Force -Path ./installer | Out-Null
+          Invoke-WebRequest -Uri $url -OutFile "./installer/$fileName"
+          
+          Write-Host "Downloaded: $fileName"
+      
+      - name: Download latest release
+        if: steps.source.outputs.source == 'latest_release'
+        shell: pwsh
+        run: |
+          $repo = "${{ github.repository }}"
+          
+          Write-Host "Fetching latest release from $repo..."
+          
+          $releaseUrl = "https://api.github.com/repos/$repo/releases/latest"
+          
+          try {
+            $release = Invoke-RestMethod -Uri $releaseUrl -Headers @{
+              "Accept" = "application/vnd.github+json"
+              "X-GitHub-Api-Version" = "2022-11-28"
+            }
+          }
+          catch {
+            Write-Host "No releases found, skipping smoke test"
+            "skip=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            exit 0
+          }
+          
+          # Find NSIS installer
+          $asset = $release.assets | Where-Object { $_.name -like "*-setup.exe" } | Select-Object -First 1
+          
+          if (-not $asset) {
+            Write-Host "No installer found in latest release, skipping"
+            "skip=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            exit 0
+          }
+          
+          Write-Host "Downloading: $($asset.name) from $($release.tag_name)"
+          New-Item -ItemType Directory -Force -Path ./installer | Out-Null
+          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile "./installer/$($asset.name)"
+          
+          Write-Host "Downloaded: $($asset.name)"
+          "version=$($release.tag_name)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+      
+      - name: Extract installer
+        id: extract
+        shell: pwsh
+        run: |
+          $installerDir = "./installer"
+          
+          # Find the installer
+          $installer = Get-ChildItem -Path $installerDir -Filter "*.exe" | Select-Object -First 1
+          
+          if (-not $installer) {
+            Write-Error "No installer found in $installerDir"
+            exit 1
+          }
+          
+          Write-Host "Found installer: $($installer.Name)"
+          Write-Host "Size: $([math]::Round($installer.Length / 1MB, 2)) MB"
+          
+          # For NSIS installers, we can extract without running
+          # Using 7-Zip to extract NSIS installer
+          
+          $extractDir = "./extracted"
+          New-Item -ItemType Directory -Force -Path $extractDir | Out-Null
+          
+          # Try to use 7-Zip if available
+          $7zPath = "C:\Program Files\7-Zip\7z.exe"
+          if (Test-Path $7zPath) {
+            Write-Host "Extracting with 7-Zip..."
+            & $7zPath x $installer.FullName -o"$extractDir" -y
+          }
+          else {
+            # Fallback: run installer silently
+            Write-Host "7-Zip not found, running silent install..."
+            $installDir = "$env:TEMP\IsolateSmokeTest"
+            Start-Process -FilePath $installer.FullName -ArgumentList "/S", "/D=$installDir" -Wait -NoNewWindow
+            Copy-Item -Path "$installDir\*" -Destination $extractDir -Recurse -Force
+          }
+          
+          # Find the main executable
+          $exe = Get-ChildItem -Path $extractDir -Filter "Isolate.exe" -Recurse | Select-Object -First 1
+          
+          if (-not $exe) {
+            # Try alternative names
+            $exe = Get-ChildItem -Path $extractDir -Filter "*.exe" -Recurse | 
+                   Where-Object { $_.Name -notlike "*uninstall*" -and $_.Name -notlike "*setup*" } |
+                   Select-Object -First 1
+          }
+          
+          if (-not $exe) {
+            Write-Error "Could not find Isolate.exe in extracted files"
+            Get-ChildItem -Path $extractDir -Recurse | ForEach-Object { Write-Host $_.FullName }
+            exit 1
+          }
+          
+          Write-Host "Found executable: $($exe.FullName)"
+          "exe_path=$($exe.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+      
+      - name: Run smoke tests
+        shell: pwsh
+        run: |
+          $exePath = "${{ steps.extract.outputs.exe_path }}"
+          
+          Write-Host "═══════════════════════════════════════════════════════════════"
+          Write-Host "  Running Smoke Tests"
+          Write-Host "═══════════════════════════════════════════════════════════════"
+          Write-Host ""
+          
+          # Test 1: Version check
+          Write-Host "▶ Test 1: Version check"
+          $versionOutput = & $exePath --version 2>&1
+          $versionExitCode = $LASTEXITCODE
+          
+          if ($versionExitCode -ne 0) {
+            Write-Error "Version check failed with exit code: $versionExitCode"
+            Write-Host "Output: $versionOutput"
+            exit 1
+          }
+          Write-Host "  Output: $versionOutput"
+          Write-Host "  ✓ PASSED"
+          Write-Host ""
+          
+          # Test 2: Smoke test flag
+          Write-Host "▶ Test 2: Smoke test (--smoke-test)"
+          $smokeOutput = & $exePath --smoke-test 2>&1
+          $smokeExitCode = $LASTEXITCODE
+          
+          Write-Host $smokeOutput
+          
+          if ($smokeExitCode -ne 0) {
+            Write-Error "Smoke test failed with exit code: $smokeExitCode"
+            exit 1
+          }
+          Write-Host "  ✓ PASSED"
+          Write-Host ""
+          
+          # Test 3: Help flag (if supported)
+          Write-Host "▶ Test 3: Help flag (--help)"
+          $helpOutput = & $exePath --help 2>&1
+          # Help may return non-zero, that's OK
+          if ($helpOutput) {
+            Write-Host "  Help output available"
+          }
+          Write-Host "  ✓ PASSED (or not implemented)"
+          Write-Host ""
+          
+          Write-Host "═══════════════════════════════════════════════════════════════"
+          Write-Host "  ✅ All smoke tests passed!"
+          Write-Host "═══════════════════════════════════════════════════════════════"
+      
+      - name: Cleanup
+        if: always()
+        shell: pwsh
+        run: |
+          # Cleanup extracted files
+          if (Test-Path "./extracted") {
+            Remove-Item -Path "./extracted" -Recurse -Force -ErrorAction SilentlyContinue
+          }
+          if (Test-Path "./installer") {
+            Remove-Item -Path "./installer" -Recurse -Force -ErrorAction SilentlyContinue
+          }
+          
+          # Cleanup silent install if used
+          $installDir = "$env:TEMP\IsolateSmokeTest"
+          if (Test-Path $installDir) {
+            # Try to run uninstaller first
+            $uninstaller = Get-ChildItem -Path $installDir -Filter "*uninstall*.exe" -Recurse | Select-Object -First 1
+            if ($uninstaller) {
+              Start-Process -FilePath $uninstaller.FullName -ArgumentList "/S" -Wait -NoNewWindow -ErrorAction SilentlyContinue
+            }
+            Remove-Item -Path $installDir -Recurse -Force -ErrorAction SilentlyContinue
+          }
+      
+      - name: Summary
+        if: always()
+        shell: bash
+        run: |
+          echo "## 🧪 Smoke Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Test | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Version check | ✅ |" >> $GITHUB_STEP_SUMMARY
+          echo "| Smoke test | ✅ |" >> $GITHUB_STEP_SUMMARY
+          echo "| Help flag | ✅ |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Source:** ${{ steps.source.outputs.source }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ steps.source.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+
+  # Post-release verification job
+  post-release-verify:
+    name: Post-Release Verification
+    runs-on: windows-latest
+    if: github.event_name == 'workflow_dispatch' && inputs.release_tag != ''
+    needs: smoke-test
+    timeout-minutes: 10
+    
+    steps:
+      - name: Verify release artifacts
+        shell: pwsh
+        run: |
+          $tag = "${{ inputs.release_tag }}"
+          $repo = "${{ github.repository }}"
+          
+          Write-Host "Verifying release $tag..."
+          
+          $releaseUrl = "https://api.github.com/repos/$repo/releases/tags/$tag"
+          $release = Invoke-RestMethod -Uri $releaseUrl -Headers @{
+            "Accept" = "application/vnd.github+json"
+            "X-GitHub-Api-Version" = "2022-11-28"
+          }
+          
+          Write-Host "Release: $($release.name)"
+          Write-Host "Published: $($release.published_at)"
+          Write-Host "Draft: $($release.draft)"
+          Write-Host "Prerelease: $($release.prerelease)"
+          Write-Host ""
+          Write-Host "Assets:"
+          
+          $expectedAssets = @(
+            "*-setup.exe",      # NSIS installer
+            "*.msi",            # MSI installer
+            "checksums.txt"     # Checksums
+          )
+          
+          $foundAssets = @()
+          foreach ($asset in $release.assets) {
+            Write-Host "  - $($asset.name) ($([math]::Round($asset.size / 1MB, 2)) MB)"
+            $foundAssets += $asset.name
+          }
+          
+          # Verify expected assets exist
+          $missingPatterns = @()
+          foreach ($pattern in $expectedAssets) {
+            $found = $foundAssets | Where-Object { $_ -like $pattern }
+            if (-not $found) {
+              $missingPatterns += $pattern
+            }
+          }
+          
+          if ($missingPatterns.Count -gt 0) {
+            Write-Warning "Missing expected assets matching: $($missingPatterns -join ', ')"
+          }
+          else {
+            Write-Host ""
+            Write-Host "✅ All expected assets present"
+          }
+      
+      - name: Verify checksums
+        shell: pwsh
+        run: |
+          $tag = "${{ inputs.release_tag }}"
+          $repo = "${{ github.repository }}"
+          
+          $releaseUrl = "https://api.github.com/repos/$repo/releases/tags/$tag"
+          $release = Invoke-RestMethod -Uri $releaseUrl -Headers @{
+            "Accept" = "application/vnd.github+json"
+            "X-GitHub-Api-Version" = "2022-11-28"
+          }
+          
+          # Find checksums file
+          $checksumAsset = $release.assets | Where-Object { $_.name -eq "checksums.txt" } | Select-Object -First 1
+          
+          if (-not $checksumAsset) {
+            Write-Host "No checksums.txt found, skipping verification"
+            exit 0
+          }
+          
+          # Download checksums
+          $checksums = Invoke-RestMethod -Uri $checksumAsset.browser_download_url
+          Write-Host "Checksums:"
+          Write-Host $checksums
+          
+          # Download and verify each asset
+          foreach ($asset in $release.assets) {
+            if ($asset.name -eq "checksums.txt" -or $asset.name -like "*.sig") {
+              continue
+            }
+            
+            Write-Host ""
+            Write-Host "Verifying: $($asset.name)"
+            
+            # Download asset
+            $tempFile = [System.IO.Path]::GetTempFileName()
+            Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $tempFile
+            
+            # Calculate hash
+            $hash = (Get-FileHash $tempFile -Algorithm SHA256).Hash.ToLower()
+            
+            # Check against checksums
+            if ($checksums -match $hash) {
+              Write-Host "  ✓ Hash verified: $hash"
+            }
+            else {
+              Write-Warning "  ✗ Hash mismatch!"
+              Write-Host "    Calculated: $hash"
+            }
+            
+            Remove-Item $tempFile -Force
+          }

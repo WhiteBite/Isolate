@@ -1,6 +1,9 @@
-# Cloudflare domains for ECH (Encrypted Client Hello) support
-# Source: zapret-discord-youtube project
+# General domains for DPI bypass
+# Source: Isolate project
+# NOTE: Специфичные домены вынесены в отдельные hostlists (discord.txt, youtube.txt, etc.)
+# Этот файл содержит общие домены и Cloudflare ECH
 
+# === Cloudflare ECH (Encrypted Client Hello) ===
 cloudflare-ech.com
 encryptedsni.com
 cloudflareaccess.com
@@ -19,40 +22,71 @@ cloudflarestorage.com
 cloudflarestream.com
 cloudflaretest.com
 
-# Discord domains
-# Core Discord domains
-dis.gd
-discord.app
-discord.co
-discord.com
-discord.design
-discord.dev
-discord.gift
-discord.gifts
-discord.gg
-discord.media
-discord.new
-discord.store
-discord.status
-discordapp.com
-discordapp.net
-discordcdn.com
-discordmerch.com
-discordstatus.com
+# === YouTube / Google Video ===
+# Core YouTube
+youtube.com
+www.youtube.com
+m.youtube.com
+music.youtube.com
+studio.youtube.com
+tv.youtube.com
+youtu.be
+youtube-nocookie.com
+youtubekids.com
 
-# Discord activities and games
-discord-activities.com
-discordactivities.com
-discordpartygames.com
-discordsays.com
-discordsez.com
+# YouTube API & Services
+youtubei.googleapis.com
+youtubeembeddedplayer.googleapis.com
+youtube-ui.l.google.com
+wide-youtube.l.google.com
+yt-video-upload.l.google.com
+jnn-pa.googleapis.com
 
-# Discord storage
-discord-attachments-uploads-prd.storage.googleapis.com
+# YouTube CDN & Images
+ytimg.com
+ytimg.l.google.com
+yt3.ggpht.com
+yt4.ggpht.com
+yt3.googleusercontent.com
+i.ytimg.com
+i9.ytimg.com
+s.ytimg.com
 
-# Third-party Discord extensions (emotes, etc.)
-frankerfacez.com
-ffzap.com
-betterttv.net
-7tv.app
-7tv.io
+# Google Video
+googlevideo.com
+*.googlevideo.com
+
+# === Google Services (часто блокируются вместе с YouTube) ===
+google.com
+www.google.com
+accounts.google.com
+apis.google.com
+clients1.google.com
+clients2.google.com
+clients3.google.com
+clients4.google.com
+clients5.google.com
+clients6.google.com
+play.google.com
+fonts.googleapis.com
+fonts.gstatic.com
+ajax.googleapis.com
+translate.googleapis.com
+maps.googleapis.com
+www.gstatic.com
+ssl.gstatic.com
+encrypted-tbn0.gstatic.com
+
+# === Common CDNs ===
+# Fastly
+fastly.net
+fastlylb.net
+
+# Akamai
+akamai.net
+akamaized.net
+akamaihd.net
+
+# Amazon CloudFront
+cloudfront.net
+

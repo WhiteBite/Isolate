@@ -5,6 +5,11 @@
 //! - Prevent duplicate instances
 //! - Health monitoring
 //! - Cleanup on app exit
+//!
+//! NOTE: Some methods are prepared for future routing and TUN features.
+
+// Public API for sing-box process management
+#![allow(dead_code)]
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -21,10 +26,12 @@ use tracing::{debug, error, info, warn};
 use crate::core::errors::{IsolateError, Result};
 use crate::core::models::{AppRoute, DomainRoute, ProxyConfig};
 use crate::core::paths::get_singbox_path;
+use crate::core::routing_converter::{convert_routing_rules, ConvertedRoutes};
 use crate::core::singbox_config::{
     generate_dns_config_fakeip, generate_dns_config_with_mode, generate_outbound,
     generate_route_rules, DnsMode,
 };
+use crate::core::storage::RoutingRule;
 use crate::core::vless_engine::{self, VlessConfig};
 
 // ============================================================================
@@ -297,8 +304,11 @@ impl SingboxManager {
             )));
         }
 
+        // Use .arg() with Path directly to safely handle non-UTF8 paths
         let child = Command::new(&singbox_path)
-            .args(["run", "-c", config_path.to_str().unwrap()])
+            .arg("run")
+            .arg("-c")
+            .arg(&config_path)
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
             .kill_on_drop(true)
@@ -426,6 +436,64 @@ impl SingboxManager {
         Ok(config)
     }
 
+    /// Start sing-box with high-level routing rules from storage
+    ///
+    /// This method converts RoutingRule (from UI/storage) to DomainRoute/AppRoute
+    /// and starts sing-box with the converted routing configuration.
+    ///
+    /// # Arguments
+    /// * `proxy` - Proxy configuration to use as outbound
+    /// * `routing_rules` - High-level routing rules from storage
+    /// * `socks_port` - SOCKS port for the inbound
+    ///
+    /// # Returns
+    /// Tuple of (SingboxInstance, ConvertedRoutes) - the instance info and converted routes
+    /// (ConvertedRoutes includes dpi_bypass_domains for winws hostlist)
+    ///
+    /// # Example
+    /// ```ignore
+    /// let rules = storage.get_routing_rules().await?;
+    /// let (instance, converted) = manager.start_with_routing_rules(&proxy, &rules, 1080).await?;
+    /// 
+    /// // Use dpi_bypass_domains for winws if needed
+    /// if !converted.dpi_bypass_domains.is_empty() {
+    ///     create_dynamic_hostlist(&converted.dpi_bypass_domains).await?;
+    /// }
+    /// ```
+    pub async fn start_with_routing_rules(
+        &self,
+        proxy: &ProxyConfig,
+        routing_rules: &[RoutingRule],
+        socks_port: u16,
+    ) -> Result<(SingboxInstance, ConvertedRoutes)> {
+        info!(
+            proxy_id = %proxy.id,
+            rules_count = routing_rules.len(),
+            socks_port = socks_port,
+            "Starting sing-box with routing rules"
+        );
+
+        // Convert high-level RoutingRule to DomainRoute/AppRoute
+        let converted = convert_routing_rules(routing_rules);
+
+        debug!(
+            domain_routes = converted.domain_routes.len(),
+            app_routes = converted.app_routes.len(),
+            dpi_bypass_domains = converted.dpi_bypass_domains.len(),
+            "Routing rules converted"
+        );
+
+        // Use existing start_with_routing method
+        let instance = self.start_with_routing(
+            proxy,
+            &converted.domain_routes,
+            &converted.app_routes,
+            socks_port,
+        ).await?;
+
+        Ok((instance, converted))
+    }
+
     /// Start sing-box with TUN mode and routing rules
     ///
     /// TUN mode captures all system traffic and routes it through the proxy.
@@ -511,8 +579,11 @@ impl SingboxManager {
             )));
         }
 
+        // Use .arg() with Path directly to safely handle non-UTF8 paths
         let child = Command::new(&singbox_path)
-            .args(["run", "-c", config_path.to_str().unwrap()])
+            .arg("run")
+            .arg("-c")
+            .arg(&config_path)
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
             .kill_on_drop(true)

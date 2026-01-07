@@ -4,6 +4,7 @@ use tauri::{Emitter, Window};
 use tracing::{info, error};
 
 use crate::core::binaries::{self, BinaryCheckResult, DownloadProgress};
+use crate::core::errors::{IsolateError, TypedResultExt};
 
 // ============================================================================
 // Version & Mode Detection
@@ -44,7 +45,8 @@ pub async fn check_binaries() -> Result<BinaryCheckResult, String> {
     
     binaries::check_binaries()
         .await
-        .map_err(|e| format!("Failed to check binaries: {}", e))
+        .io_context("Failed to check binaries")
+        .map_err(|e: IsolateError| e.to_string())
 }
 
 /// Download missing binaries with progress reporting
@@ -62,8 +64,10 @@ pub async fn download_binaries(window: Window) -> Result<(), String> {
     .await
     .map_err(|e| {
         error!("Binary download failed: {}", e);
-        format!("Failed to download binaries: {}", e)
-    })?;
+        e
+    })
+    .network_context("Failed to download binaries")
+    .map_err(|e: IsolateError| e.to_string())?;
     
     let _ = window.emit("binaries:complete", ());
     info!("Binary download completed");

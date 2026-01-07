@@ -1,0 +1,45 @@
+{
+  "id": "twitter-checker",
+  "name": "Twitter/X Checker",
+  "version": "1.0.0",
+  "author": "Isolate Team",
+  "description": "Добавляет проверку доступности Twitter/X",
+  "type": "service-checker",
+  "icon": "🐦",
+  "service": {
+    "id": "twitter",
+    "name": "Twitter/X",
+    "icon": "🐦",
+    "category": "social",
+    "description": "Социальная сеть для микроблогинга",
+    "endpoints": [
+      {
+        "id": "main",
+        "name": "Twitter Main",
+        "url": "https://twitter.com/",
+        "method": "HEAD"
+      },
+      {
+        "id": "x",
+        "name": "X.com",
+        "url": "https://x.com/",
+        "method": "HEAD"
+      },
+      {
+        "id": "api",
+        "name": "Twitter API",
+        "url": "https://api.twitter.com/",
+        "method": "HEAD"
+      },
+      {
+        "id": "cdn",
+        "name": "Twitter Images",
+        "url": "https://pbs.twimg.com/",
+        "method": "HEAD"
+      }
+    ]
+  },
+  "permissions": {
+    "http": ["twitter.com", "x.com", "api.twitter.com", "*.twimg.com"]
+  }
+}

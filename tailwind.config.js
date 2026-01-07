@@ -1,5 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+    darkMode: 'class',
     content: ['./src/**/*.{html,js,svelte,ts}'],
     theme: {
         extend: {
@@ -64,8 +65,14 @@ export default {
                 'slide-down': 'slide-down 0.3s ease-out',
                 'fade-in': 'fade-in 0.2s ease-out',
                 'fade-slide-up': 'fade-slide-up 0.4s ease-out',
+                'scanning-bar': 'scanning-bar 1.5s ease-in-out infinite',
             },
             keyframes: {
+                'scanning-bar': {
+                    '0%': { width: '0%', marginLeft: '0%' },
+                    '50%': { width: '30%', marginLeft: '35%' },
+                    '100%': { width: '0%', marginLeft: '100%' },
+                },
                 'pulse-glow': {
                     '0%, 100%': { boxShadow: '0 0 40px -10px rgba(99, 102, 241, 0.4)' },
                     '50%': { boxShadow: '0 0 60px -10px rgba(99, 102, 241, 0.7)' },

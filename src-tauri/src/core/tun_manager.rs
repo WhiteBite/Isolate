@@ -2,14 +2,19 @@
 //!
 //! Uses sing-box TUN inbound for full traffic capture.
 //! TUN mode requires administrator privileges.
+//!
+//! NOTE: get_status is prepared for future TUN status display.
+
+// Public API for TUN mode management
+#![allow(dead_code)]
 
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
 use once_cell::sync::Lazy;
-use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
+use tokio::sync::RwLock;
 use tokio::process::{Child, Command};
 use tracing::{debug, error, info, warn};
 
@@ -122,9 +127,9 @@ impl TunManager {
     /// - Failed to generate config or start sing-box
     pub async fn start(&self, socks_port: u16) -> Result<TunInstance> {
         // Check if already running
-        if *self.status.read() == TunStatus::Running {
+        if *self.status.read().await == TunStatus::Running {
             warn!("TUN already running");
-            return Ok(self.get_instance());
+            return Ok(self.get_instance().await);
         }
 
         // Check admin privileges - TUN requires admin
@@ -134,11 +139,11 @@ impl TunManager {
         }
 
         info!(socks_port, "Starting TUN mode");
-        *self.status.write() = TunStatus::Starting;
-        *self.socks_port.write() = socks_port;
+        *self.status.write().await = TunStatus::Starting;
+        *self.socks_port.write().await = socks_port;
 
         // Generate sing-box config with TUN inbound
-        let config_content = self.generate_config(socks_port)?;
+        let config_content = self.generate_config(socks_port).await?;
         let config_path = self.get_config_path();
 
         // Ensure directory exists
@@ -160,19 +165,23 @@ impl TunManager {
 
         if !singbox_path.exists() {
             error!(path = %singbox_path.display(), "sing-box binary not found");
-            *self.status.write() = TunStatus::Failed;
+            *self.status.write().await = TunStatus::Failed;
             return Err(IsolateError::Process("sing-box binary not found".into()));
         }
 
-        let child = Command::new(&singbox_path)
-            .args(["run", "-c", config_path.to_str().unwrap()])
+        // Use to_string_lossy() instead of unwrap() to handle non-UTF8 paths gracefully
+        let child = match Command::new(&singbox_path)
+            .args(["run", "-c", &config_path.to_string_lossy().to_string()])
             .kill_on_drop(true)
             .spawn()
-            .map_err(|e| {
+        {
+            Ok(child) => child,
+            Err(e) => {
                 error!(error = %e, "Failed to start sing-box for TUN");
-                *self.status.write() = TunStatus::Failed;
-                IsolateError::Process(format!("Failed to start sing-box: {}", e))
-            })?;
+                *self.status.write().await = TunStatus::Failed;
+                return Err(IsolateError::Process(format!("Failed to start sing-box: {}", e)));
+            }
+        };
 
         let pid = child.id();
         let started_at = std::time::SystemTime::now()
@@ -180,22 +189,22 @@ impl TunManager {
             .unwrap_or_default()
             .as_secs();
 
-        *self.process.write() = Some(child);
-        *self.pid.write() = pid;
-        *self.started_at.write() = Some(started_at);
-        *self.status.write() = TunStatus::Running;
+        *self.process.write().await = Some(child);
+        *self.pid.write().await = pid;
+        *self.started_at.write().await = Some(started_at);
+        *self.status.write().await = TunStatus::Running;
 
         info!(pid = ?pid, socks_port, "TUN mode started");
 
         // Wait a bit for TUN interface to initialize
         tokio::time::sleep(Duration::from_millis(500)).await;
 
-        Ok(self.get_instance())
+        Ok(self.get_instance().await)
     }
 
     /// Stop TUN mode
     pub async fn stop(&self) -> Result<()> {
-        let current_status = *self.status.read();
+        let current_status = *self.status.read().await;
         
         if current_status == TunStatus::Stopped {
             debug!("TUN already stopped");
@@ -203,10 +212,10 @@ impl TunManager {
         }
 
         info!("Stopping TUN mode");
-        *self.status.write() = TunStatus::Stopping;
+        *self.status.write().await = TunStatus::Stopping;
 
         // Take ownership of the child process
-        let child = self.process.write().take();
+        let child = self.process.write().await.take();
 
         if let Some(mut child) = child {
             // Try graceful shutdown first
@@ -242,51 +251,51 @@ impl TunManager {
         }
 
         // Reset state
-        *self.pid.write() = None;
-        *self.started_at.write() = None;
-        *self.status.write() = TunStatus::Stopped;
+        *self.pid.write().await = None;
+        *self.started_at.write().await = None;
+        *self.status.write().await = TunStatus::Stopped;
 
         info!("TUN mode stopped");
         Ok(())
     }
 
     /// Check if TUN is running
-    pub fn is_running(&self) -> bool {
-        *self.status.read() == TunStatus::Running
+    pub async fn is_running(&self) -> bool {
+        *self.status.read().await == TunStatus::Running
     }
 
     /// Get current TUN status
-    pub fn get_status(&self) -> TunStatus {
-        *self.status.read()
+    pub async fn get_status(&self) -> TunStatus {
+        *self.status.read().await
     }
 
     /// Get current TUN instance information
-    pub fn get_instance(&self) -> TunInstance {
+    pub async fn get_instance(&self) -> TunInstance {
         TunInstance {
-            status: *self.status.read(),
-            socks_port: *self.socks_port.read(),
-            pid: *self.pid.read(),
-            started_at: *self.started_at.read(),
-            config: self.config.read().clone(),
+            status: *self.status.read().await,
+            socks_port: *self.socks_port.read().await,
+            pid: *self.pid.read().await,
+            started_at: *self.started_at.read().await,
+            config: self.config.read().await.clone(),
         }
     }
 
     /// Update TUN configuration
     ///
     /// Note: Changes take effect on next start
-    pub fn set_config(&self, config: TunConfig) {
+    pub async fn set_config(&self, config: TunConfig) {
         info!(interface = %config.interface_name, mtu = config.mtu, "Updating TUN config");
-        *self.config.write() = config;
+        *self.config.write().await = config;
     }
 
     /// Get current TUN configuration
-    pub fn get_config(&self) -> TunConfig {
-        self.config.read().clone()
+    pub async fn get_config(&self) -> TunConfig {
+        self.config.read().await.clone()
     }
 
     /// Generate sing-box config with TUN inbound
-    fn generate_config(&self, socks_port: u16) -> Result<String> {
-        let config = self.config.read();
+    async fn generate_config(&self, socks_port: u16) -> Result<String> {
+        let config = self.config.read().await;
 
         // Build address array
         let mut addresses = vec![serde_json::json!(config.address_v4)];
@@ -359,7 +368,7 @@ impl TunManager {
 
     /// Restart TUN with current configuration
     pub async fn restart(&self, socks_port: Option<u16>) -> Result<TunInstance> {
-        let port = socks_port.unwrap_or(*self.socks_port.read());
+        let port = socks_port.unwrap_or(*self.socks_port.read().await);
         
         self.stop().await?;
         tokio::time::sleep(Duration::from_millis(300)).await;
@@ -400,10 +409,10 @@ mod tests {
         assert!(!config.strict_route);
     }
 
-    #[test]
-    fn test_generate_config() {
+    #[tokio::test]
+    async fn test_generate_config() {
         let manager = TunManager::new();
-        let config = manager.generate_config(1080).unwrap();
+        let config = manager.generate_config(1080).await.unwrap();
         
         // Verify it's valid JSON
         let parsed: serde_json::Value = serde_json::from_str(&config).unwrap();
@@ -424,15 +433,15 @@ mod tests {
         assert_eq!(socks_outbound["server_port"], 1080);
     }
 
-    #[test]
-    fn test_config_with_ipv6() {
+    #[tokio::test]
+    async fn test_config_with_ipv6() {
         let manager = TunManager::new();
         
         let mut config = TunConfig::default();
         config.address_v6 = Some("fdfe:dcba:9876::1/96".to_string());
-        manager.set_config(config);
+        manager.set_config(config).await;
         
-        let json_str = manager.generate_config(1080).unwrap();
+        let json_str = manager.generate_config(1080).await.unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&json_str).unwrap();
         
         let addresses = &parsed["inbounds"][0]["address"];

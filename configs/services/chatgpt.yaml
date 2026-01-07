@@ -1,0 +1,37 @@
+# OpenAI/ChatGPT Service Definition
+id: "chatgpt"
+name: "ChatGPT/OpenAI"
+enabled_by_default: true
+critical: false
+
+tests:
+  - type: https_head
+    url: "https://chat.openai.com"
+    timeout_ms: 5000
+
+  - type: https_head
+    url: "https://api.openai.com"
+    timeout_ms: 5000
+
+  - type: https_head
+    url: "https://platform.openai.com"
+    timeout_ms: 5000
+
+  - type: tcp_connect
+    host: "chat.openai.com"
+    port: 443
+    timeout_ms: 3000
+
+  - type: tcp_connect
+    host: "api.openai.com"
+    port: 443
+    timeout_ms: 3000
+
+  - type: dns
+    domain: "openai.com"
+    timeout_ms: 3000
+
+  - type: dns
+    domain: "chat.openai.com"
+    timeout_ms: 3000
+

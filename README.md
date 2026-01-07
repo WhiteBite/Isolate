@@ -15,6 +15,15 @@
   <a href="#разработка">Разработка</a>
 </p>
 
+<p align="center">
+  <a href="https://github.com/WhiteBite/Isolate/actions/workflows/nightly.yml">
+    <img src="https://github.com/WhiteBite/Isolate/actions/workflows/nightly.yml/badge.svg" alt="Nightly Build">
+  </a>
+  <a href="https://github.com/WhiteBite/Isolate/releases">
+    <img src="https://img.shields.io/github/v/release/WhiteBite/Isolate?label=release" alt="Latest Release">
+  </a>
+</p>
+
 ---
 
 ## Что это?

@@ -13,15 +13,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          
       - name: Setup pnpm
         uses: pnpm/action-setup@v2
         with:
           version: 8
+          
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
           
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -56,8 +57,120 @@ jobs:
       - name: Run TypeScript tests
         run: pnpm test
         
+      - name: Svelte check (TypeScript types)
+        run: pnpm check
+        
       - name: Build frontend
         run: pnpm build
         
       - name: Build Tauri
         run: pnpm tauri build
+      
+      - name: Smoke test - verify binary starts
+        shell: pwsh
+        run: |
+          Write-Host "Running smoke tests on built binary..."
+          
+          $exePath = "src-tauri/target/release/Isolate.exe"
+          
+          if (-not (Test-Path $exePath)) {
+            Write-Error "Binary not found at $exePath"
+            exit 1
+          }
+          
+          Write-Host "Binary found: $exePath"
+          
+          # Test 1: --version flag
+          Write-Host "=== Test: Version check ==="
+          $versionOutput = & $exePath --version 2>&1
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Version check failed"
+            exit 1
+          }
+          Write-Host "Version: $versionOutput"
+          
+          # Test 2: --smoke-test flag
+          Write-Host "=== Test: Smoke test ==="
+          $smokeOutput = & $exePath --smoke-test 2>&1
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Smoke test failed"
+            Write-Host $smokeOutput
+            exit 1
+          }
+          Write-Host $smokeOutput
+          
+          Write-Host "✅ Smoke tests passed!"
+
+  security:
+    runs-on: windows-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+          
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+          
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+          
+      - name: Install cargo-audit
+        run: cargo install cargo-audit
+        
+      - name: Install dependencies
+        run: pnpm install
+        
+      - name: npm audit
+        run: pnpm audit --audit-level=high
+        
+      - name: Cargo audit
+        run: cargo audit --file src-tauri/Cargo.lock
+
+  sbom:
+    runs-on: windows-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+          
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+          
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+          
+      - name: Install dependencies
+        run: pnpm install
+        
+      - name: Install cargo-sbom
+        run: cargo install cargo-sbom
+        
+      - name: Generate Rust SBOM
+        run: cargo sbom --output-format cyclonedx-json > sbom-rust.json
+        working-directory: src-tauri
+        
+      - name: Generate Node SBOM
+        run: npx @cyclonedx/cyclonedx-npm --output-format json --output-file sbom-node.json
+        
+      - name: Upload SBOM artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: |
+            src-tauri/sbom-rust.json
+            sbom-node.json
+          retention-days: 30

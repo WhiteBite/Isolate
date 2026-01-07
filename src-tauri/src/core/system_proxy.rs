@@ -2,13 +2,19 @@
 //!
 //! Sets/clears Windows system proxy settings via WinINet API.
 //! Based on Qv2ray's QvProxyConfigurator implementation.
+//!
+//! NOTE: get_system_proxy is prepared for future proxy status display.
+
+// Public API for system proxy management
+#![allow(dead_code)]
 
 use tracing::{info, error, debug};
 use crate::core::errors::{Result, IsolateError};
+use crate::core::logging::mask_ip;
 
 /// Set system proxy to use SOCKS5 or HTTP proxy
 pub async fn set_system_proxy(host: &str, port: u16, scheme: &str) -> Result<()> {
-    info!(host, port, scheme, "Setting system proxy");
+    info!(host = %mask_ip(host), port, scheme, "Setting system proxy");
     
     #[cfg(windows)]
     {

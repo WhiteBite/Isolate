@@ -3,10 +3,14 @@
 //! Commands for managing proxy configurations (SOCKS5, HTTP, Shadowsocks, Trojan, etc.)
 //! Note: VLESS-specific commands are in the `vless` module.
 
+#![allow(dead_code)] // Public proxy commands API
+
 use std::sync::Arc;
 use tauri::State;
 use tracing::{info, warn};
 
+use crate::commands::validation::{validate_not_empty, validate_public_url};
+use crate::core::errors::{IsolateError, TypedResultExt};
 use crate::core::models::ProxyConfig;
 use crate::state::AppState;
 
@@ -18,14 +22,14 @@ use crate::state::AppState;
 #[tauri::command]
 pub async fn get_proxies(
     state: State<'_, Arc<AppState>>,
-) -> Result<Vec<ProxyConfig>, String> {
+) -> Result<Vec<ProxyConfig>, IsolateError> {
     info!("Loading all proxies");
     
     state
         .storage
         .get_all_proxies()
         .await
-        .map_err(|e| format!("Failed to get proxies: {}", e))
+        .storage_context("Failed to get proxies")
 }
 
 /// Add a new proxy
@@ -33,7 +37,10 @@ pub async fn get_proxies(
 pub async fn add_proxy(
     state: State<'_, Arc<AppState>>,
     proxy: ProxyConfig,
-) -> Result<ProxyConfig, String> {
+) -> Result<ProxyConfig, IsolateError> {
+    validate_not_empty(&proxy.name, "Proxy name")?;
+    validate_not_empty(&proxy.server, "Server address")?;
+    
     info!(id = %proxy.id, name = %proxy.name, protocol = ?proxy.protocol, "Adding new proxy");
     
     // Generate ID if empty
@@ -50,7 +57,7 @@ pub async fn add_proxy(
         .storage
         .save_proxy(&proxy)
         .await
-        .map_err(|e| format!("Failed to add proxy: {}", e))?;
+        .storage_context("Failed to add proxy")?;
     
     info!(id = %proxy.id, "Proxy added successfully");
     Ok(proxy)
@@ -61,14 +68,14 @@ pub async fn add_proxy(
 pub async fn update_proxy(
     state: State<'_, Arc<AppState>>,
     proxy: ProxyConfig,
-) -> Result<(), String> {
+) -> Result<(), IsolateError> {
     info!(id = %proxy.id, name = %proxy.name, "Updating proxy");
     
     state
         .storage
         .update_proxy(&proxy)
         .await
-        .map_err(|e| format!("Failed to update proxy: {}", e))
+        .storage_context("Failed to update proxy")
 }
 
 /// Delete proxy by ID
@@ -76,7 +83,7 @@ pub async fn update_proxy(
 pub async fn delete_proxy(
     state: State<'_, Arc<AppState>>,
     id: String,
-) -> Result<(), String> {
+) -> Result<(), IsolateError> {
     info!(id = %id, "Deleting proxy");
     
     // Stop proxy if running
@@ -89,7 +96,7 @@ pub async fn delete_proxy(
         .storage
         .delete_proxy(&id)
         .await
-        .map_err(|e| format!("Failed to delete proxy: {}", e))
+        .storage_context("Failed to delete proxy")
 }
 
 // ============================================================================
@@ -101,7 +108,7 @@ pub async fn delete_proxy(
 pub async fn apply_proxy(
     state: State<'_, Arc<AppState>>,
     id: String,
-) -> Result<(), String> {
+) -> Result<(), IsolateError> {
     info!(id = %id, "Applying proxy");
     
     // Get proxy config
@@ -109,8 +116,8 @@ pub async fn apply_proxy(
         .storage
         .get_proxy(&id)
         .await
-        .map_err(|e| format!("Failed to get proxy: {}", e))?
-        .ok_or_else(|| format!("Proxy '{}' not found", id))?;
+        .storage_context("Failed to get proxy")?
+        .ok_or_else(|| IsolateError::Other(format!("Proxy '{}' not found", id)))?;
     
     // Check if protocol is supported for sing-box
     match proxy.protocol {
@@ -137,14 +144,14 @@ pub async fn apply_proxy(
             manager
                 .start(&vless_config, port)
                 .await
-                .map_err(|e| format!("Failed to start proxy: {}", e))?;
+                .process_context("Failed to start proxy")?;
             
             // Mark as active in storage
             state
                 .storage
                 .set_proxy_active(&id, true)
                 .await
-                .map_err(|e| format!("Failed to set proxy active: {}", e))?;
+                .storage_context("Failed to set proxy active")?;
             
             info!(id = %id, socks_port = port, "Proxy applied successfully");
             Ok(())
@@ -157,13 +164,21 @@ pub async fn apply_proxy(
                 .storage
                 .set_proxy_active(&id, true)
                 .await
-                .map_err(|e| format!("Failed to set proxy active: {}", e))?;
+                .storage_context("Failed to set proxy active")?;
             
             info!(id = %id, "Direct proxy marked as active");
             Ok(())
         }
-        _ => Err(format!("Protocol {:?} is not supported for apply", proxy.protocol)),
+        _ => Err(IsolateError::Other(format!("Protocol {:?} is not supported for apply", proxy.protocol))),
     }
+}
+
+/// Result of proxy test
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ProxyTestResult {
+    pub success: bool,
+    pub latency: Option<u32>,
+    pub error: Option<String>,
 }
 
 /// Test proxy connectivity
@@ -171,7 +186,13 @@ pub async fn apply_proxy(
 pub async fn test_proxy(
     state: State<'_, Arc<AppState>>,
     id: String,
-) -> Result<u32, String> {
+) -> Result<ProxyTestResult, IsolateError> {
+    // Rate limiting: 10 requests per minute
+    crate::commands::rate_limiter::check_rate_limit_with_config(
+        "test_proxy",
+        crate::commands::rate_limiter::limits::TEST_PROXY,
+    )?;
+    
     info!(id = %id, "Testing proxy connectivity");
     
     // Get proxy config
@@ -179,17 +200,18 @@ pub async fn test_proxy(
         .storage
         .get_proxy(&id)
         .await
-        .map_err(|e| format!("Failed to get proxy: {}", e))?
-        .ok_or_else(|| format!("Proxy '{}' not found", id))?;
+        .storage_context("Failed to get proxy")?
+        .ok_or_else(|| IsolateError::Other(format!("Proxy '{}' not found", id)))?;
     
     let manager = crate::core::singbox_manager::get_manager();
     
     // Check if already running
     if let Some(socks_port) = manager.get_socks_port(&id).await {
         // Test existing connection
-        return crate::core::vless_engine::test_proxy_connectivity(socks_port, "https://www.google.com")
-            .await
-            .map_err(|e| format!("Connectivity test failed: {}", e));
+        match crate::core::vless_engine::test_proxy_connectivity(socks_port, "https://www.google.com").await {
+            Ok(latency) => return Ok(ProxyTestResult { success: true, latency: Some(latency), error: None }),
+            Err(e) => return Ok(ProxyTestResult { success: false, latency: None, error: Some(e.to_string()) }),
+        }
     }
     
     // Start temporary proxy for testing
@@ -213,22 +235,23 @@ pub async fn test_proxy(
             let port = manager.allocate_port(10800).await;
             
             // Start proxy
-            manager
-                .start(&vless_config, port)
-                .await
-                .map_err(|e| format!("Failed to start proxy for testing: {}", e))?;
+            if let Err(e) = manager.start(&vless_config, port).await {
+                return Ok(ProxyTestResult { success: false, latency: None, error: Some(format!("Failed to start: {}", e)) });
+            }
             
             // Wait for proxy to initialize
             tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
             
             // Test connectivity
-            let result = crate::core::vless_engine::test_proxy_connectivity(port, "https://www.google.com")
-                .await;
+            let result = crate::core::vless_engine::test_proxy_connectivity(port, "https://www.google.com").await;
             
             // Stop test proxy
             let _ = manager.stop(&format!("test_{}", proxy.id)).await;
             
-            result.map_err(|e| format!("Connectivity test failed: {}", e))
+            match result {
+                Ok(latency) => Ok(ProxyTestResult { success: true, latency: Some(latency), error: None }),
+                Err(e) => Ok(ProxyTestResult { success: false, latency: None, error: Some(e.to_string()) }),
+            }
         }
         crate::core::models::ProxyProtocol::Socks5 => {
             // Test SOCKS5 directly
@@ -239,9 +262,9 @@ pub async fn test_proxy(
                 std::time::Duration::from_secs(5),
                 tokio::net::TcpStream::connect(&addr)
             ).await {
-                Ok(Ok(_)) => Ok(start.elapsed().as_millis() as u32),
-                Ok(Err(e)) => Err(format!("Connection failed: {}", e)),
-                Err(_) => Err("Connection timeout".to_string()),
+                Ok(Ok(_)) => Ok(ProxyTestResult { success: true, latency: Some(start.elapsed().as_millis() as u32), error: None }),
+                Ok(Err(e)) => Ok(ProxyTestResult { success: false, latency: None, error: Some(format!("Connection failed: {}", e)) }),
+                Err(_) => Ok(ProxyTestResult { success: false, latency: None, error: Some("Connection timeout".to_string()) }),
             }
         }
         crate::core::models::ProxyProtocol::Http |
@@ -255,21 +278,20 @@ pub async fn test_proxy(
                 proxy.port
             );
             
-            let client = reqwest::Client::builder()
-                .proxy(reqwest::Proxy::all(&proxy_url).map_err(|e| format!("Invalid proxy URL: {}", e))?)
+            let client = match reqwest::Client::builder()
+                .proxy(reqwest::Proxy::all(&proxy_url).network_context("Invalid proxy URL")?)
                 .timeout(std::time::Duration::from_secs(5))
-                .build()
-                .map_err(|e| format!("Failed to create client: {}", e))?;
+                .build() {
+                    Ok(c) => c,
+                    Err(e) => return Ok(ProxyTestResult { success: false, latency: None, error: Some(format!("Failed to create client: {}", e)) }),
+                };
             
-            client
-                .get("https://www.google.com")
-                .send()
-                .await
-                .map_err(|e| format!("Request failed: {}", e))?;
-            
-            Ok(start.elapsed().as_millis() as u32)
+            match client.get("https://www.google.com").send().await {
+                Ok(_) => Ok(ProxyTestResult { success: true, latency: Some(start.elapsed().as_millis() as u32), error: None }),
+                Err(e) => Ok(ProxyTestResult { success: false, latency: None, error: Some(format!("Request failed: {}", e)) }),
+            }
         }
-        _ => Err(format!("Protocol {:?} is not supported for testing", proxy.protocol)),
+        _ => Ok(ProxyTestResult { success: false, latency: None, error: Some(format!("Protocol {:?} is not supported for testing", proxy.protocol)) }),
     }
 }
 
@@ -282,18 +304,20 @@ pub async fn test_proxy(
 pub async fn import_proxy_url(
     state: State<'_, Arc<AppState>>,
     url: String,
-) -> Result<ProxyConfig, String> {
+) -> Result<ProxyConfig, IsolateError> {
+    validate_not_empty(&url, "Proxy URL")?;
+    
     info!("Importing proxy from URL");
     
     let proxy = crate::core::proxy_parser::parse_proxy_url(&url)
-        .map_err(|e| format!("Failed to parse proxy URL: {}", e))?;
+        .config_context("Failed to parse proxy URL")?;
     
     // Save to storage
     state
         .storage
         .save_proxy(&proxy)
         .await
-        .map_err(|e| format!("Failed to save proxy: {}", e))?;
+        .storage_context("Failed to save proxy")?;
     
     info!(id = %proxy.id, name = %proxy.name, protocol = ?proxy.protocol, "Proxy imported from URL");
     Ok(proxy)
@@ -304,33 +328,43 @@ pub async fn import_proxy_url(
 pub async fn import_subscription(
     state: State<'_, Arc<AppState>>,
     url: String,
-) -> Result<Vec<ProxyConfig>, String> {
+) -> Result<Vec<ProxyConfig>, IsolateError> {
+    // SSRF Protection: Validate that URL points to a public address
+    // This prevents attacks targeting internal services (localhost, 192.168.x.x, etc.)
+    validate_public_url(&url)?;
+    
+    // Rate limiting: 5 requests per minute (additional SSRF protection)
+    crate::commands::rate_limiter::check_rate_limit_with_config(
+        "import_subscription",
+        crate::commands::rate_limiter::limits::IMPORT_SUBSCRIPTION,
+    )?;
+    
     info!(url = %url, "Importing subscription");
     
     // Fetch subscription content
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(30))
         .build()
-        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+        .network_context("Failed to create HTTP client")?;
     
     let response = client
         .get(&url)
         .send()
         .await
-        .map_err(|e| format!("Failed to fetch subscription: {}", e))?;
+        .network_context("Failed to fetch subscription")?;
     
     if !response.status().is_success() {
-        return Err(format!("Subscription request failed with status: {}", response.status()));
+        return Err(IsolateError::Network(format!("Subscription request failed with status: {}", response.status())));
     }
     
     let content = response
         .text()
         .await
-        .map_err(|e| format!("Failed to read subscription content: {}", e))?;
+        .network_context("Failed to read subscription content")?;
     
     // Parse subscription
     let proxies = crate::core::proxy_parser::parse_subscription(&content)
-        .map_err(|e| format!("Failed to parse subscription: {}", e))?;
+        .config_context("Failed to parse subscription")?;
     
     // Save all proxies
     let mut saved_proxies = Vec::new();
@@ -352,9 +386,56 @@ pub async fn import_subscription(
 
 /// Parse proxy URL without saving (for preview)
 #[tauri::command]
-pub async fn parse_proxy_url(url: String) -> Result<ProxyConfig, String> {
+pub async fn parse_proxy_url(url: String) -> Result<ProxyConfig, IsolateError> {
     info!("Parsing proxy URL for preview");
     
     crate::core::proxy_parser::parse_proxy_url(&url)
-        .map_err(|e| format!("Failed to parse proxy URL: {}", e))
+        .config_context("Failed to parse proxy URL")
+}
+
+/// Export proxy config to URL format
+#[tauri::command]
+pub async fn export_proxy_url(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+) -> Result<String, IsolateError> {
+    info!(id = %id, "Exporting proxy to URL");
+    
+    let proxy = state
+        .storage
+        .get_proxy(&id)
+        .await
+        .storage_context("Failed to get proxy")?
+        .ok_or_else(|| IsolateError::Other(format!("Proxy '{}' not found", id)))?;
+    
+    crate::core::proxy_parser::export_proxy_url(&proxy)
+        .config_context("Failed to export proxy URL")
+}
+
+/// Deactivate proxy (stop sing-box and mark as inactive)
+#[tauri::command]
+pub async fn deactivate_proxy(
+    state: State<'_, Arc<AppState>>,
+    id: String,
+) -> Result<(), IsolateError> {
+    info!(id = %id, "Deactivating proxy");
+    
+    // Stop sing-box if running
+    let manager = crate::core::singbox_manager::get_manager();
+    if manager.is_running(&id).await {
+        manager
+            .stop(&id)
+            .await
+            .process_context("Failed to stop proxy")?;
+    }
+    
+    // Mark as inactive in storage
+    state
+        .storage
+        .set_proxy_active(&id, false)
+        .await
+        .storage_context("Failed to set proxy inactive")?;
+    
+    info!(id = %id, "Proxy deactivated successfully");
+    Ok(())
 }

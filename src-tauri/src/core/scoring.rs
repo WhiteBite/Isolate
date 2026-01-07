@@ -3,6 +3,10 @@
 //! Calculates strategy scores based on test results.
 //! Score formula: (success_rate * 0.5) + (critical_success_rate * 0.3) +
 //!                (1.0 - normalized_latency) * 0.15 + (1.0 - jitter) * 0.05
+//!
+//! Note: This module provides public scoring API for strategy evaluation.
+
+#![allow(dead_code)] // Public scoring API
 
 use tracing::{debug, instrument};
 

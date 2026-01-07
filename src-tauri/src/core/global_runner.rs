@@ -5,6 +5,11 @@
 //! instances lose track of each other's processes.
 //!
 //! CRITICAL: All process management MUST go through this module!
+//!
+//! NOTE: Some functions are prepared for future process management features.
+
+// Public API for global process management
+#![allow(dead_code)]
 
 use once_cell::sync::Lazy;
 use std::sync::Arc;

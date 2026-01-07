@@ -1,6 +1,6 @@
 //! Diagnostics commands
 //!
-//! Commands for DPI diagnostics, IPv6 checking, and emergency network reset.
+//! Commands for DPI diagnostics, IPv6 checking, conflict detection, and emergency network reset.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -11,9 +11,12 @@ use tokio::net::TcpStream;
 use tokio::time::{timeout, Duration};
 use tracing::{info, warn, error};
 
+use crate::core::errors::{IsolateError, TypedResultExt};
 use crate::core::models::DiagnosticResult;
 use crate::core::diagnostics::{DualStackResult, Ipv6Status};
+use crate::core::conflict_detector::{ConflictInfo, detect_conflicts, has_critical_conflicts, has_blocking_conflicts};
 use crate::core::paths::{get_binaries_dir, get_winws_path, get_singbox_path};
+use crate::core::tcp_timestamps::{check_tcp_timestamps, TcpTimestampsStatus};
 use crate::state::AppState;
 
 /// Component check result for UI
@@ -54,6 +57,10 @@ pub async fn run_diagnostics() -> Result<HashMap<String, ComponentCheck>, String
     // 6. Firewall check
     let firewall_result = check_firewall().await;
     results.insert("firewall".to_string(), firewall_result);
+    
+    // 7. TCP Timestamps check
+    let tcp_timestamps_result = check_tcp_timestamps_status().await;
+    results.insert("tcp_timestamps".to_string(), tcp_timestamps_result);
     
     info!("System diagnostics completed");
     Ok(results)
@@ -299,14 +306,42 @@ async fn check_firewall() -> ComponentCheck {
     }
 }
 
+/// Check TCP timestamps status
+async fn check_tcp_timestamps_status() -> ComponentCheck {
+    match check_tcp_timestamps().await {
+        Ok(status) => {
+            match status {
+                TcpTimestampsStatus::Enabled => ComponentCheck {
+                    status: "healthy".to_string(),
+                    details: "Enabled (RFC 1323)".to_string(),
+                },
+                TcpTimestampsStatus::Disabled => ComponentCheck {
+                    status: "warning".to_string(),
+                    details: "Disabled (enable in Settings → Advanced for better DPI bypass)".to_string(),
+                },
+                TcpTimestampsStatus::Unknown => ComponentCheck {
+                    status: "warning".to_string(),
+                    details: "Could not determine status".to_string(),
+                },
+            }
+        }
+        Err(e) => {
+            ComponentCheck {
+                status: "warning".to_string(),
+                details: format!("Check failed: {}", e),
+            }
+        }
+    }
+}
+
 /// Run DPI diagnostics
 #[tauri::command]
-pub async fn diagnose() -> Result<DiagnosticResult, String> {
+pub async fn diagnose() -> Result<DiagnosticResult, IsolateError> {
     info!("Running DPI diagnostics");
     
     let profile = crate::core::diagnostics::diagnose()
         .await
-        .map_err(|e| format!("Diagnostics failed: {}", e))?;
+        .network_context("Diagnostics failed")?;
     
     Ok(DiagnosticResult {
         profile,
@@ -317,12 +352,12 @@ pub async fn diagnose() -> Result<DiagnosticResult, String> {
 
 /// Run dual-stack (IPv4/IPv6) diagnostics
 #[tauri::command]
-pub async fn diagnose_dual_stack() -> Result<DualStackResult, String> {
+pub async fn diagnose_dual_stack() -> Result<DualStackResult, IsolateError> {
     info!("Running dual-stack diagnostics");
     
     crate::core::diagnostics::diagnose_dual_stack()
         .await
-        .map_err(|e| format!("Dual-stack diagnostics failed: {}", e))
+        .network_context("Dual-stack diagnostics failed")
 }
 
 /// Check IPv6 availability
@@ -362,4 +397,26 @@ pub async fn panic_reset(state: State<'_, Arc<AppState>>) -> Result<(), String> 
     }
     
     Ok(())
+}
+
+/// Check for software conflicts with WinDivert/winws
+/// 
+/// Detects running processes and services that may interfere with
+/// Isolate's packet filtering functionality.
+#[tauri::command]
+pub async fn check_conflicts() -> Result<Vec<ConflictInfo>, String> {
+    info!("Checking for software conflicts");
+    
+    let conflicts = detect_conflicts().await;
+    
+    if !conflicts.is_empty() {
+        warn!(
+            count = conflicts.len(),
+            has_critical = has_critical_conflicts(&conflicts),
+            has_blocking = has_blocking_conflicts(&conflicts),
+            "Detected software conflicts"
+        );
+    }
+    
+    Ok(conflicts)
 }

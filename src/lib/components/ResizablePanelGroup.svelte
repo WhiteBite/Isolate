@@ -233,21 +233,25 @@
     saveSizes();
   }
 
-  // Provide context to children
-  setContext('resizable-panel-group', {
-    direction: () => direction,
-    registerPanel,
-    unregisterPanel,
-    getPanelSize,
-    isPanelCollapsed,
-    startResize,
-    handleKeyboardResize,
-    expandPanel,
-    getHandleIndex: (panelId: string) => panelOrder.indexOf(panelId),
-    isDragging: () => isDragging,
-    activeHandleIndex: () => activeHandleIndex,
-    panelOrder: () => panelOrder
-  });
+  // Provide context to children (with HMR safety)
+  try {
+    setContext('resizable-panel-group', {
+      direction: () => direction,
+      registerPanel,
+      unregisterPanel,
+      getPanelSize,
+      isPanelCollapsed,
+      startResize,
+      handleKeyboardResize,
+      expandPanel,
+      getHandleIndex: (panelId: string) => panelOrder.indexOf(panelId),
+      isDragging: () => isDragging,
+      activeHandleIndex: () => activeHandleIndex,
+      panelOrder: () => panelOrder
+    });
+  } catch {
+    // HMR may cause lifecycle_outside_component error
+  }
 </script>
 
 <div 

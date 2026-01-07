@@ -2,3 +2,8 @@ export * from './logs';
 export * from './plugins';
 export * from './toast';
 export * from './pluginSlots';
+export * from './layout';
+export * from './theme';
+export * from './hotkeys';
+export * from './connectionStats';
+export * from './providers';

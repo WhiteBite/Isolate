@@ -1,9 +1,11 @@
 # General FAKE TLS AUTO Strategy - из general (FAKE TLS AUTO).bat
+# Продвинутая стратегия с автоматической генерацией TLS
 id: "zapret_general_fake_tls"
-name: "General Fake TLS"
-description: "Стратегия с автоматической генерацией fake TLS пакетов"
+name: "General Fake TLS Auto"
+description: "Продвинутая стратегия с fake+multidisorder и автоматической генерацией TLS. Использует badseq fooling и модификацию TLS."
 family: sni_frag
 engine: zapret
+label: experimental
 
 mode_capabilities:
   supports_socks: false
@@ -12,25 +14,73 @@ mode_capabilities:
 global_template:
   binary: "binaries/winws.exe"
   args:
-    # QUIC fake для общего списка
-    - "--wf-tcp=80,443"
-    - "--wf-udp=443,50000-65535"
+    # WinDivert фильтры
+    - "--wf-tcp=80,443,2053,2083,2087,2096,8443"
+    - "--wf-udp=443,19294-19344,50000-50100"
+    # QUIC fake для общего списка (увеличенные repeats)
     - "--filter-udp=443"
     - "--hostlist=hostlists/general.txt"
+    - "--hostlist-exclude=hostlists/exclude.txt"
+    - "--ipset-exclude=hostlists/ipset-exclude.txt"
     - "--dpi-desync=fake"
     - "--dpi-desync-repeats=11"
     - "--dpi-desync-fake-quic=binaries/quic_initial_www_google_com.bin"
     - "--new"
-    # Discord voice/STUN
-    - "--filter-udp=50000-65535"
+    # Discord voice/STUN с filter-l7
+    - "--filter-udp=19294-19344,50000-50100"
+    - "--filter-l7=discord,stun"
     - "--dpi-desync=fake"
-    - "--dpi-desync-any-protocol"
-    - "--dpi-desync-cutoff=d3"
+    - "--dpi-desync-fake-discord=binaries/quic_initial_www_google_com.bin"
+    - "--dpi-desync-fake-stun=binaries/quic_initial_www_google_com.bin"
     - "--dpi-desync-repeats=6"
+    - "--new"
+    # Discord media CDN с multidisorder
+    - "--filter-tcp=2053,2083,2087,2096,8443"
+    - "--hostlist-domains=discord.media"
+    - "--dpi-desync=fake,multidisorder"
+    - "--dpi-desync-split-pos=1,midsld"
+    - "--dpi-desync-repeats=11"
+    - "--dpi-desync-fooling=badseq"
+    - "--dpi-desync-fake-tls=0x00000000"
+    - "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=www.google.com"
+    - "--new"
+    # Google/YouTube с multidisorder
+    - "--filter-tcp=443"
+    - "--hostlist=hostlists/google.txt"
+    - "--ip-id=zero"
+    - "--dpi-desync=fake,multidisorder"
+    - "--dpi-desync-split-pos=1,midsld"
+    - "--dpi-desync-repeats=11"
+    - "--dpi-desync-fooling=badseq"
+    - "--dpi-desync-fake-tls=0x00000000"
+    - "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=www.google.com"
     - "--new"
     # TCP fake+multidisorder с автогенерацией TLS
     - "--filter-tcp=80,443"
     - "--hostlist=hostlists/general.txt"
+    - "--hostlist-exclude=hostlists/exclude.txt"
+    - "--ipset-exclude=hostlists/ipset-exclude.txt"
+    - "--dpi-desync=fake,multidisorder"
+    - "--dpi-desync-split-pos=1,midsld"
+    - "--dpi-desync-repeats=11"
+    - "--dpi-desync-fooling=badseq"
+    - "--dpi-desync-fake-tls=0x00000000"
+    - "--dpi-desync-fake-tls-mod=rnd,dupsid,sni=www.google.com"
+    - "--new"
+    # QUIC для ipset
+    - "--filter-udp=443"
+    - "--ipset=hostlists/ipset-all.txt"
+    - "--hostlist-exclude=hostlists/exclude.txt"
+    - "--ipset-exclude=hostlists/ipset-exclude.txt"
+    - "--dpi-desync=fake"
+    - "--dpi-desync-repeats=11"
+    - "--dpi-desync-fake-quic=binaries/quic_initial_www_google_com.bin"
+    - "--new"
+    # TCP для ipset с multidisorder
+    - "--filter-tcp=80,443"
+    - "--ipset=hostlists/ipset-all.txt"
+    - "--hostlist-exclude=hostlists/exclude.txt"
+    - "--ipset-exclude=hostlists/ipset-exclude.txt"
     - "--dpi-desync=fake,multidisorder"
     - "--dpi-desync-split-pos=1,midsld"
     - "--dpi-desync-repeats=11"

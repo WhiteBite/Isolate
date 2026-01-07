@@ -1,0 +1,28 @@
+# Мегафон Provider Profile
+id: megafon
+name: Мегафон
+description: Мобильный и домашний интернет
+dpi_type: ТСПУ
+regions:
+  - Москва
+  - Санкт-Петербург
+  - Все регионы России
+
+recommended_strategies:
+  - zapret_general_multisplit      # Первый приоритет
+  - zapret_general_fake_tls_auto_alt2  # Хорошо работает на Мегафон
+  - zapret_general_alt5            # Альтернатива
+  - zapret_general_fakedsplit      # Резервная
+
+notes: |
+  Мегафон использует стандартный ТСПУ.
+  
+  Рекомендации:
+  1. Начните с multisplit
+  2. fake_tls_auto_alt2 показывает хорошие результаты
+  3. Для Discord может потребоваться отдельная стратегия
+  
+  Особенности:
+  - DPI относительно стандартный
+  - QUIC блокируется
+  - IPv6 работает нестабильно

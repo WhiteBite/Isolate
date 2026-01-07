@@ -1,0 +1,61 @@
+# EditorConfig helps maintain consistent coding styles
+# https://editorconfig.org
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# Rust files
+[*.rs]
+indent_size = 4
+
+# Cargo files
+[Cargo.toml]
+indent_size = 4
+
+# Markdown files
+[*.md]
+trim_trailing_whitespace = false
+
+# YAML files
+[*.{yml,yaml}]
+indent_size = 2
+
+# JSON files
+[*.json]
+indent_size = 2
+
+# TypeScript/JavaScript
+[*.{ts,tsx,js,jsx,mjs,cjs}]
+indent_size = 2
+
+# Svelte files
+[*.svelte]
+indent_size = 2
+
+# CSS/SCSS
+[*.{css,scss,postcss}]
+indent_size = 2
+
+# HTML
+[*.html]
+indent_size = 2
+
+# PowerShell
+[*.{ps1,psm1}]
+indent_size = 4
+end_of_line = crlf
+
+# Batch files
+[*.{bat,cmd}]
+end_of_line = crlf
+
+# Makefiles
+[Makefile]
+indent_style = tab

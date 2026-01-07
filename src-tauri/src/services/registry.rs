@@ -221,7 +221,7 @@ impl ServiceRegistry {
 
     /// Load services from plugin.json files in plugins directory
     pub async fn load_from_plugins(&self, plugins_dir: &Path) -> Result<usize, RegistryError> {
-        if !plugins_dir.exists() {
+        if !tokio::fs::try_exists(plugins_dir).await.unwrap_or(false) {
             debug!(path = %plugins_dir.display(), "Plugins directory does not exist");
             return Ok(0);
         }
@@ -236,7 +236,7 @@ impl ServiceRegistry {
             if path.is_dir() {
                 let manifest_path = path.join("plugin.json");
 
-                if manifest_path.exists() {
+                if tokio::fs::try_exists(&manifest_path).await.unwrap_or(false) {
                     match self.load_plugin_services(&manifest_path).await {
                         Ok(count) => {
                             loaded_count += count;

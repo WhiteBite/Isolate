@@ -294,12 +294,12 @@ impl AppRouter {
             return;
         }
 
-        let entries = match std::fs::read_dir(dir) {
+        let mut entries = match tokio::fs::read_dir(dir).await {
             Ok(e) => e,
             Err(_) => return,
         };
 
-        for entry in entries.filter_map(|e| e.ok()) {
+        while let Ok(Some(entry)) = entries.next_entry().await {
             let path = entry.path();
 
             if path.is_dir() {

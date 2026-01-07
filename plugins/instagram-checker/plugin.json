@@ -1,0 +1,39 @@
+{
+  "id": "instagram-checker",
+  "name": "Instagram Checker",
+  "version": "1.0.0",
+  "author": "Isolate Team",
+  "description": "Добавляет проверку доступности Instagram",
+  "type": "service-checker",
+  "icon": "📷",
+  "service": {
+    "id": "instagram",
+    "name": "Instagram",
+    "icon": "📷",
+    "category": "social",
+    "description": "Социальная сеть для обмена фото и видео",
+    "endpoints": [
+      {
+        "id": "main",
+        "name": "Instagram Main",
+        "url": "https://www.instagram.com/",
+        "method": "HEAD"
+      },
+      {
+        "id": "api",
+        "name": "Instagram API",
+        "url": "https://i.instagram.com/api/v1/",
+        "method": "HEAD"
+      },
+      {
+        "id": "cdn",
+        "name": "Instagram CDN",
+        "url": "https://cdninstagram.com/",
+        "method": "HEAD"
+      }
+    ]
+  },
+  "permissions": {
+    "http": ["instagram.com", "*.instagram.com", "cdninstagram.com"]
+  }
+}

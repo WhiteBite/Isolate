@@ -1,7 +1,13 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
   import { browser } from '$app/environment';
-  import { createEventDispatcher } from 'svelte';
+
+  interface Props {
+    onOpenAddProxy?: () => void;
+    onToggleTheme?: () => void;
+  }
+
+  let { onOpenAddProxy, onToggleTheme }: Props = $props();
 
   interface Command {
     id: string;
@@ -16,8 +22,6 @@
   let query = $state('');
   let selectedIndex = $state(0);
   let inputRef: HTMLInputElement | null = $state(null);
-
-  const dispatch = createEventDispatcher();
 
   // Команды
   const commands: Command[] = [
@@ -174,10 +178,14 @@
     }
   }
 
-  // Emit custom event
+  // Emit custom event via callback props
   function emitEvent(eventName: string) {
     close();
-    dispatch(eventName);
+    if (eventName === 'open-add-proxy') {
+      onOpenAddProxy?.();
+    } else if (eventName === 'toggle-theme') {
+      onToggleTheme?.();
+    }
     // Also dispatch on window for global listeners
     if (browser) {
       window.dispatchEvent(new CustomEvent(eventName));
@@ -207,6 +215,41 @@
     }
   }
 
+  // Focus trap for modal - proper implementation
+  function handleFocusTrap(e: KeyboardEvent) {
+    if (!isOpen || e.key !== 'Tab') return;
+    
+    // Get all focusable elements in the dialog
+    const dialog = document.querySelector('[role="dialog"][aria-label="Command Palette"]');
+    if (!dialog) return;
+    
+    const focusableElements = dialog.querySelectorAll<HTMLElement>(
+      'input:not([disabled]), button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    );
+    
+    if (focusableElements.length === 0) {
+      e.preventDefault();
+      return;
+    }
+    
+    const firstElement = focusableElements[0];
+    const lastElement = focusableElements[focusableElements.length - 1];
+    
+    if (e.shiftKey) {
+      // Shift+Tab: if on first element, go to last
+      if (document.activeElement === firstElement) {
+        e.preventDefault();
+        lastElement.focus();
+      }
+    } else {
+      // Tab: if on last element, go to first
+      if (document.activeElement === lastElement) {
+        e.preventDefault();
+        firstElement.focus();
+      }
+    }
+  }
+
   // Keyboard handling
   function handleKeydown(e: KeyboardEvent) {
     // Global: Ctrl+K to open
@@ -222,6 +265,9 @@
 
     // Only handle when open
     if (!isOpen) return;
+
+    // Focus trap
+    handleFocusTrap(e);
 
     switch (e.key) {
       case 'Escape':
@@ -311,6 +357,7 @@
     class="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh]"
     style="background: rgba(5, 5, 5, 0.85); backdrop-filter: blur(8px);"
     onclick={handleBackdropClick}
+    role="presentation"
   >
     <div
       class="w-full max-w-xl bg-[#0d0d0d]/95 rounded-2xl border border-[#2a2f4a]/50 shadow-2xl overflow-hidden"
@@ -318,10 +365,14 @@
       role="dialog"
       aria-modal="true"
       aria-label="Command Palette"
+      aria-describedby="command-palette-description"
     >
+      <span id="command-palette-description" class="sr-only">
+        Type to search commands. Use arrow keys to navigate, Enter to select, Escape to close.
+      </span>
       <!-- Search Input -->
       <div class="relative border-b border-[#2a2f4a]/50">
-        <div class="absolute left-4 top-1/2 -translate-y-1/2 text-[#606060]">
+        <div class="absolute left-4 top-1/2 -translate-y-1/2 text-[#606060]" aria-hidden="true">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
@@ -334,14 +385,25 @@
           class="w-full bg-transparent text-white text-lg px-12 py-4 outline-none placeholder:text-[#505050]"
           autocomplete="off"
           spellcheck="false"
+          role="combobox"
+          aria-expanded="true"
+          aria-controls="command-list"
+          aria-activedescendant={flatList[selectedIndex] ? `command-${flatList[selectedIndex].id}` : undefined}
+          aria-label="Search commands"
         />
         <div class="absolute right-4 top-1/2 -translate-y-1/2">
-          <kbd class="px-2 py-1 text-xs text-[#606060] bg-[#1a1a1a] rounded border border-[#2a2a2a]">ESC</kbd>
+          <kbd class="px-2 py-1 text-xs text-[#606060] bg-[#1a1a1a] rounded border border-[#2a2a2a]" aria-hidden="true">ESC</kbd>
         </div>
       </div>
 
       <!-- Results -->
-      <div class="max-h-[400px] overflow-y-auto py-2" style="scrollbar-width: thin; scrollbar-color: #2a2f4a transparent;">
+      <div 
+        id="command-list"
+        class="max-h-[400px] overflow-y-auto py-2" 
+        style="scrollbar-width: thin; scrollbar-color: #2a2f4a transparent;"
+        role="listbox"
+        aria-label="Available commands"
+      >
         {#if flatList.length === 0}
           <div class="px-4 py-8 text-center text-[#606060]">
             <p>No commands found</p>
@@ -360,6 +422,7 @@
               {#each groupedCommands[category] as cmd, i}
                 {@const globalIndex = flatList.indexOf(cmd)}
                 <button
+                  id="command-{cmd.id}"
                   data-command-index={globalIndex}
                   onclick={() => cmd.action()}
                   onmouseenter={() => selectedIndex = globalIndex}
@@ -367,9 +430,11 @@
                          {selectedIndex === globalIndex 
                            ? 'bg-[#00d4ff]/10 text-white' 
                            : 'text-[#a0a0a0] hover:bg-[#1a1a1a]'}"
+                  role="option"
+                  aria-selected={selectedIndex === globalIndex}
                 >
                   <!-- Icon -->
-                  <div class="w-8 h-8 flex items-center justify-center rounded-lg bg-[#1a1a1a] {selectedIndex === globalIndex ? 'bg-[#00d4ff]/20' : ''}">
+                  <div class="w-8 h-8 flex items-center justify-center rounded-lg bg-[#1a1a1a] {selectedIndex === globalIndex ? 'bg-[#00d4ff]/20' : ''}" aria-hidden="true">
                     <svg class="w-4 h-4 {selectedIndex === globalIndex ? 'text-[#00d4ff]' : 'text-[#707070]'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       {@html getIcon(cmd.icon)}
                     </svg>
@@ -380,7 +445,7 @@
                   
                   <!-- Shortcut -->
                   {#if cmd.shortcut}
-                    <kbd class="px-2 py-1 text-xs text-[#505050] bg-[#1a1a1a] rounded border border-[#2a2a2a]">
+                    <kbd class="px-2 py-1 text-xs text-[#505050] bg-[#1a1a1a] rounded border border-[#2a2a2a]" aria-label="Keyboard shortcut: {cmd.shortcut}">
                       {cmd.shortcut}
                     </kbd>
                   {/if}
@@ -392,7 +457,7 @@
       </div>
 
       <!-- Footer hint -->
-      <div class="px-4 py-3 border-t border-[#2a2f4a]/50 flex items-center gap-4 text-xs text-[#505050]">
+      <div class="px-4 py-3 border-t border-[#2a2f4a]/50 flex items-center gap-4 text-xs text-[#505050]" aria-hidden="true">
         <span class="flex items-center gap-1">
           <kbd class="px-1.5 py-0.5 bg-[#1a1a1a] rounded border border-[#2a2a2a]">↑</kbd>
           <kbd class="px-1.5 py-0.5 bg-[#1a1a1a] rounded border border-[#2a2a2a]">↓</kbd>
@@ -410,3 +475,18 @@
     </div>
   </div>
 {/if}
+
+
+<style>
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+  }
+</style>

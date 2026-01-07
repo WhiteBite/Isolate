@@ -1,28 +1,209 @@
 # Exclude list - domains that should NOT be processed by DPI bypass
-# Source: zapret-discord-youtube project
+# These domains work fine in Russia and don't need proxy/bypass
 
+# ============================================
+# International services (from zapret-discord-youtube)
+# ============================================
 pusher.com
 live-video.net
 ttvnw.net
 twitch.tv
-mail.ru
-citilink.ru
-yandex.com
 nvidia.com
 donationalerts.com
-vk.com
-yandex.kz
-mts.ru
-multimc.org
-ya.ru
-dns-shop.ru
-habr.com
-3dnews.ru
-sberbank.ru
-ozon.ru
-wildberries.ru
 microsoft.com
 msi.com
 akamaitechnologies.com
-2ip.ru
+
+# ============================================
+# Russian Banks / Российские банки
+# ============================================
+sberbank.ru
+online.sberbank.ru
+api.sberbank.ru
+tinkoff.ru
+api.tinkoff.ru
+business.tinkoff.ru
+vtb.ru
+online.vtb.ru
+alfabank.ru
+click.alfabank.ru
+raiffeisen.ru
+online.raiffeisen.ru
+gazprombank.ru
+rosbank.ru
+psbank.ru
+open.ru
+sovcombank.ru
+rshb.ru
+uralsib.ru
+homecredit.ru
+otpbank.ru
+mkb.ru
+credit-suisse.ru
+citibank.ru
+unicreditbank.ru
+
+# ============================================
+# Payment Systems / Платёжные системы
+# ============================================
+mir-platform.ru
+nspk.ru
+sbp.nspk.ru
+qiwi.com
+webmoney.ru
+yoomoney.ru
+
+# ============================================
+# Government / Госуслуги
+# ============================================
+gosuslugi.ru
+esia.gosuslugi.ru
+lk.gosuslugi.ru
+nalog.ru
+lkfl2.nalog.ru
+pfr.gov.ru
+sfr.gov.ru
+mos.ru
+zakupki.gov.ru
+cbr.ru
+fns.ru
+fss.ru
+rosreestr.ru
+gibdd.ru
+mvd.ru
+fssp.gov.ru
+
+# ============================================
+# Yandex Services / Сервисы Яндекса
+# ============================================
 yandex.ru
+yandex.com
+yandex.kz
+ya.ru
+yandex.net
+yastatic.net
+disk.yandex.ru
+mail.yandex.ru
+passport.yandex.ru
+market.yandex.ru
+music.yandex.ru
+kinopoisk.ru
+hd.kinopoisk.ru
+api.kinopoisk.ru
+plus.yandex.ru
+taxi.yandex.ru
+eda.yandex.ru
+lavka.yandex.ru
+maps.yandex.ru
+zen.yandex.ru
+dzen.ru
+alice.yandex.ru
+
+# ============================================
+# Mail.ru Group / VK
+# ============================================
+mail.ru
+e.mail.ru
+my.mail.ru
+cloud.mail.ru
+vk.com
+vk.ru
+vkusvill.ru
+vkontakte.ru
+ok.ru
+odnoklassniki.ru
+dzen.ru
+
+# ============================================
+# Russian E-commerce / Маркетплейсы
+# ============================================
+ozon.ru
+api.ozon.ru
+wildberries.ru
+wb.ru
+avito.ru
+m.avito.ru
+aliexpress.ru
+lamoda.ru
+mvideo.ru
+eldorado.ru
+dns-shop.ru
+citilink.ru
+beru.ru
+sbermegamarket.ru
+kazanexpress.ru
+detmir.ru
+sportmaster.ru
+letoile.ru
+lenta.com
+perekrestok.ru
+magnit.ru
+5ka.ru
+dixy.ru
+
+# ============================================
+# Russian Media & Entertainment
+# ============================================
+rutube.ru
+ivi.ru
+okko.tv
+premier.one
+more.tv
+wink.ru
+start.ru
+amediateka.ru
+kion.ru
+habr.com
+3dnews.ru
+ria.ru
+rbc.ru
+lenta.ru
+gazeta.ru
+kommersant.ru
+vedomosti.ru
+tass.ru
+interfax.ru
+iz.ru
+kp.ru
+aif.ru
+mk.ru
+sport.ru
+sports.ru
+championat.com
+matchtv.ru
+
+# ============================================
+# Telecom / Операторы связи
+# ============================================
+mts.ru
+megafon.ru
+beeline.ru
+tele2.ru
+rt.ru
+rostelecom.ru
+dom.ru
+ttk.ru
+
+# ============================================
+# Other Russian Services / Другие сервисы
+# ============================================
+2ip.ru
+multimc.org
+hh.ru
+superjob.ru
+rabota.ru
+cian.ru
+domclick.ru
+avito.ru
+youla.ru
+auto.ru
+drom.ru
+booking.com
+tutu.ru
+rzd.ru
+aeroflot.ru
+s7.ru
+pobeda.aero
+utair.ru
+flydubai.com
+

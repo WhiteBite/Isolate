@@ -1,0 +1,69 @@
+# Streaming Multisplit Strategy - стратегия для стриминговых сервисов
+# Spotify, Netflix, Twitch, TikTok, SoundCloud, Deezer, Apple Music
+id: "zapret_streaming_multisplit"
+name: "Streaming Multisplit"
+description: "Стратегия с multisplit фрагментацией для стриминговых сервисов (Spotify, Netflix, Twitch, TikTok и др.)"
+family: sni_frag
+engine: zapret
+label: specialized
+
+mode_capabilities:
+  supports_socks: false
+  supports_global: true
+
+global_template:
+  binary: "binaries/winws.exe"
+  args:
+    # WinDivert фильтры
+    - "--wf-tcp=80,443"
+    - "--wf-udp=443"
+    # QUIC fake для streaming сервисов (TikTok, Twitch используют QUIC)
+    - "--filter-udp=443"
+    - "--hostlist=hostlists/streaming.txt"
+    - "--hostlist-exclude=hostlists/exclude.txt"
+    - "--ipset-exclude=hostlists/ipset-exclude.txt"
+    - "--dpi-desync=fake"
+    - "--dpi-desync-repeats=6"
+    - "--dpi-desync-fake-quic=binaries/quic_initial_www_google_com.bin"
+    - "--new"
+    # TCP multisplit для HTTPS streaming
+    - "--filter-tcp=443"
+    - "--hostlist=hostlists/streaming.txt"
+    - "--hostlist-exclude=hostlists/exclude.txt"
+    - "--ipset-exclude=hostlists/ipset-exclude.txt"
+    - "--dpi-desync=multisplit"
+    - "--dpi-desync-split-seqovl=568"
+    - "--dpi-desync-split-pos=1"
+    - "--dpi-desync-split-seqovl-pattern=binaries/tls_clienthello_4pda_to.bin"
+    - "--new"
+    # HTTP fallback для streaming
+    - "--filter-tcp=80"
+    - "--hostlist=hostlists/streaming.txt"
+    - "--hostlist-exclude=hostlists/exclude.txt"
+    - "--ipset-exclude=hostlists/ipset-exclude.txt"
+    - "--dpi-desync=multisplit"
+    - "--dpi-desync-split-seqovl=568"
+    - "--dpi-desync-split-pos=1"
+    - "--dpi-desync-split-seqovl-pattern=binaries/tls_clienthello_4pda_to.bin"
+  env: {}
+  requires_admin: true
+
+requirements:
+  min_rights: "admin"
+  os:
+    - windows
+  binaries:
+    - "binaries/winws.exe"
+    - "binaries/WinDivert64.sys"
+    - "binaries/tls_clienthello_4pda_to.bin"
+    - "binaries/quic_initial_www_google_com.bin"
+
+weight_hint: 10
+services:
+  - spotify
+  - netflix
+  - twitch
+  - tiktok
+  - soundcloud
+  - deezer
+  - apple_music

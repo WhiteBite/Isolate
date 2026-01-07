@@ -1,0 +1,91 @@
+# AI Services domains (ChatGPT, Claude, Gemini, etc.)
+# Source: Isolate project
+
+# === OpenAI / ChatGPT ===
+openai.com
+www.openai.com
+api.openai.com
+chat.openai.com
+platform.openai.com
+auth0.openai.com
+cdn.openai.com
+beta.openai.com
+labs.openai.com
+
+# === Anthropic / Claude ===
+anthropic.com
+www.anthropic.com
+claude.ai
+www.claude.ai
+api.anthropic.com
+console.anthropic.com
+
+# === Google AI / Gemini ===
+gemini.google.com
+ai.google
+ai.google.dev
+aistudio.google.com
+makersuite.google.com
+bard.google.com
+generativelanguage.googleapis.com
+deepmind.com
+www.deepmind.com
+deepmind.google
+
+# === Microsoft Copilot ===
+copilot.microsoft.com
+www.bing.com
+bing.com
+sydney.bing.com
+edgeservices.bing.com
+
+# === Perplexity ===
+perplexity.ai
+www.perplexity.ai
+api.perplexity.ai
+
+# === Mistral AI ===
+mistral.ai
+www.mistral.ai
+chat.mistral.ai
+api.mistral.ai
+console.mistral.ai
+
+# === Hugging Face ===
+huggingface.co
+www.huggingface.co
+api-inference.huggingface.co
+cdn-lfs.huggingface.co
+
+# === Stability AI ===
+stability.ai
+www.stability.ai
+dreamstudio.ai
+clipdrop.co
+
+# === Midjourney ===
+midjourney.com
+www.midjourney.com
+
+# === Replicate ===
+replicate.com
+www.replicate.com
+api.replicate.com
+
+# === Cohere ===
+cohere.ai
+www.cohere.ai
+dashboard.cohere.ai
+api.cohere.ai
+
+# === Together AI ===
+together.ai
+www.together.ai
+api.together.xyz
+
+# === Groq ===
+groq.com
+www.groq.com
+console.groq.com
+api.groq.com
+

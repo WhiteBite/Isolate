@@ -46,7 +46,7 @@
     <BigToggleButton 
       {active} 
       {loading} 
-      onClick={handleClick}
+      onclick={handleClick}
     />
   </div>
 

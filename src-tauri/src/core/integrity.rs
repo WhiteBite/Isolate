@@ -2,6 +2,11 @@
 //!
 //! Provides SHA-256 hash verification for external binaries (winws, sing-box)
 //! to ensure they haven't been tampered with.
+//!
+//! NOTE: Some functions and types are prepared for future integrity features.
+
+// Public API for binary integrity verification
+#![allow(dead_code)]
 
 use std::collections::HashMap;
 use std::fs::File;
@@ -11,13 +16,42 @@ use std::path::Path;
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
+use crate::core::binaries;
+
 /// Known binary hashes for verification
-/// Format: filename -> expected SHA-256 hash
+/// 
+/// Uses binaries::binary_hashes as the single source of truth.
+/// This ensures consistency between download verification and runtime verification.
 pub fn get_known_hashes() -> HashMap<&'static str, &'static str> {
-    // TODO: Add actual hashes when binaries are finalized
-    // hashes.insert("winws.exe", "expected_sha256_hash_here");
-    // hashes.insert("sing-box.exe", "expected_sha256_hash_here");
-    HashMap::new()
+    let mut hashes = HashMap::new();
+    
+    // Core executables from binaries.rs
+    if let Some(hash) = binaries::binary_hashes::get_expected_hash("winws.exe") {
+        hashes.insert("winws.exe", hash);
+    }
+    if let Some(hash) = binaries::binary_hashes::get_expected_hash("sing-box.exe") {
+        hashes.insert("sing-box.exe", hash);
+    }
+    if let Some(hash) = binaries::binary_hashes::get_expected_hash("WinDivert64.sys") {
+        hashes.insert("WinDivert64.sys", hash);
+    }
+    if let Some(hash) = binaries::binary_hashes::get_expected_hash("WinDivert.dll") {
+        hashes.insert("WinDivert.dll", hash);
+    }
+    
+    // Additional blobs (keep hardcoded as they're not in binaries.rs)
+    // Cygwin runtime (required for winws)
+    hashes.insert("cygwin1.dll", "103104a52e5293ce418944725df19e2bf81ad9269b9a120d71d39028e821499b");
+    
+    // TLS ClientHello blobs for DPI bypass
+    hashes.insert("tls_clienthello_www_google_com.bin", "936c2bee4cfb80aa3c426b2dcbcc834b3fbcd1adb17172959dc569c73a14275c");
+    hashes.insert("tls_clienthello_4pda_to.bin", "eefeaf09dde8d69b1f176212541f63c68b314a33a335eced99a8a29f17254da8");
+    hashes.insert("tls_clienthello_max_ru.bin", "e4a94cec50b3c048eb988a513ee28191e4d7544dd5f98a9bf94f37ee02d2568e");
+    
+    // QUIC Initial packet blob
+    hashes.insert("quic_initial_www_google_com.bin", "f4589c57749f956bb30538197a521d7005f8b0a8723b4707e72405e51ddac50a");
+    
+    hashes
 }
 
 #[derive(Error, Debug)]
@@ -100,6 +134,47 @@ pub fn verify_binary_hash(path: &Path, expected_sha256: &str) -> Result<bool, In
     let expected_lower = expected_sha256.to_lowercase();
 
     Ok(actual_hash == expected_lower)
+}
+
+/// Async version of calculate_sha256 that uses spawn_blocking
+/// to avoid blocking the async runtime during CPU-intensive hashing.
+///
+/// # Arguments
+/// * `path` - Path to the file to hash
+///
+/// # Returns
+/// * `Ok(String)` - Lowercase hex-encoded SHA-256 hash
+/// * `Err(IntegrityError)` - If file cannot be read
+pub async fn calculate_sha256_async(path: &Path) -> Result<String, IntegrityError> {
+    let path = path.to_path_buf();
+    tokio::task::spawn_blocking(move || calculate_sha256(&path))
+        .await
+        .map_err(|e| IntegrityError::FileOpen(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!("Hash task failed: {}", e)
+        )))?
+}
+
+/// Async version of verify_binary_hash that uses spawn_blocking
+/// to avoid blocking the async runtime.
+///
+/// # Arguments
+/// * `path` - Path to the binary file
+/// * `expected_sha256` - Expected SHA-256 hash (lowercase hex)
+///
+/// # Returns
+/// * `Ok(true)` - Hash matches
+/// * `Ok(false)` - Hash does not match
+/// * `Err(IntegrityError)` - If file cannot be read
+pub async fn verify_binary_hash_async(path: &Path, expected_sha256: &str) -> Result<bool, IntegrityError> {
+    let path = path.to_path_buf();
+    let expected = expected_sha256.to_string();
+    tokio::task::spawn_blocking(move || verify_binary_hash(&path, &expected))
+        .await
+        .map_err(|e| IntegrityError::FileOpen(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!("Verify task failed: {}", e)
+        )))?
 }
 
 /// Verification result for a single binary
@@ -211,6 +286,214 @@ pub fn verify_all_binaries_detailed(binaries_dir: &Path) -> Vec<BinaryStatus> {
     }
 
     results
+}
+
+// ============================================================================
+// Startup Verification
+// ============================================================================
+
+/// Result of startup verification
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct StartupVerificationResult {
+    /// Total number of binaries checked
+    pub total_checked: usize,
+    /// Number of binaries that passed verification
+    pub verified: usize,
+    /// Number of binaries with hash mismatch (potential tampering)
+    pub tampered: Vec<String>,
+    /// Number of missing binaries
+    pub missing: Vec<String>,
+    /// Number of binaries without known hashes
+    pub unverified: Vec<String>,
+    /// Whether all critical binaries are valid
+    pub is_safe: bool,
+}
+
+/// Critical binaries that MUST pass verification for the app to run safely
+const CRITICAL_BINARIES: &[&str] = &[
+    "winws.exe",
+    "sing-box.exe",
+    "WinDivert64.sys",
+    "WinDivert.dll",
+];
+
+/// Verify all binaries at application startup
+///
+/// This function should be called during app initialization to ensure
+/// all binaries are present and haven't been tampered with.
+///
+/// # Arguments
+/// * `binaries_dir` - Directory containing binary files
+///
+/// # Returns
+/// * `StartupVerificationResult` - Detailed verification results
+///
+/// # Security
+/// - Logs warnings for any hash mismatches (potential tampering)
+/// - Returns `is_safe = false` if any critical binary fails verification
+/// - Non-critical binaries (blobs) can be missing without blocking startup
+///
+/// # Example
+/// ```ignore
+/// let result = verify_on_startup(&get_binaries_dir());
+/// if !result.is_safe {
+///     error!("Binary integrity check failed!");
+///     // Show warning to user or exit
+/// }
+/// ```
+pub fn verify_on_startup(binaries_dir: &Path) -> StartupVerificationResult {
+    use tracing::{debug, error, info, warn};
+    
+    info!(
+        binaries_dir = %binaries_dir.display(),
+        "Starting binary integrity verification..."
+    );
+    
+    let statuses = verify_all_binaries_detailed(binaries_dir);
+    let known_hashes = get_known_hashes();
+    
+    let mut verified = Vec::new();
+    let mut tampered = Vec::new();
+    let mut missing = Vec::new();
+    let mut unverified = Vec::new();
+    
+    for status in &statuses {
+        match &status.status {
+            BinaryVerificationStatus::Valid => {
+                // Log verified binaries with their hash for audit trail
+                let hash = known_hashes.get(status.name.as_str()).unwrap_or(&"unknown");
+                info!(
+                    binary = %status.name,
+                    hash = %hash,
+                    status = "OK",
+                    "Binary verified"
+                );
+                verified.push(status.name.clone());
+            }
+            BinaryVerificationStatus::HashMismatch { expected, actual } => {
+                error!(
+                    binary = %status.name,
+                    expected_hash = %expected,
+                    actual_hash = %actual,
+                    status = "FAIL",
+                    "SECURITY WARNING: Binary hash mismatch - possible tampering!"
+                );
+                tampered.push(status.name.clone());
+            }
+            BinaryVerificationStatus::Missing => {
+                if CRITICAL_BINARIES.contains(&status.name.as_str()) {
+                    warn!(
+                        binary = %status.name,
+                        status = "MISSING",
+                        critical = true,
+                        "Critical binary not found"
+                    );
+                } else {
+                    debug!(
+                        binary = %status.name,
+                        status = "MISSING",
+                        critical = false,
+                        "Optional binary not found"
+                    );
+                }
+                missing.push(status.name.clone());
+            }
+            BinaryVerificationStatus::Unverified => {
+                debug!(
+                    binary = %status.name,
+                    status = "UNVERIFIED",
+                    "Binary has no known hash to verify against"
+                );
+                unverified.push(status.name.clone());
+            }
+            BinaryVerificationStatus::ReadError(e) => {
+                error!(
+                    binary = %status.name,
+                    error = %e,
+                    status = "ERROR",
+                    "Failed to read binary file"
+                );
+                tampered.push(status.name.clone()); // Treat read errors as suspicious
+            }
+        }
+    }
+    
+    // Check if all critical binaries are safe
+    let critical_tampered: Vec<_> = tampered.iter()
+        .filter(|name| CRITICAL_BINARIES.contains(&name.as_str()))
+        .collect();
+    
+    let critical_missing: Vec<_> = missing.iter()
+        .filter(|name| CRITICAL_BINARIES.contains(&name.as_str()))
+        .collect();
+    
+    let is_safe = critical_tampered.is_empty();
+    
+    if !is_safe {
+        error!(
+            "SECURITY ALERT: {} critical binaries may have been tampered with: {:?}",
+            critical_tampered.len(),
+            critical_tampered
+        );
+    }
+    
+    if !critical_missing.is_empty() {
+        warn!(
+            "Missing {} critical binaries: {:?}",
+            critical_missing.len(),
+            critical_missing
+        );
+    }
+    
+    let result = StartupVerificationResult {
+        total_checked: statuses.len(),
+        verified: verified.len(),
+        tampered,
+        missing,
+        unverified,
+        is_safe,
+    };
+    
+    // Log final summary
+    if is_safe {
+        info!(
+            verified = result.verified,
+            total = result.total_checked,
+            missing_count = result.missing.len(),
+            "Binary integrity verification completed successfully"
+        );
+    } else {
+        error!(
+            verified = result.verified,
+            total = result.total_checked,
+            tampered_count = result.tampered.len(),
+            tampered_binaries = ?result.tampered,
+            missing_count = result.missing.len(),
+            "Binary integrity verification FAILED - security risk detected"
+        );
+    }
+    
+    result
+}
+
+/// Async version of verify_on_startup
+///
+/// Uses spawn_blocking to avoid blocking the async runtime.
+pub async fn verify_on_startup_async(binaries_dir: &Path) -> StartupVerificationResult {
+    let binaries_dir = binaries_dir.to_path_buf();
+    tokio::task::spawn_blocking(move || verify_on_startup(&binaries_dir))
+        .await
+        .unwrap_or_else(|e| {
+            tracing::error!("Verification task panicked: {}", e);
+            StartupVerificationResult {
+                total_checked: 0,
+                verified: 0,
+                tampered: vec!["verification_failed".to_string()],
+                missing: vec![],
+                unverified: vec![],
+                is_safe: false,
+            }
+        })
 }
 
 #[cfg(test)]

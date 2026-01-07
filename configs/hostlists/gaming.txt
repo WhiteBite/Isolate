@@ -1,0 +1,31 @@
+# Gaming platforms - Steam
+store.steampowered.com
+steamcommunity.com
+steamcdn-a.akamaihd.net
+cdn.cloudflare.steamstatic.com
+api.steampowered.com
+steam-chat.com
+steamcontent.com
+steamgames.com
+steamusercontent.com
+steamstatic.com
+
+# Epic Games
+epicgames.com
+launcher-public-service-prod06.ol.epicgames.com
+
+# EA/Origin
+ea.com
+origin.com
+
+# Riot Games
+riotgames.com
+leagueoflegends.com
+
+# Blizzard
+blizzard.com
+battle.net
+
+# Xbox
+xbox.com
+xboxlive.com

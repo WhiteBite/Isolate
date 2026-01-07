@@ -1,0 +1,108 @@
+{
+  "$schema": "../schemas/plugin.schema.json",
+  
+  "_comment_id": "Уникальный идентификатор плагина (kebab-case)",
+  "id": "my-lua-script",
+  
+  "_comment_name": "Отображаемое имя плагина",
+  "name": "My Lua Script",
+  
+  "_comment_version": "Версия в формате semver",
+  "version": "1.0.0",
+  
+  "_comment_author": "Автор плагина",
+  "author": "Your Name",
+  
+  "_comment_description": "Краткое описание скрипта",
+  "description": "Пример Lua скрипта для автоматизации",
+  
+  "_comment_type": "Тип плагина",
+  "type": "lua-script",
+  
+  "_comment_icon": "Иконка плагина",
+  "icon": "🔧",
+  
+  "_comment_script": "Конфигурация Lua скрипта",
+  "script": {
+    "_comment_entry": "Точка входа — главный Lua файл",
+    "entry": "main.lua",
+    
+    "_comment_triggers": "Когда запускать скрипт",
+    "triggers": {
+      "_comment_events": "Запуск по событиям",
+      "events": ["strategy-applied", "status-changed"],
+      
+      "_comment_schedule": "Запуск по расписанию (cron-like)",
+      "schedule": "*/5 * * * *",
+      
+      "_comment_manual": "Разрешить ручной запуск",
+      "manual": true
+    },
+    
+    "_comment_sandbox": "Настройки песочницы",
+    "sandbox": {
+      "_comment_memory_limit": "Лимит памяти в байтах",
+      "memoryLimit": 10485760,
+      
+      "_comment_timeout": "Таймаут выполнения в мс",
+      "timeout": 30000,
+      
+      "_comment_allowed_modules": "Разрешённые Lua модули",
+      "allowedModules": ["string", "table", "math", "os.time", "os.date"]
+    }
+  },
+  
+  "_comment_permissions": "Разрешения плагина",
+  "permissions": {
+    "_comment_http": "Домены для HTTP запросов",
+    "http": ["api.example.com"],
+    
+    "_comment_storage": "Доступ к локальному хранилищу",
+    "storage": true,
+    
+    "_comment_events": "Паттерны событий",
+    "events": ["my-script-*"],
+    
+    "_comment_system": "Системные разрешения",
+    "system": {
+      "_comment_notifications": "Показ уведомлений",
+      "notifications": true,
+      
+      "_comment_clipboard": "Доступ к буферу обмена",
+      "clipboard": false
+    }
+  },
+  
+  "_comment_config": "Пользовательские настройки скрипта",
+  "config": {
+    "_comment_schema": "JSON Schema для настроек",
+    "schema": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Включить скрипт"
+        },
+        "interval": {
+          "type": "number",
+          "default": 60,
+          "minimum": 10,
+          "description": "Интервал проверки в секундах"
+        },
+        "threshold": {
+          "type": "number",
+          "default": 100,
+          "description": "Пороговое значение"
+        }
+      }
+    },
+    
+    "_comment_defaults": "Значения по умолчанию",
+    "defaults": {
+      "enabled": true,
+      "interval": 60,
+      "threshold": 100
+    }
+  }
+}

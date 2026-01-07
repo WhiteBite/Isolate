@@ -6,6 +6,12 @@
 //! - SOCKS5, HTTP/HTTPS proxies
 //! - Domain and application-based routing
 //! - TUN mode with fake-ip DNS
+//!
+//! NOTE: This module provides comprehensive sing-box config generation.
+//! Some functions are prepared for future routing features.
+
+// Public API for sing-box configuration generation
+#![allow(dead_code)]
 
 use crate::core::models::{AppRoute, DomainRoute, ProxyConfig, ProxyProtocol};
 use anyhow::{anyhow, Result};
@@ -970,10 +976,11 @@ pub fn config_to_string(config: &Value) -> Result<String> {
         .map_err(|e| anyhow!("Failed to serialize config: {}", e))
 }
 
-/// Write config to file
-pub fn write_config_to_file(config: &Value, path: &std::path::Path) -> Result<()> {
+/// Write config to file (async)
+pub async fn write_config_to_file(config: &Value, path: &std::path::Path) -> Result<()> {
     let json_str = config_to_string(config)?;
-    std::fs::write(path, json_str)
+    tokio::fs::write(path, json_str)
+        .await
         .map_err(|e| anyhow!("Failed to write config file: {}", e))
 }
 

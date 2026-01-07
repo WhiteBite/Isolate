@@ -2,6 +2,7 @@
 
 use tracing::info;
 
+use crate::core::errors::{IsolateError, TypedResultExt};
 use crate::core::models::LogEntry;
 
 /// Log filter parameters
@@ -39,7 +40,7 @@ pub async fn clear_logs() -> Result<(), String> {
 
 /// Export logs to file
 #[tauri::command]
-pub async fn export_logs() -> Result<String, String> {
+pub async fn export_logs() -> Result<String, IsolateError> {
     info!("Exporting logs");
     
     let logs_content = crate::core::log_capture::export_logs_to_string();
@@ -48,7 +49,7 @@ pub async fn export_logs() -> Result<String, String> {
     let logs_dir = crate::core::paths::get_logs_dir();
     tokio::fs::create_dir_all(&logs_dir)
         .await
-        .map_err(|e| format!("Failed to create logs directory: {}", e))?;
+        .io_context("Failed to create logs directory")?;
     
     // Create filename with timestamp
     let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
@@ -58,7 +59,7 @@ pub async fn export_logs() -> Result<String, String> {
     // Write logs
     tokio::fs::write(&filepath, logs_content)
         .await
-        .map_err(|e| format!("Failed to write logs: {}", e))?;
+        .io_context("Failed to write logs")?;
     
     info!(path = %filepath.display(), "Logs exported");
     Ok(filepath.display().to_string())

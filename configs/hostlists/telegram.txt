@@ -1,15 +1,69 @@
 # Telegram domains
-
+# Main domains
 telegram.org
 telegram.me
 t.me
 telegram.dog
-telegra.ph
-telesco.pe
-tdesktop.com
 tg.dev
 tx.me
+
+# Web clients
 web.telegram.org
+webk.telegram.org
+webz.telegram.org
+weba.telegram.org
+
+# Desktop & Apps
 desktop.telegram.org
+tdesktop.com
+macos.telegram.org
+android.telegram.org
+
+# API & Core
 core.telegram.org
 my.telegram.org
+api.telegram.org
+
+# Telegraph (Telegram's publishing platform)
+telegra.ph
+graph.org
+
+# Telesco.pe (Telegram's link preview service)
+telesco.pe
+
+# CDN domains (content delivery)
+cdn1.telegram-cdn.org
+cdn2.telegram-cdn.org
+cdn3.telegram-cdn.org
+cdn4.telegram-cdn.org
+cdn5.telegram-cdn.org
+telegram-cdn.org
+
+# Updates & Downloads
+updates.telegram.org
+updates.tdesktop.com
+
+# Login widget
+oauth.telegram.org
+
+# Telegram X
+tx.me
+
+# Telegram Premium
+premium.telegram.org
+
+# Telegram Passport
+passport.telegram.org
+
+# Telegram Ads
+promote.telegram.org
+ads.telegram.org
+
+# Telegram Business
+fragment.com
+
+# Telegram TON (historical)
+ton.org
+ton.sh
+
+# IP ranges are handled separately via ipset

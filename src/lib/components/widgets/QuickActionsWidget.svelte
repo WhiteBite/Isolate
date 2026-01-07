@@ -72,7 +72,7 @@
           </svg>
         {/if}
       </div>
-      <span class="text-xs text-zinc-500 font-medium group-hover:text-zinc-200 transition-colors duration-200">
+      <span class="text-xs text-zinc-400 font-medium group-hover:text-zinc-200 transition-colors duration-200">
         {action.label}
       </span>
     </button>

@@ -3,6 +3,9 @@
 //! Combines multiple strategies from different categories into a single
 //! unified winws command-line configuration.
 //!
+//! NOTE: This module is prepared for future multi-strategy support.
+//! Currently not used in production but has comprehensive tests.
+//!
 //! ## Usage
 //!
 //! ```rust,ignore
@@ -18,6 +21,9 @@
 //! // combined.args contains the full winws command line
 //! ```
 
+// Public API for future multi-strategy combination feature
+#![allow(dead_code)]
+
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
@@ -25,7 +31,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info};
 
-use crate::core::strategy_loader::JsonStrategy;
+use crate::core::strategy_loader::ZapretStrategy;
 
 // ============================================================================
 // Data Structures
@@ -107,7 +113,7 @@ pub struct CombinedStrategy {
 /// Combines multiple strategies into a single winws configuration
 pub struct StrategyCombiner {
     /// Available strategies
-    strategies: Vec<JsonStrategy>,
+    strategies: Vec<ZapretStrategy>,
     /// Directory containing hostlist files
     hostlists_dir: PathBuf,
     /// Directory containing binary blob files
@@ -122,7 +128,7 @@ impl StrategyCombiner {
     /// * `hostlists_dir` - Path to hostlists directory
     /// * `blobs_dir` - Path to blobs directory (fake TLS, QUIC files)
     pub fn new(
-        strategies: Vec<JsonStrategy>,
+        strategies: Vec<ZapretStrategy>,
         hostlists_dir: impl AsRef<Path>,
         blobs_dir: impl AsRef<Path>,
     ) -> Self {
@@ -139,8 +145,8 @@ impl StrategyCombiner {
     /// * `category` - Category name (youtube, discord, telegram, games, custom, general)
     ///
     /// # Returns
-    /// * `Vec<&JsonStrategy>` - Strategies matching the category
-    pub fn get_strategies_for_category(&self, category: &str) -> Vec<&JsonStrategy> {
+    /// * `Vec<&ZapretStrategy>` - Strategies matching the category
+    pub fn get_strategies_for_category(&self, category: &str) -> Vec<&ZapretStrategy> {
         let category_lower = category.to_lowercase();
         self.strategies
             .iter()
@@ -165,7 +171,7 @@ impl StrategyCombiner {
         }
 
         // Collect selected strategies
-        let mut selected_strategies: Vec<(&str, &JsonStrategy)> = Vec::new();
+        let mut selected_strategies: Vec<(&str, &ZapretStrategy)> = Vec::new();
 
         if let Some(ref id) = selection.youtube {
             if let Some(strategy) = self.find_strategy(id) {
@@ -218,7 +224,7 @@ impl StrategyCombiner {
             .collect();
 
         // Merge ports
-        let strategies_only: Vec<&JsonStrategy> =
+        let strategies_only: Vec<&ZapretStrategy> =
             selected_strategies.iter().map(|(_, s)| *s).collect();
         let (tcp_ports, udp_ports) = self.merge_ports(&strategies_only);
 
@@ -246,14 +252,14 @@ impl StrategyCombiner {
     }
 
     /// Find a strategy by its ID
-    fn find_strategy(&self, id: &str) -> Option<&JsonStrategy> {
+    fn find_strategy(&self, id: &str) -> Option<&ZapretStrategy> {
         self.strategies.iter().find(|s| s.id == id)
     }
 
     /// Merge TCP and UDP ports from multiple strategies
     ///
     /// Combines port specifications, removing duplicates and sorting.
-    fn merge_ports(&self, strategies: &[&JsonStrategy]) -> (String, String) {
+    fn merge_ports(&self, strategies: &[&ZapretStrategy]) -> (String, String) {
         let mut tcp_ports: HashSet<String> = HashSet::new();
         let mut udp_ports: HashSet<String> = HashSet::new();
 
@@ -296,7 +302,7 @@ impl StrategyCombiner {
     }
 
     /// Merge profiles from multiple strategies
-    fn merge_profiles<'a>(&self, strategies: &[&'a JsonStrategy]) -> Vec<&'a crate::core::strategy_loader::StrategyProfile> {
+    fn merge_profiles<'a>(&self, strategies: &[&'a ZapretStrategy]) -> Vec<&'a crate::core::strategy_loader::StrategyProfile> {
         strategies
             .iter()
             .flat_map(|s| s.profiles.iter())
@@ -306,7 +312,7 @@ impl StrategyCombiner {
     /// Generate combined winws arguments from multiple strategies
     fn generate_combined_args(
         &self,
-        strategies: &[&JsonStrategy],
+        strategies: &[&ZapretStrategy],
         tcp_ports: &str,
         udp_ports: &str,
     ) -> Result<Vec<String>> {
@@ -504,8 +510,8 @@ mod tests {
     use super::*;
     use crate::core::strategy_loader::{StrategyCategory, StrategyPorts, StrategyProfile};
 
-    fn create_test_strategy(id: &str, category: StrategyCategory, tcp: &str, udp: &str) -> JsonStrategy {
-        JsonStrategy {
+    fn create_test_strategy(id: &str, category: StrategyCategory, tcp: &str, udp: &str) -> ZapretStrategy {
+        ZapretStrategy {
             id: id.to_string(),
             name: format!("{} Strategy", id),
             description: format!("Test strategy for {}", id),
@@ -703,7 +709,7 @@ mod tests {
         ];
 
         let combiner = StrategyCombiner::new(strategies.clone(), "hostlists", "blobs");
-        let refs: Vec<&JsonStrategy> = strategies.iter().collect();
+        let refs: Vec<&ZapretStrategy> = strategies.iter().collect();
         let (tcp, udp) = combiner.merge_ports(&refs);
 
         // 443 should appear only once
@@ -722,7 +728,7 @@ mod tests {
         ];
 
         let combiner = StrategyCombiner::new(strategies.clone(), "hostlists", "blobs");
-        let refs: Vec<&JsonStrategy> = strategies.iter().collect();
+        let refs: Vec<&ZapretStrategy> = strategies.iter().collect();
         let (tcp, udp) = combiner.merge_ports(&refs);
 
         // Ports should be sorted numerically
@@ -803,7 +809,7 @@ mod tests {
         ];
 
         let combiner = StrategyCombiner::new(strategies.clone(), "hostlists", "blobs");
-        let refs: Vec<&JsonStrategy> = strategies.iter().collect();
+        let refs: Vec<&ZapretStrategy> = strategies.iter().collect();
         let profiles = combiner.merge_profiles(&refs);
 
         // Each strategy has 1 profile, so total should be 2

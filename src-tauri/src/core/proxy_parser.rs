@@ -750,6 +750,181 @@ fn parse_http_url(url: &str) -> Result<ProxyConfig> {
 }
 
 // ============================================================================
+// Export Functions
+// ============================================================================
+
+/// Exports ProxyConfig to URL format
+pub fn export_proxy_url(proxy: &ProxyConfig) -> Result<String> {
+    match proxy.protocol {
+        ProxyProtocol::Vless => export_vless_url(proxy),
+        ProxyProtocol::Vmess => export_vmess_url(proxy),
+        ProxyProtocol::Shadowsocks => export_shadowsocks_url(proxy),
+        ProxyProtocol::Trojan => export_trojan_url(proxy),
+        ProxyProtocol::Tuic => export_tuic_url(proxy),
+        ProxyProtocol::Hysteria | ProxyProtocol::Hysteria2 => export_hysteria_url(proxy),
+        ProxyProtocol::Socks5 => export_socks_url(proxy),
+        ProxyProtocol::Http | ProxyProtocol::Https => export_http_url(proxy),
+        _ => Err(anyhow!("Protocol {:?} export not supported", proxy.protocol)),
+    }
+}
+
+fn export_vless_url(proxy: &ProxyConfig) -> Result<String> {
+    let uuid = proxy.uuid.as_ref().ok_or_else(|| anyhow!("VLESS requires UUID"))?;
+    let mut params = vec![];
+    
+    if proxy.tls {
+        params.push("security=tls".to_string());
+    }
+    if let Some(ref sni) = proxy.sni {
+        params.push(format!("sni={}", urlencoding::encode(sni)));
+    }
+    if let Some(flow) = proxy.custom_fields.get("flow") {
+        params.push(format!("flow={}", urlencoding::encode(flow)));
+    }
+    if let Some(ref transport) = proxy.transport {
+        params.push(format!("type={}", urlencoding::encode(transport)));
+    }
+    if let Some(path) = proxy.custom_fields.get("path") {
+        params.push(format!("path={}", urlencoding::encode(path)));
+    }
+    if let Some(host) = proxy.custom_fields.get("host") {
+        params.push(format!("host={}", urlencoding::encode(host)));
+    }
+    if let Some(pbk) = proxy.custom_fields.get("public_key") {
+        params.push(format!("pbk={}", urlencoding::encode(pbk)));
+    }
+    if let Some(sid) = proxy.custom_fields.get("short_id") {
+        params.push(format!("sid={}", urlencoding::encode(sid)));
+    }
+    if let Some(fp) = proxy.custom_fields.get("fingerprint") {
+        params.push(format!("fp={}", urlencoding::encode(fp)));
+    }
+    
+    let query = if params.is_empty() { String::new() } else { format!("?{}", params.join("&")) };
+    let fragment = urlencoding::encode(&proxy.name);
+    
+    Ok(format!("vless://{}@{}:{}{}#{}", uuid, proxy.server, proxy.port, query, fragment))
+}
+
+fn export_vmess_url(proxy: &ProxyConfig) -> Result<String> {
+    let uuid = proxy.uuid.as_ref().ok_or_else(|| anyhow!("VMess requires UUID"))?;
+    
+    let mut json = serde_json::json!({
+        "v": "2",
+        "ps": proxy.name,
+        "add": proxy.server,
+        "port": proxy.port,
+        "id": uuid,
+        "aid": proxy.custom_fields.get("alter_id").and_then(|s| s.parse::<u64>().ok()).unwrap_or(0),
+        "net": proxy.transport.as_deref().unwrap_or("tcp"),
+        "tls": if proxy.tls { "tls" } else { "" }
+    });
+    
+    if let Some(sni) = &proxy.sni {
+        json["sni"] = serde_json::json!(sni);
+    }
+    if let Some(path) = proxy.custom_fields.get("path") {
+        json["path"] = serde_json::json!(path);
+    }
+    if let Some(host) = proxy.custom_fields.get("host") {
+        json["host"] = serde_json::json!(host);
+    }
+    
+    let encoded = general_purpose::STANDARD.encode(json.to_string());
+    Ok(format!("vmess://{}", encoded))
+}
+
+fn export_shadowsocks_url(proxy: &ProxyConfig) -> Result<String> {
+    let password = proxy.password.as_ref().ok_or_else(|| anyhow!("Shadowsocks requires password"))?;
+    let method = proxy.custom_fields.get("method").map(|s| s.as_str()).unwrap_or("aes-256-gcm");
+    
+    let user_info = format!("{}:{}", method, password);
+    let encoded = general_purpose::STANDARD.encode(&user_info);
+    let fragment = urlencoding::encode(&proxy.name);
+    
+    Ok(format!("ss://{}@{}:{}#{}", encoded, proxy.server, proxy.port, fragment))
+}
+
+fn export_trojan_url(proxy: &ProxyConfig) -> Result<String> {
+    let password = proxy.password.as_ref().ok_or_else(|| anyhow!("Trojan requires password"))?;
+    let mut params = vec![];
+    
+    if let Some(ref sni) = proxy.sni {
+        params.push(format!("sni={}", urlencoding::encode(sni)));
+    }
+    if let Some(ref transport) = proxy.transport {
+        params.push(format!("type={}", urlencoding::encode(transport)));
+    }
+    
+    let query = if params.is_empty() { String::new() } else { format!("?{}", params.join("&")) };
+    let fragment = urlencoding::encode(&proxy.name);
+    
+    Ok(format!("trojan://{}@{}:{}{}#{}", urlencoding::encode(password), proxy.server, proxy.port, query, fragment))
+}
+
+fn export_tuic_url(proxy: &ProxyConfig) -> Result<String> {
+    let uuid = proxy.uuid.as_ref().ok_or_else(|| anyhow!("TUIC requires UUID"))?;
+    let mut params = vec![];
+    
+    if let Some(ref sni) = proxy.sni {
+        params.push(format!("sni={}", urlencoding::encode(sni)));
+    }
+    if let Some(cc) = proxy.custom_fields.get("congestion_control") {
+        params.push(format!("congestion_control={}", urlencoding::encode(cc)));
+    }
+    
+    let query = if params.is_empty() { String::new() } else { format!("?{}", params.join("&")) };
+    let fragment = urlencoding::encode(&proxy.name);
+    let password_part = proxy.password.as_ref().map(|p| format!(":{}", p)).unwrap_or_default();
+    
+    Ok(format!("tuic://{}{}@{}:{}{}#{}", uuid, password_part, proxy.server, proxy.port, query, fragment))
+}
+
+fn export_hysteria_url(proxy: &ProxyConfig) -> Result<String> {
+    let prefix = if proxy.protocol == ProxyProtocol::Hysteria2 { "hysteria2" } else { "hysteria" };
+    let mut params = vec![];
+    
+    if let Some(ref sni) = proxy.sni {
+        params.push(format!("sni={}", urlencoding::encode(sni)));
+    }
+    if let Some(obfs) = proxy.custom_fields.get("obfs") {
+        params.push(format!("obfs={}", urlencoding::encode(obfs)));
+    }
+    
+    let query = if params.is_empty() { String::new() } else { format!("?{}", params.join("&")) };
+    let fragment = urlencoding::encode(&proxy.name);
+    let auth = proxy.password.as_ref().map(|p| format!("{}@", p)).unwrap_or_default();
+    
+    Ok(format!("{}://{}{}:{}{}#{}", prefix, auth, proxy.server, proxy.port, query, fragment))
+}
+
+fn export_socks_url(proxy: &ProxyConfig) -> Result<String> {
+    let auth = match (&proxy.username, &proxy.password) {
+        (Some(u), Some(p)) => format!("{}:{}@", urlencoding::encode(u), urlencoding::encode(p)),
+        (Some(u), None) => format!("{}@", urlencoding::encode(u)),
+        _ => String::new(),
+    };
+    let fragment = if proxy.name.is_empty() || proxy.name == format!("{}:{}", proxy.server, proxy.port) {
+        String::new()
+    } else {
+        format!("#{}", urlencoding::encode(&proxy.name))
+    };
+    
+    Ok(format!("socks5://{}{}:{}{}", auth, proxy.server, proxy.port, fragment))
+}
+
+fn export_http_url(proxy: &ProxyConfig) -> Result<String> {
+    let scheme = if proxy.protocol == ProxyProtocol::Https { "https" } else { "http" };
+    let auth = match (&proxy.username, &proxy.password) {
+        (Some(u), Some(p)) => format!("{}:{}@", urlencoding::encode(u), urlencoding::encode(p)),
+        (Some(u), None) => format!("{}@", urlencoding::encode(u)),
+        _ => String::new(),
+    };
+    
+    Ok(format!("{}://{}{}:{}", scheme, auth, proxy.server, proxy.port))
+}
+
+// ============================================================================
 // Tests
 // ============================================================================
 

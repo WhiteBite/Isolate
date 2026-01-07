@@ -6,6 +6,11 @@
 //! - Manage sing-box process lifecycle
 //! - Health checks for running instances
 //! - System proxy management (Windows)
+//!
+//! NOTE: Some functions are prepared for future VLESS management features.
+
+// Public API for VLESS protocol support
+#![allow(dead_code)]
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -390,25 +395,26 @@ fn sanitize_id(s: &str) -> String {
 /// Path to sing-box config template
 const SINGBOX_TEMPLATE_PATH: &str = "singbox/vless_template.json";
 
-/// Load sing-box template from configs directory
-fn load_singbox_template() -> Result<String> {
+/// Load sing-box template from configs directory (async)
+async fn load_singbox_template() -> Result<String> {
     let template_path = get_configs_dir().join(SINGBOX_TEMPLATE_PATH);
     
-    if !template_path.exists() {
+    if !tokio::fs::try_exists(&template_path).await.unwrap_or(false) {
         return Err(IsolateError::Config(format!(
             "Sing-box template not found at: {}",
             template_path.display()
         )));
     }
     
-    std::fs::read_to_string(&template_path)
+    tokio::fs::read_to_string(&template_path)
+        .await
         .map_err(|e| IsolateError::Config(format!(
             "Failed to read sing-box template: {}",
             e
         )))
 }
 
-/// Generate sing-box configuration from template
+/// Generate sing-box configuration from template (async)
 ///
 /// Replaces placeholders in the template:
 /// - {{port}} - SOCKS port
@@ -420,11 +426,11 @@ fn load_singbox_template() -> Result<String> {
 /// - {{fingerprint}} - TLS fingerprint
 /// - {{reality_public_key}} - Reality public key
 /// - {{reality_short_id}} - Reality short ID
-pub fn generate_singbox_config_from_template(
+pub async fn generate_singbox_config_from_template(
     config: &VlessConfig,
     socks_port: u16,
 ) -> Result<serde_json::Value> {
-    let template = load_singbox_template()?;
+    let template = load_singbox_template().await?;
     
     // Determine flow based on transport
     let flow = match &config.transport {
@@ -712,10 +718,62 @@ fn get_temp_config_path(config_id: &str) -> PathBuf {
     std::env::temp_dir().join(format!("isolate-singbox-{}.json", config_id))
 }
 
+/// RAII wrapper for temporary config files
+/// 
+/// Ensures temp files are cleaned up even if panic occurs.
+/// The file is automatically deleted when this struct is dropped.
+struct TempConfigFile {
+    path: PathBuf,
+}
+
+impl TempConfigFile {
+    /// Create a new temp config file with the given content
+    async fn new(config_id: &str, content: &str) -> Result<Self> {
+        let path = get_temp_config_path(config_id);
+        
+        tokio::fs::write(&path, content).await.map_err(|e| {
+            IsolateError::Config(format!("Failed to write temp config: {}", e))
+        })?;
+        
+        debug!(path = %path.display(), "Created temp config file");
+        
+        Ok(Self { path })
+    }
+    
+    /// Get the path to the temp file
+    fn path(&self) -> &PathBuf {
+        &self.path
+    }
+}
+
+impl Drop for TempConfigFile {
+    fn drop(&mut self) {
+        // Attempt to remove the file synchronously
+        // We can't use async in Drop, so we use std::fs
+        if self.path.exists() {
+            match std::fs::remove_file(&self.path) {
+                Ok(_) => {
+                    debug!(path = %self.path.display(), "Cleaned up temp config file");
+                }
+                Err(e) => {
+                    warn!(
+                        path = %self.path.display(),
+                        error = %e,
+                        "Failed to cleanup temp config file in Drop"
+                    );
+                }
+            }
+        }
+    }
+}
+
 /// Start VLESS connection via sing-box
 ///
 /// Writes configuration to a temp file and starts sing-box process.
 /// Returns the Child process handle for lifecycle management.
+/// 
+/// Note: The temp config file is NOT automatically cleaned up by this function.
+/// Caller must call `stop_vless()` or manually cleanup the temp file.
 pub async fn start_vless(config: &VlessConfig, socks_port: u16) -> Result<Child> {
     let singbox_path = crate::core::paths::get_singbox_path();
 
@@ -728,7 +786,7 @@ pub async fn start_vless(config: &VlessConfig, socks_port: u16) -> Result<Child>
     }
 
     // Try to generate config from template first, fallback to programmatic
-    let singbox_config = match generate_singbox_config_from_template(config, socks_port) {
+    let singbox_config = match generate_singbox_config_from_template(config, socks_port).await {
         Ok(cfg) => cfg,
         Err(e) => {
             warn!(
@@ -739,14 +797,14 @@ pub async fn start_vless(config: &VlessConfig, socks_port: u16) -> Result<Child>
         }
     };
     
-    let config_path = get_temp_config_path(&config.id);
-
     let config_json = serde_json::to_string_pretty(&singbox_config)?;
-    tokio::fs::write(&config_path, &config_json).await?;
+    
+    // Create temp config file with RAII cleanup
+    let temp_file = TempConfigFile::new(&config.id, &config_json).await?;
 
     info!(
         config_id = %config.id,
-        config_path = %config_path.display(),
+        config_path = %temp_file.path().display(),
         socks_port = socks_port,
         "Starting sing-box for VLESS"
     );
@@ -754,8 +812,11 @@ pub async fn start_vless(config: &VlessConfig, socks_port: u16) -> Result<Child>
     debug!(config = %config_json, "Sing-box configuration");
 
     // Start sing-box process
+    // Use .arg() with Path directly to safely handle non-UTF8 paths
     let child = Command::new(&singbox_path)
-        .args(["run", "-c", config_path.to_str().unwrap()])
+        .arg("run")
+        .arg("-c")
+        .arg(temp_file.path())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true)
@@ -773,6 +834,11 @@ pub async fn start_vless(config: &VlessConfig, socks_port: u16) -> Result<Child>
         pid = ?pid,
         "sing-box process started"
     );
+    
+    // Keep temp_file alive until sing-box reads it
+    // sing-box reads the config immediately on startup, so we can drop it here
+    // The Drop impl will clean up the file
+    std::mem::drop(temp_file);
 
     Ok(child)
 }
@@ -840,18 +906,8 @@ pub async fn stop_vless(config_id: &str, mut child: Child) -> Result<()> {
         }
     }
 
-    // Cleanup temp config file
-    let config_path = get_temp_config_path(config_id);
-    if config_path.exists() {
-        if let Err(e) = tokio::fs::remove_file(&config_path).await {
-            warn!(
-                config_id = %config_id,
-                path = %config_path.display(),
-                error = %e,
-                "Failed to remove temp config"
-            );
-        }
-    }
+    // Note: Temp config file is automatically cleaned up by TempConfigFile's Drop impl
+    // when start_vless() completes. No manual cleanup needed here.
 
     Ok(())
 }
@@ -1255,5 +1311,172 @@ mod tests {
         assert_eq!(VlessFlow::from_str("XTLS-RPRX-VISION"), VlessFlow::XtlsRprxVision);
         assert_eq!(VlessFlow::from_str("unknown"), VlessFlow::None);
         assert_eq!(VlessFlow::from_str(""), VlessFlow::None);
+    }
+
+    // ========================================================================
+    // TempConfigFile Tests
+    // ========================================================================
+
+    #[tokio::test]
+    async fn test_temp_config_file_normal_cleanup() {
+        let config_id = "test-normal-cleanup";
+        let content = r#"{"test": "data"}"#;
+        
+        let path = {
+            let temp_file = TempConfigFile::new(config_id, content).await.unwrap();
+            let path = temp_file.path().clone();
+            
+            // File should exist while temp_file is in scope
+            assert!(path.exists(), "Temp file should exist");
+            
+            // Verify content
+            let read_content = std::fs::read_to_string(&path).unwrap();
+            assert_eq!(read_content, content);
+            
+            path
+            // temp_file drops here
+        };
+        
+        // File should be cleaned up after drop
+        assert!(!path.exists(), "Temp file should be cleaned up after drop");
+    }
+
+    #[tokio::test]
+    async fn test_temp_config_file_panic_cleanup() {
+        let config_id = "test-panic-cleanup";
+        let content = r#"{"test": "panic"}"#;
+        
+        let path = get_temp_config_path(config_id);
+        
+        // Use catch_unwind to simulate panic
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            // Create a runtime for the async operation
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(async {
+                let _temp_file = TempConfigFile::new(config_id, content).await.unwrap();
+                
+                // Verify file exists
+                assert!(path.exists(), "Temp file should exist before panic");
+                
+                // Simulate panic
+                panic!("Simulated panic!");
+            });
+        }));
+        
+        // Panic should have occurred
+        assert!(result.is_err(), "Should have panicked");
+        
+        // File should still be cleaned up despite panic
+        // Note: In real panic scenarios, Drop is called during unwinding
+        // For this test, we verify the file doesn't exist
+        assert!(!path.exists(), "Temp file should be cleaned up even after panic");
+    }
+
+    #[tokio::test]
+    async fn test_temp_config_file_early_return() {
+        let config_id = "test-early-return";
+        let content = r#"{"test": "early"}"#;
+        
+        async fn function_with_early_return(config_id: &str, content: &str) -> Result<()> {
+            let _temp_file = TempConfigFile::new(config_id, content).await?;
+            
+            // Early return - temp_file should still be cleaned up
+            return Ok(());
+            
+            #[allow(unreachable_code)]
+            {
+                Ok(())
+            }
+        }
+        
+        let path = get_temp_config_path(config_id);
+        
+        // Call function with early return
+        function_with_early_return(config_id, content).await.unwrap();
+        
+        // File should be cleaned up
+        assert!(!path.exists(), "Temp file should be cleaned up after early return");
+    }
+
+    #[tokio::test]
+    async fn test_temp_config_file_concurrent() {
+        // Test that multiple temp files don't conflict
+        let configs = vec![
+            ("test-concurrent-1", r#"{"id": 1}"#),
+            ("test-concurrent-2", r#"{"id": 2}"#),
+            ("test-concurrent-3", r#"{"id": 3}"#),
+        ];
+        
+        let mut handles = vec![];
+        
+        for (config_id, content) in configs {
+            let handle = tokio::spawn(async move {
+                let temp_file = TempConfigFile::new(config_id, content).await.unwrap();
+                let path = temp_file.path().clone();
+                
+                // Verify file exists
+                assert!(path.exists());
+                
+                // Verify content
+                let read_content = std::fs::read_to_string(&path).unwrap();
+                assert_eq!(read_content, content);
+                
+                // Simulate some work
+                tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+                
+                path
+                // temp_file drops here
+            });
+            
+            handles.push(handle);
+        }
+        
+        // Wait for all tasks and collect paths
+        let paths: Vec<PathBuf> = futures::future::join_all(handles)
+            .await
+            .into_iter()
+            .map(|r| r.unwrap())
+            .collect();
+        
+        // All files should be cleaned up
+        for path in paths {
+            assert!(!path.exists(), "Temp file should be cleaned up: {:?}", path);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_temp_config_file_error_handling() {
+        // Test with invalid path characters (though most OSes handle this)
+        let config_id = "test-error";
+        let content = r#"{"test": "error"}"#;
+        
+        let result = TempConfigFile::new(config_id, content).await;
+        
+        // Should succeed in creating temp file
+        assert!(result.is_ok());
+        
+        if let Ok(temp_file) = result {
+            let path = temp_file.path().clone();
+            assert!(path.exists());
+            // Drop will clean up
+        }
+    }
+
+    #[tokio::test]
+    async fn test_temp_config_file_multiple_drops() {
+        // Test that dropping the same path multiple times doesn't cause issues
+        let config_id = "test-multiple-drops";
+        let content = r#"{"test": "multi"}"#;
+        
+        let path = {
+            let temp_file = TempConfigFile::new(config_id, content).await.unwrap();
+            temp_file.path().clone()
+        };
+        
+        // File should be cleaned up
+        assert!(!path.exists());
+        
+        // Manually try to remove again (should not panic)
+        let _ = std::fs::remove_file(&path); // Should fail silently
     }
 }

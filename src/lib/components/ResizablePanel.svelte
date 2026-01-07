@@ -23,16 +23,24 @@
   // Generate unique ID if not provided - use $derived for reactivity
   let panelId = $derived(id ?? `panel-${Math.random().toString(36).slice(2, 9)}`);
 
-  // Get context from parent group
-  const ctx = getContext<{
+  // Get context from parent group (with HMR safety)
+  type PanelGroupContext = {
     direction: () => 'horizontal' | 'vertical';
     registerPanel: (id: string, defaultSize: number, minSize: number, maxSize: number, collapsible: boolean) => void;
     unregisterPanel: (id: string) => void;
     getPanelSize: (id: string) => number;
     isPanelCollapsed: (id: string) => boolean;
     expandPanel: (id: string) => void;
-  }>('resizable-panel-group');
+  };
+  
+  let ctx: PanelGroupContext | undefined;
+  try {
+    ctx = getContext<PanelGroupContext>('resizable-panel-group');
+  } catch {
+    // HMR may cause lifecycle_outside_component error
+  }
 
+  // svelte-ignore state_referenced_locally
   let size = $state(defaultSize);
   let collapsed = $state(false);
 

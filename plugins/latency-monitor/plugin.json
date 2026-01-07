@@ -1,0 +1,22 @@
+{
+  "id": "latency-monitor",
+  "name": "Latency Monitor",
+  "version": "1.0.0",
+  "author": "Isolate Team",
+  "description": "Мониторинг задержки сети в реальном времени с графиком",
+  "type": "ui-widget",
+  "icon": "📊",
+  "contributes": {
+    "widgets": [{
+      "id": "latency-graph",
+      "name": "Latency Graph",
+      "slot": "dashboard",
+      "component": "ui/LatencyWidget.svelte",
+      "defaultSize": { "cols": 2, "rows": 2 }
+    }]
+  },
+  "permissions": {
+    "http": ["*"],
+    "storage": true
+  }
+}

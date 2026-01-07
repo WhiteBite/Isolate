@@ -1,6 +1,15 @@
-# Isolate Google/YouTube Hostlist
-# Google and YouTube domains for DPI bypass
+# Isolate Google Services Hostlist
+# Домены Google для обхода DPI
 # Format: one domain per line
+
+# === Google Search ===
+google.com
+google.ru
+google.co.uk
+google.de
+google.fr
+www.google.com
+www.google.ru
 
 # === YouTube ===
 youtube.com
@@ -10,6 +19,10 @@ youtubekids.com
 youtube-ui.l.google.com
 wide-youtube.l.google.com
 yt-video-upload.l.google.com
+m.youtube.com
+music.youtube.com
+studio.youtube.com
+tv.youtube.com
 
 # === YouTube API ===
 youtubei.googleapis.com
@@ -23,6 +36,94 @@ yt3.ggpht.com
 yt4.ggpht.com
 yt3.googleusercontent.com
 googlevideo.com
+i.ytimg.com
+s.ytimg.com
 
-# === Discord CDN (Google Storage) ===
-stable.dl2.discordapp.net
+# === Google APIs ===
+googleapis.com
+clients1.google.com
+clients2.google.com
+clients3.google.com
+clients4.google.com
+clients5.google.com
+clients6.google.com
+ajax.googleapis.com
+fonts.googleapis.com
+storage.googleapis.com
+
+# === Google User Content ===
+googleusercontent.com
+lh3.googleusercontent.com
+lh4.googleusercontent.com
+lh5.googleusercontent.com
+lh6.googleusercontent.com
+
+# === Google Play ===
+play.google.com
+play-lh.googleusercontent.com
+android.clients.google.com
+
+# === Google Drive & Docs ===
+drive.google.com
+docs.google.com
+sheets.google.com
+slides.google.com
+forms.google.com
+sites.google.com
+
+# === Gmail ===
+mail.google.com
+gmail.com
+googlemail.com
+
+# === Google Meet ===
+meet.google.com
+
+# === Google Cloud ===
+cloud.google.com
+console.cloud.google.com
+
+# === Google Translate ===
+translate.google.com
+translate.googleapis.com
+
+# === Google Maps ===
+maps.google.com
+maps.googleapis.com
+mapsengine.google.com
+
+# === Google Photos ===
+photos.google.com
+
+# === Other Google Services ===
+accounts.google.com
+myaccount.google.com
+calendar.google.com
+contacts.google.com
+keep.google.com
+news.google.com
+books.google.com
+scholar.google.com
+trends.google.com
+analytics.google.com
+ads.google.com
+adsense.google.com
+admob.google.com
+firebase.google.com
+developers.google.com
+support.google.com
+
+# === Google CDN & Infrastructure ===
+gstatic.com
+ssl.gstatic.com
+www.gstatic.com
+fonts.gstatic.com
+encrypted-tbn0.gstatic.com
+ggpht.com
+googleadservices.com
+googlesyndication.com
+google-analytics.com
+googletagmanager.com
+googletagservices.com
+doubleclick.net
+

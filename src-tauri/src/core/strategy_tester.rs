@@ -3,6 +3,9 @@
 //! Запускает стратегию и проверяет её эффективность через DPI-симулятор
 //! в Hyper-V VM. Тестирование происходит через SSH в VM.
 //!
+//! NOTE: This module is used for automated strategy testing with DPI simulator.
+//! Some methods are prepared for different testing scenarios.
+//!
 //! ## Интеграция с Strategy Engine
 //! Тестер использует `SharedStrategyEngine` для запуска/остановки стратегий
 //! во время тестирования. Полный цикл:
@@ -12,6 +15,9 @@
 //! 4. Ожидание применения (2 сек)
 //! 5. Проверка доступности СО стратегией
 //! 6. Остановка стратегии
+
+// Public API for DPI simulator testing
+#![allow(dead_code)]
 
 use std::process::Stdio;
 use std::time::Duration;
@@ -40,16 +46,27 @@ pub struct DpiSimulatorConfig {
     pub test_domain: String,
 }
 
+impl DpiSimulatorConfig {
+    /// Load config from environment variables or use defaults for development
+    pub fn from_env() -> Self {
+        Self {
+            ssh_host: std::env::var("DPI_SSH_HOST")
+                .unwrap_or_else(|_| "VM-test@192.168.100.20".to_string()),
+            api_url: std::env::var("DPI_API_URL")
+                .unwrap_or_else(|_| "http://localhost:8888".to_string()),
+            test_timeout_secs: std::env::var("DPI_TIMEOUT")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(10),
+            test_domain: std::env::var("DPI_TEST_DOMAIN")
+                .unwrap_or_else(|_| "youtube.com".to_string()),
+        }
+    }
+}
+
 impl Default for DpiSimulatorConfig {
     fn default() -> Self {
-        Self {
-            // WindhawkTest VM - Windows test client behind DPI
-            ssh_host: "VM-test@192.168.100.20".to_string(),
-            // DPI-Simulator API (via SSH tunnel to 192.168.100.10)
-            api_url: "http://localhost:8888".to_string(),
-            test_timeout_secs: 10,
-            test_domain: "youtube.com".to_string(),
-        }
+        Self::from_env()
     }
 }
 

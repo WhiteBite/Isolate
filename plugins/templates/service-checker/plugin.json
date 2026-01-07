@@ -1,0 +1,75 @@
+{
+  "$schema": "../schemas/plugin.schema.json",
+  
+  "_comment_id": "Уникальный идентификатор плагина (kebab-case)",
+  "id": "my-service-checker",
+  
+  "_comment_name": "Отображаемое имя плагина",
+  "name": "My Service Checker",
+  
+  "_comment_version": "Версия в формате semver",
+  "version": "1.0.0",
+  
+  "_comment_author": "Автор плагина",
+  "author": "Your Name",
+  
+  "_comment_description": "Краткое описание функциональности",
+  "description": "Добавляет проверку доступности My Service",
+  
+  "_comment_type": "Тип плагина: service-checker | ui-widget | lua-script",
+  "type": "service-checker",
+  
+  "_comment_service": "Конфигурация сервиса для проверки",
+  "service": {
+    "_comment_service_id": "Уникальный ID сервиса",
+    "id": "my-service",
+    
+    "_comment_service_name": "Отображаемое имя сервиса",
+    "name": "My Service",
+    
+    "_comment_icon": "Emoji или иконка сервиса",
+    "icon": "🌐",
+    
+    "_comment_category": "Категория: social | media | gaming | messaging | other",
+    "category": "other",
+    
+    "_comment_service_description": "Описание сервиса для пользователя",
+    "description": "Описание вашего сервиса",
+    
+    "_comment_endpoints": "Список эндпоинтов для проверки доступности",
+    "endpoints": [
+      {
+        "_comment_endpoint_id": "Уникальный ID эндпоинта",
+        "id": "main",
+        
+        "_comment_endpoint_name": "Название эндпоинта",
+        "name": "Main Site",
+        
+        "_comment_url": "URL для проверки",
+        "url": "https://example.com/",
+        
+        "_comment_method": "HTTP метод: HEAD | GET | POST",
+        "method": "HEAD",
+        
+        "_comment_timeout": "Таймаут в мс (опционально, по умолчанию 5000)",
+        "timeout": 5000,
+        
+        "_comment_expected_status": "Ожидаемый HTTP статус (опционально)",
+        "expectedStatus": [200, 301, 302]
+      },
+      {
+        "id": "api",
+        "name": "API Endpoint",
+        "url": "https://api.example.com/health",
+        "method": "GET",
+        "timeout": 3000
+      }
+    ]
+  },
+  
+  "_comment_permissions": "Разрешения плагина",
+  "permissions": {
+    "_comment_http": "Список доменов для HTTP запросов (поддерживает wildcards)",
+    "http": ["example.com", "*.example.com", "api.example.com"]
+  }
+}

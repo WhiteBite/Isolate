@@ -2,6 +2,12 @@
 //!
 //! Provides HTTP GET/HEAD tests, TCP connect tests with SOCKS5 proxy support.
 //! All tests have configurable timeouts (max 5 seconds as per project rules).
+//!
+//! NOTE: This module provides low-level testing primitives for strategy validation.
+//! Used internally by the testing subsystem.
+
+// Public API for strategy testing infrastructure
+#![allow(dead_code)]
 
 use std::time::{Duration, Instant};
 

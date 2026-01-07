@@ -97,6 +97,7 @@
            animate-context-menu"
     style="left: {x}px; top: {y}px;"
     role="menu"
+    tabindex="-1"
     onclick={handleItemClick}
     onkeydown={(e) => e.key === 'Enter' && handleItemClick()}
   >

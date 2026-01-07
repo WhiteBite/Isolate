@@ -23,9 +23,9 @@
   };
 </script>
 
-<div class="bg-[#1a1f3a] rounded-xl border border-[#2a2f4a] shadow-lg {className}">
+<div class="bg-zinc-900/40 rounded-xl border border-white/5 shadow-card hover:border-white/10 transition-all duration-200 {className}">
   {#if title}
-    <div class="px-4 py-3 border-b border-[#2a2f4a]">
+    <div class="px-4 py-3 border-b border-white/5">
       <h3 class="text-lg font-semibold text-white">{title}</h3>
     </div>
   {/if}

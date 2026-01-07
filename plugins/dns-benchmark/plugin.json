@@ -1,0 +1,25 @@
+{
+  "id": "dns-benchmark",
+  "name": "DNS Benchmark",
+  "version": "1.0.0",
+  "author": "Isolate Team",
+  "description": "Тестирует производительность популярных DNS серверов через DoH (DNS over HTTPS)",
+  "type": "script-plugin",
+  "icon": "🔍",
+  "contributes": {
+    "checkers": [
+      {
+        "id": "dns-bench",
+        "name": "DNS Benchmark",
+        "description": "Измеряет задержку DNS серверов через DoH протокол",
+        "script": "scripts/benchmark.lua",
+        "trigger": "on-demand"
+      }
+    ]
+  },
+  "permissions": {
+    "http": ["*"],
+    "timeout": 30000,
+    "storage": true
+  }
+}

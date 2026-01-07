@@ -6,6 +6,8 @@ use std::sync::Arc;
 use tauri::State;
 use tracing::info;
 
+use crate::commands::validation::validate_not_empty;
+use crate::core::errors::{IsolateError, TypedResultExt};
 use crate::core::models::VlessConfig;
 use crate::state::AppState;
 
@@ -22,17 +24,24 @@ pub async fn import_vless(
     state: State<'_, Arc<AppState>>,
     url: String,
 ) -> Result<VlessConfig, String> {
+    validate_not_empty(&url, "VLESS URL").map_err(|e| e.to_string())?;
+    
+    if !url.starts_with("vless://") {
+        return Err("URL must start with vless://".to_string());
+    }
+    
     info!("Importing VLESS config from URL");
 
     // Parse the URL
-    let config = VlessConfig::from_url(&url)?;
+    let config = VlessConfig::from_url(&url).map_err(|e| e.to_string())?;
 
     // Load existing configs
     let mut configs: Vec<VlessConfig> = state
         .storage
         .get_setting(VLESS_CONFIGS_KEY)
         .await
-        .map_err(|e| format!("Failed to load configs: {}", e))?
+        .storage_context("Failed to load configs")
+        .map_err(|e: IsolateError| e.to_string())?
         .unwrap_or_default();
 
     // Check for duplicate UUID
@@ -48,7 +57,8 @@ pub async fn import_vless(
         .storage
         .set_setting(VLESS_CONFIGS_KEY, &configs)
         .await
-        .map_err(|e| format!("Failed to save config: {}", e))?;
+        .storage_context("Failed to save config")
+        .map_err(|e: IsolateError| e.to_string())?;
 
     info!(id = %config.id, name = %config.name, "VLESS config imported");
     Ok(config)
@@ -66,7 +76,8 @@ pub async fn get_vless_configs(
         .storage
         .get_setting(VLESS_CONFIGS_KEY)
         .await
-        .map_err(|e| format!("Failed to load configs: {}", e))?
+        .storage_context("Failed to load configs")
+        .map_err(|e: IsolateError| e.to_string())?
         .unwrap_or_default();
 
     Ok(configs)
@@ -85,7 +96,8 @@ pub async fn delete_vless_config(
         .storage
         .get_setting(VLESS_CONFIGS_KEY)
         .await
-        .map_err(|e| format!("Failed to load configs: {}", e))?
+        .storage_context("Failed to load configs")
+        .map_err(|e: IsolateError| e.to_string())?
         .unwrap_or_default();
 
     // Find and remove
@@ -101,7 +113,8 @@ pub async fn delete_vless_config(
         .storage
         .set_setting(VLESS_CONFIGS_KEY, &configs)
         .await
-        .map_err(|e| format!("Failed to save configs: {}", e))?;
+        .storage_context("Failed to save configs")
+        .map_err(|e: IsolateError| e.to_string())?;
 
     info!(id = %id, "VLESS config deleted");
     Ok(())
@@ -121,7 +134,8 @@ pub async fn toggle_vless_config(
         .storage
         .get_setting(VLESS_CONFIGS_KEY)
         .await
-        .map_err(|e| format!("Failed to load configs: {}", e))?
+        .storage_context("Failed to load configs")
+        .map_err(|e: IsolateError| e.to_string())?
         .unwrap_or_default();
 
     // Find and update
@@ -145,7 +159,8 @@ pub async fn toggle_vless_config(
         .storage
         .set_setting(VLESS_CONFIGS_KEY, &configs)
         .await
-        .map_err(|e| format!("Failed to save configs: {}", e))?;
+        .storage_context("Failed to save configs")
+        .map_err(|e: IsolateError| e.to_string())?;
 
     Ok(())
 }
@@ -165,6 +180,10 @@ pub async fn start_vless_proxy(
     config_id: String,
     socks_port: Option<u16>,
 ) -> Result<crate::core::singbox_manager::SingboxInstance, String> {
+    // Rate limit: max 1 call per 5 seconds
+    crate::commands::rate_limiter::check_rate_limit("start_vless_proxy", 5)
+        .map_err(|e| e.to_string())?;
+    
     info!(config_id = %config_id, "Starting VLESS proxy");
 
     // Load the config
@@ -172,7 +191,8 @@ pub async fn start_vless_proxy(
         .storage
         .get_setting(VLESS_CONFIGS_KEY)
         .await
-        .map_err(|e| format!("Failed to load configs: {}", e))?
+        .storage_context("Failed to load configs")
+        .map_err(|e: IsolateError| e.to_string())?
         .unwrap_or_default();
 
     let config = configs
@@ -200,7 +220,8 @@ pub async fn start_vless_proxy(
     let instance = manager
         .start(&vless_config, port)
         .await
-        .map_err(|e| format!("Failed to start VLESS proxy: {}", e))?;
+        .process_context("Failed to start VLESS proxy")
+        .map_err(|e: IsolateError| e.to_string())?;
 
     info!(
         config_id = %config_id,
@@ -221,7 +242,8 @@ pub async fn stop_vless_proxy(config_id: String) -> Result<(), String> {
     manager
         .stop(&config_id)
         .await
-        .map_err(|e| format!("Failed to stop VLESS proxy: {}", e))?;
+        .process_context("Failed to stop VLESS proxy")
+        .map_err(|e: IsolateError| e.to_string())?;
 
     info!(config_id = %config_id, "VLESS proxy stopped");
     Ok(())
@@ -237,7 +259,8 @@ pub async fn stop_all_vless_proxies() -> Result<(), String> {
     manager
         .stop_all()
         .await
-        .map_err(|e| format!("Failed to stop VLESS proxies: {}", e))?;
+        .process_context("Failed to stop VLESS proxies")
+        .map_err(|e: IsolateError| e.to_string())?;
 
     info!("All VLESS proxies stopped");
     Ok(())
@@ -270,7 +293,8 @@ pub async fn health_check_vless(config_id: String) -> Result<bool, String> {
     manager
         .health_check(&config_id)
         .await
-        .map_err(|e| format!("Health check failed: {}", e))
+        .network_context("Health check failed")
+        .map_err(|e: IsolateError| e.to_string())
 }
 
 /// Test VLESS proxy connectivity
@@ -295,7 +319,8 @@ pub async fn test_vless_connectivity(
 
     crate::core::vless_engine::test_proxy_connectivity(socks_port, &url)
         .await
-        .map_err(|e| format!("Connectivity test failed: {}", e))
+        .network_context("Connectivity test failed")
+        .map_err(|e: IsolateError| e.to_string())
 }
 
 /// Check if sing-box binary is available
@@ -309,5 +334,6 @@ pub async fn is_singbox_available() -> Result<bool, String> {
 pub async fn get_singbox_version() -> Result<String, String> {
     crate::core::singbox_manager::get_singbox_version()
         .await
-        .map_err(|e| format!("Failed to get sing-box version: {}", e))
+        .process_context("Failed to get sing-box version")
+        .map_err(|e: IsolateError| e.to_string())
 }

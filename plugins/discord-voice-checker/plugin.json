@@ -1,0 +1,26 @@
+{
+  "id": "discord-voice-checker",
+  "name": "Discord Voice Checker",
+  "version": "1.0.0",
+  "author": "Isolate Team",
+  "description": "Проверяет доступность Discord Voice серверов и измеряет задержку по регионам",
+  "type": "script-plugin",
+  "icon": "🎤",
+  "contributes": {
+    "checkers": [
+      {
+        "id": "discord-voice",
+        "name": "Discord Voice Latency",
+        "description": "Проверяет задержку до voice серверов Discord по регионам",
+        "script": "scripts/voice_check.lua",
+        "targetService": "discord",
+        "trigger": "on-demand"
+      }
+    ]
+  },
+  "permissions": {
+    "http": ["discord.com", "*.discord.gg", "*.discordapp.net", "*.discord.media"],
+    "timeout": 15000,
+    "storage": true
+  }
+}

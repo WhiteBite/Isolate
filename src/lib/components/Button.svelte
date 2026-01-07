@@ -23,13 +23,13 @@
     children 
   }: Props = $props();
 
-  const baseClasses = 'inline-flex items-center justify-center font-medium rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900 disabled:opacity-50 disabled:cursor-not-allowed';
+  const baseClasses = 'inline-flex items-center justify-center font-medium rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-zinc-900 disabled:opacity-50 disabled:cursor-not-allowed';
 
   const variantClasses = {
-    primary: 'bg-[#00d4ff] hover:bg-[#00d4ff]/80 text-white focus:ring-[#00d4ff]',
-    secondary: 'bg-[#2a2f4a] hover:bg-[#2a2f4a]/80 text-white focus:ring-[#2a2f4a]',
-    danger: 'bg-[#ff3333] hover:bg-[#ff3333]/80 text-white focus:ring-[#ff3333]',
-    ghost: 'bg-transparent hover:bg-[#1a1f3a] text-[#a0a0a0] focus:ring-[#2a2f4a]'
+    primary: 'bg-indigo-500 hover:bg-indigo-600 text-white focus:ring-indigo-500/50 shadow-lg shadow-indigo-500/20',
+    secondary: 'bg-zinc-800 hover:bg-zinc-700 text-white border border-white/5 focus:ring-zinc-500/50',
+    danger: 'bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 focus:ring-red-500/50',
+    ghost: 'bg-transparent hover:bg-white/5 text-zinc-400 hover:text-zinc-200 focus:ring-zinc-500/50'
   };
 
   const sizeClasses = {

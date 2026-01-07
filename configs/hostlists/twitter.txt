@@ -1,0 +1,31 @@
+# Twitter/X domains
+# Source: Isolate project
+
+# === Twitter/X Core ===
+twitter.com
+www.twitter.com
+mobile.twitter.com
+api.twitter.com
+x.com
+www.x.com
+
+# === Twitter CDN ===
+twimg.com
+pbs.twimg.com
+video.twimg.com
+abs.twimg.com
+ton.twimg.com
+cdn.syndication.twimg.com
+
+# === Twitter API ===
+api.x.com
+upload.twitter.com
+caps.twitter.com
+tweetdeck.twitter.com
+
+# === Twitter Analytics ===
+analytics.twitter.com
+ads-api.twitter.com
+
+# === t.co shortener ===
+t.co

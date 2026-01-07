@@ -1,0 +1,117 @@
+{
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "add": "Add",
+    "remove": "Remove",
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "comingSoon": "Coming Soon"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "strategies": "Strategies",
+    "testing": "Testing",
+    "settings": "Settings",
+    "diagnostics": "Diagnostics",
+    "orchestra": "Orchestra"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "subtitle": "Monitor and control your network protection",
+    "status": {
+      "active": "Active",
+      "inactive": "Inactive",
+      "connecting": "Connecting..."
+    }
+  },
+  "strategies": {
+    "title": "Strategies",
+    "subtitle": "Manage bypass strategies"
+  },
+  "testing": {
+    "title": "Testing",
+    "subtitle": "Check proxies and strategies for functionality"
+  },
+  "settings": {
+    "title": "Settings",
+    "subtitle": "Configure application preferences",
+    "tabs": {
+      "general": "General",
+      "routing": "Routing",
+      "advanced": "Advanced"
+    },
+    "general": {
+      "title": "General Settings",
+      "autostart": "Autostart",
+      "autostartDesc": "Launch application on Windows startup",
+      "language": "Language",
+      "languageDesc": "Interface language",
+      "theme": "Theme",
+      "themeDesc": "Application appearance",
+      "minimizeToTray": "Minimize to Tray",
+      "minimizeToTrayDesc": "Minimize to system tray when closing",
+      "notifications": "Notifications",
+      "notificationsDesc": "Show system notifications"
+    },
+    "routing": {
+      "title": "Routing Settings",
+      "domainExceptions": "Domain Exceptions",
+      "domainExceptionsDesc": "Domains that bypass DPI filtering",
+      "noExceptions": "No exceptions configured",
+      "perAppRouting": "Per-App Routing",
+      "perAppRoutingDesc": "Route traffic from specific applications through DPI bypass"
+    },
+    "advanced": {
+      "title": "Advanced Settings",
+      "blockQuic": "Block QUIC",
+      "blockQuicDesc": "Block UDP/443 to force TCP connections",
+      "debugMode": "Debug Mode",
+      "debugModeDesc": "Enable verbose logging for troubleshooting",
+      "backup": "Backup & Restore",
+      "backupDesc": "Export or import your configuration (settings, proxies, routing rules)",
+      "exportConfig": "Export Config",
+      "importConfig": "Import Config",
+      "backupNote": "Note: Passwords are not exported for security reasons. You'll need to re-enter them after import.",
+      "dangerZone": "Danger Zone — Advanced Settings",
+      "dangerZoneWarning": "⚠️ These settings can affect system stability. Change only if you know what you're doing.",
+      "windivertMode": "WinDivert Mode",
+      "windivertModeDesc": "Driver operation mode"
+    },
+    "messages": {
+      "saved": "Settings saved successfully",
+      "saveFailed": "Failed to save",
+      "exported": "Configuration exported successfully",
+      "exportFailed": "Export failed",
+      "imported": "Imported",
+      "importFailed": "Import failed",
+      "noNewData": "No new data to import (all items already exist)"
+    }
+  },
+  "diagnostics": {
+    "title": "System Diagnostics",
+    "subtitle": "Check system components and network health"
+  },
+  "orchestra": {
+    "title": "Orchestra",
+    "subtitle": "Automatic strategy optimization and learning center"
+  },
+  "services": {
+    "title": "Services",
+    "youtube": "YouTube",
+    "discord": "Discord",
+    "telegram": "Telegram",
+    "instagram": "Instagram",
+    "twitter": "Twitter"
+  },
+  "themes": {
+    "dark": "Dark",
+    "light": "Light",
+    "system": "System"
+  },
+  "languages": {
+    "ru": "Русский",
+    "en": "English"
+  }
+}

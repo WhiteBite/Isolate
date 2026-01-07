@@ -1,7 +1,9 @@
-//! JSON Strategy Loader for Isolate
+//! YAML Strategy Loader for Isolate
 //!
-//! Provides functionality for loading and parsing JSON strategy files.
-//! Converts JSON strategies to winws command-line arguments.
+//! Provides functionality for loading and parsing YAML strategy files.
+//! Converts YAML strategies to winws command-line arguments.
+//!
+//! NOTE: Some types and methods are prepared for future strategy management features.
 //!
 //! ## Usage
 //!
@@ -16,6 +18,15 @@
 //!     println!("Strategy {}: {:?}", strategy.id, args);
 //! }
 //! ```
+//!
+//! ## Note on naming
+//!
+//! `ZapretStrategy` (formerly `JsonStrategy`) is loaded from YAML files.
+//! The old name was a historical artifact from when JSON was considered.
+//! All strategy files use YAML format exclusively.
+
+// Public API for strategy loading and parsing
+#![allow(dead_code)]
 
 use std::path::{Path, PathBuf};
 
@@ -27,18 +38,24 @@ use tracing::{debug, info, warn};
 // Data Structures
 // ============================================================================
 
-/// Root structure of a JSON strategy file
+/// Root structure of a YAML strategy file
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StrategyFile {
     /// File format version
     pub version: String,
     /// List of strategies in the file
-    pub strategies: Vec<JsonStrategy>,
+    pub strategies: Vec<ZapretStrategy>,
 }
 
-/// JSON strategy definition
+/// Zapret/winws strategy definition (loaded from YAML)
+///
+/// This struct represents a low-level DPI bypass strategy with profiles
+/// that can be converted to winws command-line arguments.
+///
+/// Note: Previously named `JsonStrategy` - renamed to better reflect
+/// that these are Zapret-specific strategies loaded from YAML files.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct JsonStrategy {
+pub struct ZapretStrategy {
     /// Unique identifier
     pub id: String,
     /// Human-readable name
@@ -60,6 +77,12 @@ pub struct JsonStrategy {
     /// DPI bypass profiles
     pub profiles: Vec<StrategyProfile>,
 }
+
+/// Type alias for backward compatibility
+/// 
+/// @deprecated Use `ZapretStrategy` instead
+#[deprecated(since = "0.2.0", note = "Use ZapretStrategy instead - this was renamed to better reflect the actual format (YAML, not JSON)")]
+pub type JsonStrategy = ZapretStrategy;
 
 /// Strategy category enumeration
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -442,9 +465,9 @@ pub struct StrategyProfile {
 // Strategy Loader
 // ============================================================================
 
-/// Loader for JSON strategy files
+/// Loader for YAML strategy files
 pub struct StrategyLoader {
-    /// Directory containing strategy JSON files
+    /// Directory containing strategy YAML files
     strategies_dir: PathBuf,
 }
 
@@ -452,24 +475,24 @@ impl StrategyLoader {
     /// Create a new strategy loader
     ///
     /// # Arguments
-    /// * `strategies_dir` - Path to directory containing JSON strategy files
+    /// * `strategies_dir` - Path to directory containing YAML strategy files
     pub fn new(strategies_dir: impl AsRef<Path>) -> Self {
         Self {
             strategies_dir: strategies_dir.as_ref().to_path_buf(),
         }
     }
 
-    /// Load all JSON strategy files from the directory
+    /// Load all YAML strategy files from the directory (async version)
     ///
-    /// Scans the strategies directory for .json files and loads all strategies.
+    /// Scans the strategies directory for .yaml/.yml files and loads all strategies.
     ///
     /// # Returns
-    /// * `Ok(Vec<JsonStrategy>)` - All loaded strategies
+    /// * `Ok(Vec<ZapretStrategy>)` - All loaded strategies
     /// * `Err` - Failed to read directory or parse files
-    pub fn load_all(&self) -> Result<Vec<JsonStrategy>> {
+    pub async fn load_all(&self) -> Result<Vec<ZapretStrategy>> {
         let mut all_strategies = Vec::new();
 
-        if !self.strategies_dir.exists() {
+        if !tokio::fs::try_exists(&self.strategies_dir).await.unwrap_or(false) {
             warn!(
                 "Strategies directory does not exist: {}",
                 self.strategies_dir.display()
@@ -477,16 +500,23 @@ impl StrategyLoader {
             return Ok(all_strategies);
         }
 
-        let entries = std::fs::read_dir(&self.strategies_dir)
+        let mut entries = tokio::fs::read_dir(&self.strategies_dir)
+            .await
             .with_context(|| format!("Failed to read strategies directory: {}", self.strategies_dir.display()))?;
 
-        for entry in entries {
-            let entry = entry?;
+        while let Some(entry) = entries.next_entry().await? {
             let path = entry.path();
 
-            // Only process .json files
-            if path.is_file() && path.extension().is_some_and(|ext| ext == "json") {
-                match self.load_file(&path) {
+            // Only process .yaml and .yml files
+            let is_file = tokio::fs::metadata(&path)
+                .await
+                .map(|m| m.is_file())
+                .unwrap_or(false);
+            
+            let is_yaml = path.extension().is_some_and(|ext| ext == "yaml" || ext == "yml");
+            
+            if is_file && is_yaml {
+                match self.load_file(&path).await {
                     Ok(strategy_file) => {
                         info!(
                             "Loaded {} strategies from {}",
@@ -506,22 +536,23 @@ impl StrategyLoader {
         Ok(all_strategies)
     }
 
-    /// Load a single JSON strategy file
+    /// Load a single YAML strategy file (async version)
     ///
     /// # Arguments
-    /// * `path` - Path to the JSON file
+    /// * `path` - Path to the YAML file
     ///
     /// # Returns
     /// * `Ok(StrategyFile)` - Parsed strategy file
     /// * `Err` - Failed to read or parse file
-    pub fn load_file(&self, path: impl AsRef<Path>) -> Result<StrategyFile> {
+    pub async fn load_file(&self, path: impl AsRef<Path>) -> Result<StrategyFile> {
         let path = path.as_ref();
         debug!("Loading strategy file: {}", path.display());
 
-        let content = std::fs::read_to_string(path)
+        let content = tokio::fs::read_to_string(path)
+            .await
             .with_context(|| format!("Failed to read strategy file: {}", path.display()))?;
 
-        let strategy_file: StrategyFile = serde_json::from_str(&content)
+        let strategy_file: StrategyFile = serde_yaml::from_str(&content)
             .with_context(|| format!("Failed to parse strategy file: {}", path.display()))?;
 
         debug!(
@@ -540,12 +571,12 @@ impl StrategyLoader {
     /// * `category` - Category to filter by
     ///
     /// # Returns
-    /// * `Vec<JsonStrategy>` - Strategies matching the category
+    /// * `Vec<ZapretStrategy>` - Strategies matching the category
     pub fn filter_by_category(
         &self,
-        strategies: &[JsonStrategy],
+        strategies: &[ZapretStrategy],
         category: StrategyCategory,
-    ) -> Vec<JsonStrategy> {
+    ) -> Vec<ZapretStrategy> {
         strategies
             .iter()
             .filter(|s| s.category == category)
@@ -555,7 +586,7 @@ impl StrategyLoader {
 
     /// Generate winws command-line arguments from a strategy
     ///
-    /// Converts a JsonStrategy into a vector of command-line arguments
+    /// Converts a ZapretStrategy into a vector of command-line arguments
     /// suitable for launching winws.exe.
     ///
     /// # Arguments
@@ -568,7 +599,7 @@ impl StrategyLoader {
     /// * `Err` - Failed to generate arguments
     pub fn to_winws_args(
         &self,
-        strategy: &JsonStrategy,
+        strategy: &ZapretStrategy,
         hostlists_dir: &Path,
         blobs_dir: &Path,
     ) -> Result<Vec<String>> {
@@ -903,8 +934,8 @@ impl StrategyLoader {
 mod tests {
     use super::*;
 
-    fn create_test_strategy() -> JsonStrategy {
-        JsonStrategy {
+    fn create_test_strategy() -> ZapretStrategy {
+        ZapretStrategy {
             id: "test-strategy".to_string(),
             name: "Test Strategy".to_string(),
             description: "A test strategy".to_string(),
@@ -1084,7 +1115,7 @@ mod tests {
         let loader = StrategyLoader::new("test");
 
         let strategies = vec![
-            JsonStrategy {
+            ZapretStrategy {
                 id: "yt-1".to_string(),
                 name: "YouTube 1".to_string(),
                 description: "".to_string(),
@@ -1095,7 +1126,7 @@ mod tests {
                 ports: StrategyPorts::default(),
                 profiles: vec![],
             },
-            JsonStrategy {
+            ZapretStrategy {
                 id: "discord-1".to_string(),
                 name: "Discord 1".to_string(),
                 description: "".to_string(),
@@ -1106,7 +1137,7 @@ mod tests {
                 ports: StrategyPorts::default(),
                 profiles: vec![],
             },
-            JsonStrategy {
+            ZapretStrategy {
                 id: "yt-2".to_string(),
                 name: "YouTube 2".to_string(),
                 description: "".to_string(),
@@ -1129,30 +1160,23 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_strategy_json() {
-        let json = r#"{
-            "version": "1.0",
-            "strategies": [
-                {
-                    "id": "test-1",
-                    "name": "Test Strategy",
-                    "description": "Test description",
-                    "category": "youtube",
-                    "family": "zapret",
-                    "ports": {
-                        "tcp": "443"
-                    },
-                    "profiles": [
-                        {
-                            "filter": "tcp",
-                            "desync": "fake"
-                        }
-                    ]
-                }
-            ]
-        }"#;
+    fn test_parse_strategy_yaml() {
+        let yaml = r#"
+version: "1.0"
+strategies:
+  - id: "test-1"
+    name: "Test Strategy"
+    description: "Test description"
+    category: youtube
+    family: zapret
+    ports:
+      tcp: "443"
+    profiles:
+      - filter: tcp
+        desync: fake
+"#;
 
-        let strategy_file: StrategyFile = serde_json::from_str(json).unwrap();
+        let strategy_file: StrategyFile = serde_yaml::from_str(yaml).unwrap();
         assert_eq!(strategy_file.version, "1.0");
         assert_eq!(strategy_file.strategies.len(), 1);
         assert_eq!(strategy_file.strategies[0].id, "test-1");
@@ -1169,40 +1193,33 @@ mod tests {
     #[test]
     fn test_strategy_deserialization() {
         // Test full strategy deserialization with all fields
-        let json = r#"{
-            "version": "1.0",
-            "strategies": [
-                {
-                    "id": "youtube-basic",
-                    "name": "YouTube Basic",
-                    "description": "Basic YouTube bypass strategy",
-                    "category": "youtube",
-                    "family": "zapret",
-                    "author": "Test Author",
-                    "label": "recommended",
-                    "ports": {
-                        "tcp": "80,443",
-                        "udp": "443"
-                    },
-                    "profiles": [
-                        {
-                            "filter": "tcp",
-                            "hostlist": "youtube.txt",
-                            "l7": "http",
-                            "desync": "fake,split2",
-                            "repeats": 6,
-                            "split_seqovl": 2,
-                            "split_pos": "1",
-                            "fooling": "md5sig",
-                            "fake_tls": "tls_clienthello.bin",
-                            "autottl": "2"
-                        }
-                    ]
-                }
-            ]
-        }"#;
+        let yaml = r#"
+version: "1.0"
+strategies:
+  - id: youtube-basic
+    name: YouTube Basic
+    description: Basic YouTube bypass strategy
+    category: youtube
+    family: zapret
+    author: Test Author
+    label: recommended
+    ports:
+      tcp: "80,443"
+      udp: "443"
+    profiles:
+      - filter: tcp
+        hostlist: youtube.txt
+        l7: http
+        desync: "fake,split2"
+        repeats: 6
+        split_seqovl: 2
+        split_pos: "1"
+        fooling: md5sig
+        fake_tls: tls_clienthello.bin
+        autottl: "2"
+"#;
 
-        let strategy_file: StrategyFile = serde_json::from_str(json).unwrap();
+        let strategy_file: StrategyFile = serde_yaml::from_str(yaml).unwrap();
         
         assert_eq!(strategy_file.version, "1.0");
         assert_eq!(strategy_file.strategies.len(), 1);
@@ -1238,27 +1255,21 @@ mod tests {
     #[test]
     fn test_strategy_deserialization_minimal() {
         // Test minimal strategy with only required fields
-        let json = r#"{
-            "version": "1.0",
-            "strategies": [
-                {
-                    "id": "minimal",
-                    "name": "Minimal Strategy",
-                    "description": "",
-                    "category": "general",
-                    "family": "zapret",
-                    "ports": {},
-                    "profiles": [
-                        {
-                            "filter": "tcp",
-                            "desync": "fake"
-                        }
-                    ]
-                }
-            ]
-        }"#;
+        let yaml = r#"
+version: "1.0"
+strategies:
+  - id: minimal
+    name: Minimal Strategy
+    description: ""
+    category: general
+    family: zapret
+    ports: {}
+    profiles:
+      - filter: tcp
+        desync: fake
+"#;
 
-        let strategy_file: StrategyFile = serde_json::from_str(json).unwrap();
+        let strategy_file: StrategyFile = serde_yaml::from_str(yaml).unwrap();
         let strategy = &strategy_file.strategies[0];
         
         assert_eq!(strategy.id, "minimal");
@@ -1402,22 +1413,22 @@ mod tests {
 
     #[test]
     fn test_category_serialization() {
-        // Test category serialization/deserialization
+        // Test category serialization/deserialization with YAML
         let categories = vec![
-            (StrategyCategory::YouTube, "\"youtube\""),
-            (StrategyCategory::Discord, "\"discord\""),
-            (StrategyCategory::Telegram, "\"telegram\""),
-            (StrategyCategory::General, "\"general\""),
-            (StrategyCategory::Games, "\"games\""),
-            (StrategyCategory::Warp, "\"warp\""),
-            (StrategyCategory::Custom, "\"custom\""),
+            (StrategyCategory::YouTube, "youtube"),
+            (StrategyCategory::Discord, "discord"),
+            (StrategyCategory::Telegram, "telegram"),
+            (StrategyCategory::General, "general"),
+            (StrategyCategory::Games, "games"),
+            (StrategyCategory::Warp, "warp"),
+            (StrategyCategory::Custom, "custom"),
         ];
 
-        for (category, expected_json) in categories {
-            let json = serde_json::to_string(&category).unwrap();
-            assert_eq!(json, expected_json);
+        for (category, expected_yaml) in categories {
+            let yaml = serde_yaml::to_string(&category).unwrap();
+            assert!(yaml.trim() == expected_yaml, "Expected '{}', got '{}'", expected_yaml, yaml.trim());
             
-            let deserialized: StrategyCategory = serde_json::from_str(&json).unwrap();
+            let deserialized: StrategyCategory = serde_yaml::from_str(&yaml).unwrap();
             assert_eq!(deserialized, category);
         }
     }
@@ -1715,18 +1726,18 @@ mod tests {
     }
 
     // ========================================================================
-    // JsonStrategy serialization tests
+    // ZapretStrategy serialization tests
     // ========================================================================
 
     #[test]
-    fn test_json_strategy_serialization_roundtrip() {
+    fn test_zapret_strategy_serialization_roundtrip() {
         let strategy = create_test_strategy();
         
         // Serialize
         let json = serde_json::to_string(&strategy).unwrap();
         
         // Deserialize
-        let deserialized: JsonStrategy = serde_json::from_str(&json).unwrap();
+        let deserialized: ZapretStrategy = serde_json::from_str(&json).unwrap();
         
         // Verify fields
         assert_eq!(deserialized.id, strategy.id);
@@ -1757,5 +1768,126 @@ mod tests {
         assert_eq!(deserialized.version, strategy_file.version);
         assert_eq!(deserialized.strategies.len(), strategy_file.strategies.len());
         assert_eq!(deserialized.strategies[0].id, strategy_file.strategies[0].id);
+    }
+
+    // ========================================================================
+    // Deprecated JsonStrategy alias tests
+    // ========================================================================
+
+    #[test]
+    #[allow(deprecated)]
+    fn test_json_strategy_deprecated_alias() {
+        // Test that JsonStrategy is a valid type alias for ZapretStrategy
+        // This ensures backward compatibility for code using the old name
+        
+        let strategy: JsonStrategy = JsonStrategy {
+            id: "test-deprecated".to_string(),
+            name: "Test Deprecated Alias".to_string(),
+            description: "Testing deprecated JsonStrategy alias".to_string(),
+            category: StrategyCategory::General,
+            family: "zapret".to_string(),
+            author: None,
+            label: None,
+            ports: StrategyPorts::default(),
+            profiles: vec![],
+        };
+        
+        // Verify it's the same type as ZapretStrategy
+        let zapret_strategy: ZapretStrategy = strategy.clone();
+        assert_eq!(zapret_strategy.id, "test-deprecated");
+        assert_eq!(zapret_strategy.name, "Test Deprecated Alias");
+        
+        // Verify serialization works the same way
+        let json = serde_json::to_string(&strategy).unwrap();
+        let deserialized: ZapretStrategy = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.id, strategy.id);
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn test_json_strategy_interchangeable_with_zapret_strategy() {
+        // Test that JsonStrategy and ZapretStrategy are fully interchangeable
+        
+        fn accepts_zapret_strategy(s: &ZapretStrategy) -> &str {
+            &s.id
+        }
+        
+        fn accepts_json_strategy(s: &JsonStrategy) -> &str {
+            &s.id
+        }
+        
+        let strategy = create_test_strategy();
+        
+        // Both functions should accept the same strategy
+        assert_eq!(accepts_zapret_strategy(&strategy), "test-strategy");
+        assert_eq!(accepts_json_strategy(&strategy), "test-strategy");
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn test_json_strategy_yaml_deserialization() {
+        // Test that YAML can be deserialized into JsonStrategy (deprecated alias)
+        let yaml = r#"
+version: "1.0"
+strategies:
+  - id: "yaml-to-json-strategy"
+    name: "YAML to JsonStrategy"
+    description: "Test deserializing YAML into deprecated JsonStrategy type"
+    category: youtube
+    family: zapret
+    ports:
+      tcp: "443"
+    profiles:
+      - filter: tcp
+        desync: fake
+"#;
+
+        // Deserialize into StrategyFile (which contains Vec<ZapretStrategy>)
+        let strategy_file: StrategyFile = serde_yaml::from_str(yaml).unwrap();
+        
+        // Assign to JsonStrategy type alias - should work seamlessly
+        let json_strategy: JsonStrategy = strategy_file.strategies[0].clone();
+        
+        assert_eq!(json_strategy.id, "yaml-to-json-strategy");
+        assert_eq!(json_strategy.name, "YAML to JsonStrategy");
+        assert_eq!(json_strategy.category, StrategyCategory::YouTube);
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn test_json_strategy_in_vec() {
+        // Test that Vec<JsonStrategy> works the same as Vec<ZapretStrategy>
+        
+        let strategies: Vec<JsonStrategy> = vec![
+            JsonStrategy {
+                id: "s1".to_string(),
+                name: "Strategy 1".to_string(),
+                description: "".to_string(),
+                category: StrategyCategory::YouTube,
+                family: "zapret".to_string(),
+                author: None,
+                label: None,
+                ports: StrategyPorts::default(),
+                profiles: vec![],
+            },
+            JsonStrategy {
+                id: "s2".to_string(),
+                name: "Strategy 2".to_string(),
+                description: "".to_string(),
+                category: StrategyCategory::Discord,
+                family: "zapret".to_string(),
+                author: None,
+                label: None,
+                ports: StrategyPorts::default(),
+                profiles: vec![],
+            },
+        ];
+        
+        // Can be used with StrategyLoader methods
+        let loader = StrategyLoader::new("test");
+        let youtube: Vec<ZapretStrategy> = loader.filter_by_category(&strategies, StrategyCategory::YouTube);
+        
+        assert_eq!(youtube.len(), 1);
+        assert_eq!(youtube[0].id, "s1");
     }
 }

@@ -1,17 +1,18 @@
 import { writable } from 'svelte/store';
 import type { ComponentType } from 'svelte';
 
-interface PluginSlotEntry {
+export interface PluginSlotEntry {
   pluginId: string;
   component: ComponentType;
   props?: Record<string, unknown>;
   order?: number;
 }
 
-interface PluginSlots {
+export interface PluginSlots {
   sidebar: PluginSlotEntry[];
   dashboard: PluginSlotEntry[];
   settings: PluginSlotEntry[];
+  toolbar: PluginSlotEntry[];
   contextMenu: PluginSlotEntry[];
 }
 
@@ -20,6 +21,7 @@ function createPluginSlotsStore() {
     sidebar: [],
     dashboard: [],
     settings: [],
+    toolbar: [],
     contextMenu: [],
   });
 
@@ -41,4 +43,3 @@ function createPluginSlotsStore() {
 }
 
 export const pluginSlots = createPluginSlotsStore();
-export type { PluginSlotEntry, PluginSlots };

@@ -1,0 +1,544 @@
+name: Performance Benchmarks
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src-tauri/src/**'
+      - 'src-tauri/benches/**'
+      - 'src-tauri/Cargo.toml'
+      - 'src/**'
+      - 'package.json'
+      - '.github/workflows/benchmarks.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src-tauri/src/**'
+      - 'src-tauri/benches/**'
+      - 'src-tauri/Cargo.toml'
+      - 'src/**'
+      - 'package.json'
+      - '.github/workflows/benchmarks.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  CARGO_TERM_COLOR: always
+  # Regression threshold (10%)
+  REGRESSION_THRESHOLD: 10
+
+jobs:
+  # ============================================================================
+  # Rust Benchmarks
+  # ============================================================================
+  rust-benchmarks:
+    name: Rust Performance Benchmarks
+    runs-on: windows-latest
+    timeout-minutes: 10
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          cache-on-failure: true
+          shared-key: benchmarks
+          
+      - name: Download baseline (if exists)
+        if: github.event_name == 'pull_request'
+        uses: dawidd6/action-download-artifact@v3
+        with:
+          workflow: benchmarks.yml
+          branch: main
+          name: rust-benchmark-baseline
+          path: baseline
+        continue-on-error: true
+          
+      - name: Run Criterion benchmarks
+        id: bench
+        shell: pwsh
+        run: |
+          Write-Host "Running Criterion benchmarks..."
+          
+          # Run benchmarks with JSON output for comparison
+          cargo bench --manifest-path src-tauri/Cargo.toml -- --noplot 2>&1 | Tee-Object -Variable output
+          
+          # Save raw output
+          $output | Out-File -FilePath benchmark-output.txt -Encoding utf8
+          
+          Write-Host "`n=== Benchmark Results ==="
+          Get-Content benchmark-output.txt
+          
+      - name: Parse and compare results
+        id: parse
+        shell: pwsh
+        run: |
+          $output = Get-Content benchmark-output.txt -Raw
+          
+          # Parse benchmark results
+          $results = @()
+          $regressions = @()
+          $improvements = @()
+          
+          # Pattern: "benchmark_name  time:   [low med high]"
+          $pattern = '(?m)^([^\s]+)\s+time:\s+\[([0-9.]+)\s+\w+\s+([0-9.]+)\s+\w+\s+([0-9.]+)\s+\w+\]'
+          
+          $matches = [regex]::Matches($output, $pattern)
+          foreach ($match in $matches) {
+            $name = $match.Groups[1].Value
+            $low = $match.Groups[2].Value
+            $median = $match.Groups[3].Value
+            $high = $match.Groups[4].Value
+            $results += [PSCustomObject]@{
+              Name = $name
+              Low = $low
+              Median = $median
+              High = $high
+            }
+          }
+          
+          # Save results as JSON for baseline
+          $results | ConvertTo-Json | Out-File -FilePath benchmark-results.json -Encoding utf8
+          
+          # Compare with baseline if exists
+          $baselineFile = "baseline/benchmark-results.json"
+          $hasBaseline = Test-Path $baselineFile
+          $comparisonTable = @()
+          
+          if ($hasBaseline) {
+            Write-Host "`n=== Comparing with baseline ==="
+            $baseline = Get-Content $baselineFile | ConvertFrom-Json
+            
+            foreach ($result in $results) {
+              $baselineResult = $baseline | Where-Object { $_.Name -eq $result.Name }
+              if ($baselineResult) {
+                $currentMedian = [double]$result.Median
+                $baselineMedian = [double]$baselineResult.Median
+                
+                if ($baselineMedian -gt 0) {
+                  $changePercent = (($currentMedian - $baselineMedian) / $baselineMedian) * 100
+                  $changeStr = if ($changePercent -gt 0) { "+$([math]::Round($changePercent, 1))%" } else { "$([math]::Round($changePercent, 1))%" }
+                  
+                  $status = "✅"
+                  if ($changePercent -gt $env:REGRESSION_THRESHOLD) {
+                    $status = "🔴"
+                    $regressions += "$($result.Name): $changeStr"
+                  } elseif ($changePercent -lt -5) {
+                    $status = "🟢"
+                    $improvements += "$($result.Name): $changeStr"
+                  }
+                  
+                  $comparisonTable += [PSCustomObject]@{
+                    Benchmark = $result.Name
+                    Current = "$($result.Median)"
+                    Baseline = "$($baselineResult.Median)"
+                    Change = $changeStr
+                    Status = $status
+                  }
+                }
+              } else {
+                $comparisonTable += [PSCustomObject]@{
+                  Benchmark = $result.Name
+                  Current = "$($result.Median)"
+                  Baseline = "N/A"
+                  Change = "new"
+                  Status = "🆕"
+                }
+              }
+            }
+          }
+          
+          # Generate markdown summary
+          $summary = @"
+          ## 🦀 Rust Benchmark Results
+          
+          "@
+          
+          if ($hasBaseline -and $comparisonTable.Count -gt 0) {
+            $summary += @"
+          
+          ### Comparison with baseline (main branch)
+          
+          | Benchmark | Current | Baseline | Change | Status |
+          |-----------|---------|----------|--------|--------|
+          "@
+            foreach ($row in $comparisonTable) {
+              $summary += "`n| $($row.Benchmark) | $($row.Current) | $($row.Baseline) | $($row.Change) | $($row.Status) |"
+            }
+            
+            if ($regressions.Count -gt 0) {
+              $summary += "`n`n### ⚠️ Performance Regressions (>$($env:REGRESSION_THRESHOLD)%)`n"
+              foreach ($reg in $regressions) {
+                $summary += "- $reg`n"
+              }
+            }
+            
+            if ($improvements.Count -gt 0) {
+              $summary += "`n`n### 🎉 Performance Improvements`n"
+              foreach ($imp in $improvements) {
+                $summary += "- $imp`n"
+              }
+            }
+          } else {
+            $summary += @"
+          
+          | Benchmark | Time (median) |
+          |-----------|---------------|
+          "@
+            foreach ($result in $results) {
+              $summary += "`n| $($result.Name) | $($result.Median) |"
+            }
+          }
+          
+          $summary += @"
+          
+          
+          <details>
+          <summary>📋 Full Output</summary>
+          
+          ``````
+          $output
+          ``````
+          </details>
+          "@
+          
+          # Save summary
+          $summary | Out-File -FilePath rust-benchmark-summary.md -Encoding utf8
+          
+          # Output for GitHub Step Summary
+          $summary | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+          
+          # Set output for regression check
+          if ($regressions.Count -gt 0) {
+            "has_regression=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            "regression_count=$($regressions.Count)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          } else {
+            "has_regression=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          }
+          
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-benchmark-results-${{ github.sha }}
+          path: |
+            benchmark-output.txt
+            benchmark-results.json
+            rust-benchmark-summary.md
+          retention-days: 30
+          
+      - name: Upload baseline (main branch only)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-benchmark-baseline
+          path: benchmark-results.json
+          retention-days: 90
+          
+      - name: Upload Criterion HTML reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: criterion-reports-${{ github.sha }}
+          path: src-tauri/target/criterion/**/report/
+          retention-days: 30
+          if-no-files-found: ignore
+          
+      - name: Check for regressions
+        if: steps.parse.outputs.has_regression == 'true'
+        shell: pwsh
+        run: |
+          Write-Host "::error::Performance regression detected! ${{ steps.parse.outputs.regression_count }} benchmark(s) regressed by more than ${{ env.REGRESSION_THRESHOLD }}%"
+          exit 1
+
+  # ============================================================================
+  # Frontend Benchmarks
+  # ============================================================================
+  frontend-benchmarks:
+    name: Frontend Performance Benchmarks
+    runs-on: windows-latest
+    timeout-minutes: 10
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 9
+          
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+          
+      - name: Install dependencies
+        run: pnpm install --ignore-scripts
+        
+      - name: Download baseline (if exists)
+        if: github.event_name == 'pull_request'
+        uses: dawidd6/action-download-artifact@v3
+        with:
+          workflow: benchmarks.yml
+          branch: main
+          name: frontend-benchmark-baseline
+          path: baseline
+        continue-on-error: true
+        
+      - name: Build frontend
+        run: pnpm build
+        
+      - name: Analyze bundle size
+        id: bundle
+        shell: pwsh
+        run: |
+          Write-Host "=== Analyzing bundle size ==="
+          
+          $buildDir = "build"
+          if (-not (Test-Path $buildDir)) {
+            $buildDir = ".svelte-kit/output/client"
+          }
+          
+          $results = @{
+            js = @{ files = @(); total = 0 }
+            css = @{ files = @(); total = 0 }
+            total = 0
+          }
+          
+          # Analyze JS files
+          Get-ChildItem -Path $buildDir -Recurse -Filter "*.js" | ForEach-Object {
+            $size = $_.Length
+            $results.js.files += @{ name = $_.Name; size = $size }
+            $results.js.total += $size
+          }
+          
+          # Analyze CSS files
+          Get-ChildItem -Path $buildDir -Recurse -Filter "*.css" | ForEach-Object {
+            $size = $_.Length
+            $results.css.files += @{ name = $_.Name; size = $size }
+            $results.css.total += $size
+          }
+          
+          $results.total = $results.js.total + $results.css.total
+          
+          # Save results
+          $results | ConvertTo-Json -Depth 5 | Out-File -FilePath bundle-size.json -Encoding utf8
+          
+          # Format sizes
+          function Format-Size($bytes) {
+            if ($bytes -ge 1MB) { return "$([math]::Round($bytes / 1MB, 2)) MB" }
+            if ($bytes -ge 1KB) { return "$([math]::Round($bytes / 1KB, 2)) KB" }
+            return "$bytes B"
+          }
+          
+          # Compare with baseline
+          $baselineFile = "baseline/bundle-size.json"
+          $hasBaseline = Test-Path $baselineFile
+          $comparison = @()
+          
+          if ($hasBaseline) {
+            $baseline = Get-Content $baselineFile | ConvertFrom-Json
+            
+            $jsChange = $results.js.total - $baseline.js.total
+            $cssChange = $results.css.total - $baseline.css.total
+            $totalChange = $results.total - $baseline.total
+            
+            $jsChangePercent = if ($baseline.js.total -gt 0) { ($jsChange / $baseline.js.total) * 100 } else { 0 }
+            $cssChangePercent = if ($baseline.css.total -gt 0) { ($cssChange / $baseline.css.total) * 100 } else { 0 }
+            $totalChangePercent = if ($baseline.total -gt 0) { ($totalChange / $baseline.total) * 100 } else { 0 }
+            
+            $comparison = @(
+              @{ Type = "JavaScript"; Current = Format-Size $results.js.total; Baseline = Format-Size $baseline.js.total; Change = "$(if($jsChange -ge 0){'+'}else{''})$(Format-Size $jsChange) ($([math]::Round($jsChangePercent, 1))%)" }
+              @{ Type = "CSS"; Current = Format-Size $results.css.total; Baseline = Format-Size $baseline.css.total; Change = "$(if($cssChange -ge 0){'+'}else{''})$(Format-Size $cssChange) ($([math]::Round($cssChangePercent, 1))%)" }
+              @{ Type = "**Total**"; Current = Format-Size $results.total; Baseline = Format-Size $baseline.total; Change = "$(if($totalChange -ge 0){'+'}else{''})$(Format-Size $totalChange) ($([math]::Round($totalChangePercent, 1))%)" }
+            )
+            
+            # Check for regression
+            if ($totalChangePercent -gt $env:REGRESSION_THRESHOLD) {
+              "has_regression=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+              "regression_percent=$([math]::Round($totalChangePercent, 1))" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            } else {
+              "has_regression=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            }
+          } else {
+            "has_regression=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          }
+          
+          # Generate summary
+          $summary = @"
+          ## 📦 Frontend Bundle Size
+          
+          "@
+          
+          if ($hasBaseline -and $comparison.Count -gt 0) {
+            $summary += @"
+          
+          ### Comparison with baseline (main branch)
+          
+          | Type | Current | Baseline | Change |
+          |------|---------|----------|--------|
+          "@
+            foreach ($row in $comparison) {
+              $status = ""
+              if ($row.Change -match '\+.*\(([0-9.]+)%\)') {
+                $pct = [double]$matches[1]
+                if ($pct -gt $env:REGRESSION_THRESHOLD) { $status = " 🔴" }
+                elseif ($pct -gt 5) { $status = " ⚠️" }
+              } elseif ($row.Change -match '-') {
+                $status = " 🟢"
+              }
+              $summary += "`n| $($row.Type) | $($row.Current) | $($row.Baseline) | $($row.Change)$status |"
+            }
+          } else {
+            $summary += @"
+          
+          | Type | Size |
+          |------|------|
+          | JavaScript | $(Format-Size $results.js.total) |
+          | CSS | $(Format-Size $results.css.total) |
+          | **Total** | $(Format-Size $results.total) |
+          "@
+          }
+          
+          $summary += @"
+          
+          
+          <details>
+          <summary>📋 File Details</summary>
+          
+          **JavaScript files:**
+          "@
+          
+          $results.js.files | Sort-Object -Property size -Descending | Select-Object -First 10 | ForEach-Object {
+            $summary += "`n- $($_.name): $(Format-Size $_.size)"
+          }
+          
+          $summary += "`n`n**CSS files:**"
+          $results.css.files | Sort-Object -Property size -Descending | Select-Object -First 5 | ForEach-Object {
+            $summary += "`n- $($_.name): $(Format-Size $_.size)"
+          }
+          
+          $summary += "`n</details>"
+          
+          # Save summary
+          $summary | Out-File -FilePath frontend-benchmark-summary.md -Encoding utf8
+          
+          # Output for GitHub Step Summary
+          $summary | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+          
+          Write-Host $summary
+          
+      - name: Upload bundle analysis
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-benchmark-results-${{ github.sha }}
+          path: |
+            bundle-size.json
+            frontend-benchmark-summary.md
+          retention-days: 30
+          
+      - name: Upload baseline (main branch only)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-benchmark-baseline
+          path: bundle-size.json
+          retention-days: 90
+          
+      - name: Check for bundle size regression
+        if: steps.bundle.outputs.has_regression == 'true'
+        shell: pwsh
+        run: |
+          Write-Host "::warning::Bundle size increased by ${{ steps.bundle.outputs.regression_percent }}% (threshold: ${{ env.REGRESSION_THRESHOLD }}%)"
+          # Warning only, don't fail the build for bundle size
+
+  # ============================================================================
+  # PR Comment
+  # ============================================================================
+  comment-pr:
+    name: Comment on PR
+    runs-on: ubuntu-latest
+    needs: [rust-benchmarks, frontend-benchmarks]
+    if: github.event_name == 'pull_request'
+    
+    steps:
+      - name: Download Rust results
+        uses: actions/download-artifact@v4
+        with:
+          name: rust-benchmark-results-${{ github.sha }}
+          path: rust-results
+          
+      - name: Download Frontend results
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-benchmark-results-${{ github.sha }}
+          path: frontend-results
+          
+      - name: Combine and comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            
+            let rustSummary = '';
+            let frontendSummary = '';
+            
+            try {
+              rustSummary = fs.readFileSync('rust-results/rust-benchmark-summary.md', 'utf8');
+            } catch (e) {
+              rustSummary = '⚠️ Could not read Rust benchmark summary';
+            }
+            
+            try {
+              frontendSummary = fs.readFileSync('frontend-results/frontend-benchmark-summary.md', 'utf8');
+            } catch (e) {
+              frontendSummary = '⚠️ Could not read Frontend benchmark summary';
+            }
+            
+            const body = `# 📊 Performance Benchmark Results
+            
+            ${rustSummary}
+            
+            ---
+            
+            ${frontendSummary}
+            
+            ---
+            *Commit: ${context.sha.substring(0, 7)} | [View full reports](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})*`;
+            
+            // Find existing comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            
+            const botComment = comments.find(comment => 
+              comment.user.type === 'Bot' && 
+              comment.body.includes('📊 Performance Benchmark Results')
+            );
+            
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body
+              });
+            }

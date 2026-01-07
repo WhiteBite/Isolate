@@ -1,17 +1,16 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
+  interface Props {
+    active?: boolean;
+    loading?: boolean;
+    disabled?: boolean;
+    onclick?: () => void;
+  }
 
-  export let active: boolean = false;
-  export let loading: boolean = false;
-  export let disabled: boolean = false;
-  export let onClick: (() => void) | null = null;
-
-  const dispatch = createEventDispatcher();
+  let { active = false, loading = false, disabled = false, onclick }: Props = $props();
 
   function handleClick() {
     if (!disabled && !loading) {
-      dispatch('click');
-      onClick?.();
+      onclick?.();
     }
   }
 </script>
@@ -23,7 +22,7 @@
          flex items-center justify-center
          {active 
            ? 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white border-indigo-400/50 shadow-[0_0_50px_-10px_rgba(79,70,229,0.5)]' 
-           : 'bg-zinc-900 text-zinc-500 border-white/5 shadow-inner hover:text-zinc-300 hover:border-white/10'}
+           : 'bg-zinc-900 text-zinc-400 border-white/5 shadow-inner hover:text-zinc-300 hover:border-white/10'}
          {loading ? 'animate-pulse cursor-wait' : ''}
          {disabled ? 'opacity-50 cursor-not-allowed' : ''}
          border"

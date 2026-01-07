@@ -1,7 +1,15 @@
 <script lang="ts">
   import { browser } from '$app/environment';
-  import { Button } from '$lib/components';
+  import { Button, ScanningIndicator } from '$lib/components';
   import { toasts } from '$lib/stores/toast';
+  import { waitForBackend } from '$lib/utils/backend';
+  import { 
+    mockDiagnosticsComponents, 
+    mockSystemInfo as defaultSystemInfo, 
+    mockDiagnosticsResults,
+    mockConflicts
+  } from '$lib/mocks';
+  import type { ConflictInfo, ConflictSeverity, ConflictCategory } from '$lib/api/types';
 
   // Types
   type ComponentStatus = 'healthy' | 'warning' | 'error' | 'unknown' | 'checking';
@@ -24,14 +32,12 @@
   }
 
   // State
-  let components = $state<SystemComponent[]>([
-    { id: 'windivert', name: 'WinDivert', description: 'Kernel-level packet filter driver', status: 'unknown', details: 'Not checked', icon: '🔧' },
-    { id: 'singbox', name: 'Sing-box', description: 'Universal proxy platform', status: 'unknown', details: 'Not checked', icon: '📦' },
-    { id: 'winws', name: 'WinWS', description: 'DPI bypass tool (Zapret)', status: 'unknown', details: 'Not checked', icon: '⚡' },
-    { id: 'network', name: 'Network', description: 'Internet connectivity', status: 'unknown', details: 'Not checked', icon: '🌐' },
-    { id: 'dns', name: 'DNS', description: 'Domain name resolution', status: 'unknown', details: 'Not checked', icon: '🔍' },
-    { id: 'firewall', name: 'Firewall', description: 'Windows Firewall status', status: 'unknown', details: 'Not checked', icon: '🛡️' },
-  ]);
+  let components = $state<SystemComponent[]>([...mockDiagnosticsComponents]);
+  let conflicts = $state<ConflictInfo[]>([]);
+  let isCheckingConflicts = $state(false);
+  
+  // Demo mode flag (browser preview without Tauri)
+  let isDemoMode = $state(false);
 
   let systemInfo = $state<SystemInfo>({
     os: 'Windows',
@@ -65,7 +71,9 @@
   $effect(() => {
     if (!browser) return;
     isTauri = '__TAURI__' in window || '__TAURI_INTERNALS__' in window;
+    isDemoMode = !isTauri;
     loadSystemInfo();
+    checkConflicts();
   });
 
   async function loadSystemInfo() {
@@ -76,10 +84,10 @@
         const { invoke } = await import('@tauri-apps/api/core');
         
         // Wait for backend
-        for (let i = 0; i < 10; i++) {
-          const ready = await invoke<boolean>('is_backend_ready').catch(() => false);
-          if (ready) break;
-          await new Promise(r => setTimeout(r, 200));
+        const ready = await waitForBackend(10, 200);
+        if (!ready) {
+          console.warn('[Diagnostics] Backend not ready after retries');
+          return;
         }
         
         const info = await invoke<SystemInfo>('get_system_info').catch(() => null);
@@ -89,13 +97,36 @@
       }
     } else {
       // Demo data
-      systemInfo = {
-        os: 'Windows',
-        osVersion: '11 Pro (22H2)',
-        arch: 'x64',
-        memory: '16 GB',
-        adminRights: true
-      };
+      systemInfo = { ...defaultSystemInfo };
+    }
+  }
+
+  async function checkConflicts() {
+    if (!browser) return;
+    
+    isCheckingConflicts = true;
+    
+    try {
+      if (isTauri) {
+        const { invoke } = await import('@tauri-apps/api/core');
+        
+        const ready = await waitForBackend(10, 200);
+        if (!ready) {
+          console.warn('[Diagnostics] Backend not ready for conflict check');
+          return;
+        }
+        
+        const result = await invoke<ConflictInfo[]>('check_conflicts').catch(() => []);
+        conflicts = result;
+      } else {
+        // Demo mode - show mock conflicts
+        await new Promise(r => setTimeout(r, 500));
+        conflicts = [...mockConflicts] as ConflictInfo[];
+      }
+    } catch (e) {
+      console.error('Failed to check conflicts:', e);
+    } finally {
+      isCheckingConflicts = false;
     }
   }
 
@@ -110,10 +141,11 @@
         const { invoke } = await import('@tauri-apps/api/core');
         
         // Wait for backend
-        for (let i = 0; i < 10; i++) {
-          const ready = await invoke<boolean>('is_backend_ready').catch(() => false);
-          if (ready) break;
-          await new Promise(r => setTimeout(r, 200));
+        const ready = await waitForBackend(10, 200);
+        if (!ready) {
+          console.warn('[Diagnostics] Backend not ready for diagnostics');
+          toasts.error('Backend not ready');
+          return;
         }
         
         // Run diagnostics
@@ -141,17 +173,9 @@
     }
   }
 
+  // Demo mode simulation - generates mock diagnostic results for browser preview
   async function simulateDiagnostics() {
-    const checks = [
-      { id: 'network', delay: 300, status: 'healthy', details: 'Connected (45ms latency)' },
-      { id: 'dns', delay: 400, status: 'healthy', details: 'Resolving correctly' },
-      { id: 'windivert', delay: 600, status: 'healthy', details: 'Driver loaded (v2.2)' },
-      { id: 'winws', delay: 500, status: 'healthy', details: 'Binary found' },
-      { id: 'singbox', delay: 700, status: 'warning', details: 'Not configured' },
-      { id: 'firewall', delay: 400, status: 'healthy', details: 'Rules configured' },
-    ];
-    
-    for (const check of checks) {
+    for (const check of mockDiagnosticsResults) {
       await new Promise(r => setTimeout(r, check.delay));
       components = components.map(c => 
         c.id === check.id 
@@ -199,13 +223,141 @@
       default: return 'from-void-200 to-void-300';
     }
   }
+
+  function getSeverityColor(severity: ConflictSeverity): string {
+    switch (severity) {
+      case 'critical': return 'text-neon-red';
+      case 'high': return 'text-neon-orange';
+      case 'medium': return 'text-neon-yellow';
+      case 'low': return 'text-text-muted';
+    }
+  }
+
+  function getSeverityBgColor(severity: ConflictSeverity): string {
+    switch (severity) {
+      case 'critical': return 'bg-neon-red/20 border-neon-red/30';
+      case 'high': return 'bg-neon-orange/20 border-neon-orange/30';
+      case 'medium': return 'bg-neon-yellow/20 border-neon-yellow/30';
+      case 'low': return 'bg-void-200 border-void-300';
+    }
+  }
+
+  function getCategoryIcon(category: ConflictCategory): string {
+    switch (category) {
+      case 'network_filter': return '🛡️';
+      case 'vpn': return '🔐';
+      case 'network_optimization': return '⚡';
+      case 'security': return '🔒';
+      case 'windivert': return '⚠️';
+    }
+  }
+
+  function getCategoryLabel(category: ConflictCategory): string {
+    switch (category) {
+      case 'network_filter': return 'Network Filter';
+      case 'vpn': return 'VPN';
+      case 'network_optimization': return 'Network Optimization';
+      case 'security': return 'Security Software';
+      case 'windivert': return 'WinDivert Conflict';
+    }
+  }
+
+  function exportReport() {
+    const report = {
+      timestamp: new Date().toISOString(),
+      lastCheck,
+      overallHealth: {
+        status: overallHealth.status,
+        percentage: overallHealth.percentage
+      },
+      systemInfo,
+      components: components.map(c => ({
+        id: c.id,
+        name: c.name,
+        status: c.status,
+        details: c.details
+      })),
+      conflicts: conflicts.map(c => ({
+        name: c.name,
+        category: c.category,
+        severity: c.severity,
+        description: c.description,
+        recommendation: c.recommendation,
+        detected_processes: c.detected_processes,
+        detected_services: c.detected_services
+      }))
+    };
+    
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `isolate-diagnostics-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    toasts.success('Report exported');
+  }
+
+  let isFixing = $state(false);
+
+  async function autoFix() {
+    if (!isTauri || isDemoMode) {
+      toasts.info('Auto-fix is not available in demo mode');
+      return;
+    }
+
+    isFixing = true;
+    toasts.info('Running auto-fix...');
+
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+
+      // 1. Stop any running strategy
+      try {
+        await invoke('stop_strategy');
+      } catch {
+        // Ignore - may not have running strategy
+      }
+
+      // 2. Clear system proxy
+      try {
+        await invoke('clear_system_proxy');
+      } catch {
+        // Ignore - proxy may not be set
+      }
+
+      // 3. Panic reset (clears WinDivert state)
+      try {
+        await invoke('panic_reset');
+      } catch {
+        // Ignore - may fail if not admin
+      }
+
+      toasts.success('Auto-fix completed. Running diagnostics...');
+
+      // Re-run diagnostics to check results
+      await runDiagnostics();
+    } catch (e) {
+      toasts.error(`Auto-fix failed: ${e}`);
+    } finally {
+      isFixing = false;
+    }
+  }
 </script>
 
 <div class="p-8 space-y-6">
   <!-- Header -->
   <div class="flex items-center justify-between">
     <div>
-      <h1 class="text-3xl font-bold text-white">System Diagnostics</h1>
+      <div class="flex items-center gap-3">
+        <h1 class="text-3xl font-bold text-white">System Diagnostics</h1>
+        {#if isDemoMode}
+          <span class="px-2 py-1 text-xs uppercase tracking-wider bg-amber-500/20 text-amber-400 rounded-md font-medium border border-amber-500/30">Demo</span>
+        {/if}
+      </div>
       <p class="text-text-muted mt-1">Check system components and network health</p>
     </div>
     <div class="flex items-center gap-4">
@@ -293,6 +445,79 @@
     </div>
   </div>
 
+  <!-- Software Conflicts Section -->
+  {#if isCheckingConflicts}
+    <div class="bg-void-50 rounded-xl border border-glass-border p-5">
+      <div class="flex items-center gap-3">
+        <ScanningIndicator active={true} text="" variant="pulse" />
+        <span class="text-text-muted">Checking for software conflicts...</span>
+      </div>
+    </div>
+  {:else if conflicts.length > 0}
+    <div class="bg-void-50 rounded-xl border border-neon-red/30 p-5">
+      <div class="flex items-start gap-3 mb-4">
+        <div class="w-10 h-10 rounded-lg bg-neon-red/20 flex items-center justify-center flex-shrink-0">
+          <svg class="w-5 h-5 text-neon-red" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+        </div>
+        <div>
+          <h3 class="text-white font-semibold">Software Conflicts Detected</h3>
+          <p class="text-text-muted text-sm">
+            {conflicts.length} conflicting {conflicts.length === 1 ? 'program' : 'programs'} found that may interfere with Isolate
+          </p>
+        </div>
+      </div>
+      
+      <div class="space-y-3">
+        {#each conflicts as conflict}
+          <div class="bg-void-100/50 rounded-lg p-4 border border-glass-border">
+            <div class="flex items-start justify-between mb-2">
+              <div class="flex items-center gap-2">
+                <span class="text-xl">{getCategoryIcon(conflict.category)}</span>
+                <div>
+                  <h4 class="text-white font-medium">{conflict.name}</h4>
+                  <span class="text-text-muted text-xs">{getCategoryLabel(conflict.category)}</span>
+                </div>
+              </div>
+              <span class="px-2 py-1 rounded-full text-xs font-medium border {getSeverityBgColor(conflict.severity)} {getSeverityColor(conflict.severity)} uppercase">
+                {conflict.severity}
+              </span>
+            </div>
+            
+            <p class="text-text-muted text-sm mb-2">{conflict.description}</p>
+            
+            <div class="flex flex-wrap gap-2 mb-2">
+              {#each conflict.detected_processes as proc}
+                <span class="px-2 py-0.5 bg-void-200 rounded text-xs text-text-muted font-mono">{proc}</span>
+              {/each}
+              {#each conflict.detected_services as svc}
+                <span class="px-2 py-0.5 bg-void-200 rounded text-xs text-text-muted font-mono">{svc}</span>
+              {/each}
+            </div>
+            
+            <div class="flex items-start gap-2 mt-3 pt-3 border-t border-glass-border">
+              <svg class="w-4 h-4 text-neon-cyan flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p class="text-neon-cyan text-sm">{conflict.recommendation}</p>
+            </div>
+          </div>
+        {/each}
+      </div>
+      
+      <button
+        onclick={checkConflicts}
+        class="mt-4 flex items-center gap-2 px-4 py-2 bg-void-100 hover:bg-void-200 rounded-lg text-white text-sm transition-colors"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+        Re-check Conflicts
+      </button>
+    </div>
+  {/if}
+
   <!-- Main Grid: Components + System Info -->
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
     <!-- Components Grid (2 columns) -->
@@ -313,10 +538,7 @@
               <!-- Status Badge -->
               <div class="flex items-center gap-2 px-2.5 py-1 rounded-full border {getStatusBgColor(component.status)}">
                 {#if component.status === 'checking'}
-                  <svg class="w-3.5 h-3.5 animate-spin {getStatusColor(component.status)}" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-                  </svg>
+                  <ScanningIndicator active={true} text="" variant="pulse" />
                 {:else}
                   <span class="text-sm font-bold {getStatusColor(component.status)}">{getStatusIcon(component.status)}</span>
                 {/if}
@@ -419,6 +641,7 @@
           </button>
           
           <button
+            onclick={exportReport}
             class="w-full flex items-center gap-3 px-4 py-3 bg-void-100/50 hover:bg-void-100 rounded-lg text-left transition-colors"
           >
             <svg class="w-5 h-5 text-neon-cyan" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -428,12 +651,24 @@
           </button>
           
           <button
-            class="w-full flex items-center gap-3 px-4 py-3 bg-void-100/50 hover:bg-void-100 rounded-lg text-left transition-colors"
+            onclick={autoFix}
+            disabled={isFixing || isRunning || isDemoMode}
+            class="w-full flex items-center gap-3 px-4 py-3 bg-void-100/50 hover:bg-void-100 rounded-lg text-left transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            title={isDemoMode ? 'Not available in demo mode' : 'Stop strategies, clear proxy, reset network state'}
           >
-            <svg class="w-5 h-5 text-neon-yellow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-            </svg>
-            <span class="text-white text-sm">Auto-fix Issues</span>
+            {#if isFixing}
+              <svg class="w-5 h-5 text-neon-yellow animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            {:else}
+              <svg class="w-5 h-5 text-neon-yellow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+              </svg>
+            {/if}
+            <div class="flex flex-col">
+              <span class="text-white text-sm">{isFixing ? 'Fixing...' : 'Auto-fix Issues'}</span>
+              <span class="text-text-muted/60 text-xs">Stop strategies, clear proxy, reset state</span>
+            </div>
           </button>
         </div>
       </div>
@@ -463,6 +698,9 @@
             {/if}
             {#if components.find(c => c.id === 'firewall')?.status === 'warning'}
               <li>• <span class="text-neon-yellow">Firewall:</span> Allow Isolate through Windows Firewall</li>
+            {/if}
+            {#if components.find(c => c.id === 'tcp_timestamps')?.status === 'warning'}
+              <li>• <span class="text-neon-yellow">TCP Timestamps:</span> Enable in Settings → Advanced for better DPI bypass</li>
             {/if}
           </ul>
         </div>

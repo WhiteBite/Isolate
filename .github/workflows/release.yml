@@ -5,42 +5,313 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 0.1.0)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
 
 jobs:
   build:
+    name: Build Windows x64
     runs-on: windows-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
     
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 9
+          
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'pnpm'
           
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: 8
-          
-      - name: Install Rust
+      - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
         
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          cache-on-failure: true
           
       - name: Install dependencies
         run: pnpm install
-        
+      
+      - name: Get version
+        id: version
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.version }}" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+          echo "📦 Building version: $VERSION"
+      
       - name: Build Tauri app
-        uses: tauri-apps/tauri-action@v0
+        run: pnpm tauri build
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      
+      - name: Smoke test - verify binary starts
+        shell: pwsh
+        run: |
+          Write-Host "Running smoke tests on built binary..."
+          
+          $exePath = "src-tauri/target/release/Isolate.exe"
+          
+          if (-not (Test-Path $exePath)) {
+            Write-Error "Binary not found at $exePath"
+            exit 1
+          }
+          
+          Write-Host "Binary found: $exePath"
+          Write-Host "File size: $((Get-Item $exePath).Length / 1MB) MB"
+          
+          # Test 1: --version flag
+          Write-Host "`n=== Test 1: Version check ==="
+          $versionOutput = & $exePath --version 2>&1
+          $versionExitCode = $LASTEXITCODE
+          
+          if ($versionExitCode -ne 0) {
+            Write-Error "Version check failed with exit code: $versionExitCode"
+            Write-Host "Output: $versionOutput"
+            exit 1
+          }
+          Write-Host "Version output: $versionOutput"
+          Write-Host "[PASS] Version check"
+          
+          # Test 2: --smoke-test flag (comprehensive check)
+          Write-Host "`n=== Test 2: Smoke test ==="
+          $smokeOutput = & $exePath --smoke-test 2>&1
+          $smokeExitCode = $LASTEXITCODE
+          
+          if ($smokeExitCode -ne 0) {
+            Write-Error "Smoke test failed with exit code: $smokeExitCode"
+            Write-Host "Output: $smokeOutput"
+            exit 1
+          }
+          Write-Host $smokeOutput
+          Write-Host "[PASS] Smoke test"
+          
+          Write-Host "`n✅ All smoke tests passed!"
+      
+      - name: List build artifacts
+        shell: bash
+        run: |
+          echo "=== NSIS Installers ==="
+          ls -la src-tauri/target/release/bundle/nsis/ || echo "No NSIS artifacts"
+          echo ""
+          echo "=== MSI Installers ==="
+          ls -la src-tauri/target/release/bundle/msi/ || echo "No MSI artifacts"
+      
+      - name: Generate checksums
+        id: checksums
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $checksumFile = "checksums.txt"
+          
+          # Find and hash all installers
+          $artifacts = @()
+          
+          # NSIS
+          $nsisPath = "src-tauri/target/release/bundle/nsis"
+          if (Test-Path $nsisPath) {
+            Get-ChildItem "$nsisPath/*.exe" | ForEach-Object {
+              $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+              "$hash  $($_.Name)" | Add-Content $checksumFile
+              $artifacts += $_.FullName
+            }
+          }
+          
+          # MSI
+          $msiPath = "src-tauri/target/release/bundle/msi"
+          if (Test-Path $msiPath) {
+            Get-ChildItem "$msiPath/*.msi" | ForEach-Object {
+              $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+              "$hash  $($_.Name)" | Add-Content $checksumFile
+              $artifacts += $_.FullName
+            }
+          }
+          
+          # Updater signature
+          $sigPath = "src-tauri/target/release/bundle/nsis"
+          if (Test-Path "$sigPath/*.sig") {
+            Get-ChildItem "$sigPath/*.sig" | ForEach-Object {
+              $artifacts += $_.FullName
+            }
+          }
+          
+          Write-Host "Generated checksums:"
+          Get-Content $checksumFile
+          
+          # Output for next steps
+          "checksums_content<<EOF" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Get-Content $checksumFile | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "EOF" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+      
+      - name: Generate release notes
+        id: notes
+        shell: bash
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          
+          # Get commits since last tag
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          
+          if [ -n "$PREV_TAG" ]; then
+            echo "📝 Changes since $PREV_TAG:"
+            COMMITS=$(git log --pretty=format:"- %s (%h)" "$PREV_TAG"..HEAD --no-merges 2>/dev/null | head -30 || echo "")
+          else
+            echo "📝 Initial release commits:"
+            COMMITS=$(git log --pretty=format:"- %s (%h)" --no-merges -30 2>/dev/null || echo "")
+          fi
+          
+          # Get tag message if exists
+          TAG_MESSAGE=$(git tag -l --format='%(contents)' "v$VERSION" 2>/dev/null || echo "")
+          
+          # Build release notes
+          cat > release_notes.md << NOTES_EOF
+          ## 🛡️ Isolate v${VERSION}
+          
+          Автоматический обход DPI-блокировок для Windows.
+          
+          NOTES_EOF
+          
+          # Add tag message if present
+          if [ -n "$TAG_MESSAGE" ]; then
+            echo "### 📋 Описание релиза" >> release_notes.md
+            echo "" >> release_notes.md
+            echo "$TAG_MESSAGE" >> release_notes.md
+            echo "" >> release_notes.md
+          fi
+          
+          # Add changes
+          cat << CHANGES_EOF >> release_notes.md
+          ### ✨ Изменения
+          
+          ${COMMITS:-"- Первый релиз"}
+          
+          ---
+          
+          ### 📥 Скачать
+          
+          | Файл | Описание |
+          |------|----------|
+          | \`Isolate_${VERSION}_x64-setup.exe\` | **Рекомендуется** — NSIS установщик |
+          | \`Isolate_${VERSION}_x64_en-US.msi\` | MSI пакет для корпоративного развёртывания |
+          | \`Isolate_${VERSION}_x64_ru-RU.msi\` | MSI пакет (русский) |
+          
+          ### 🔧 Установка
+          
+          1. Скачайте \`Isolate_${VERSION}_x64-setup.exe\`
+          2. Запустите установщик (может потребоваться "Всё равно запустить" в SmartScreen)
+          3. Выберите язык интерфейса
+          4. Следуйте инструкциям установщика
+          
+          ### 💻 Системные требования
+          
+          - **ОС:** Windows 10/11 (64-bit)
+          - **Runtime:** WebView2 (устанавливается автоматически)
+          - **Права:** Администратор (для WinDivert)
+          
+          ### ⚠️ Важно
+          
+          - Антивирус может ложно срабатывать на WinDivert — добавьте папку в исключения
+          - Приложение не подписано сертификатом — Windows SmartScreen покажет предупреждение
+          
+          ---
+          
+          <details>
+          <summary>🔐 Контрольные суммы (SHA256)</summary>
+          
+          \`\`\`
+          CHANGES_EOF
+          
+          # Add checksums
+          if [ -f checksums.txt ]; then
+            cat checksums.txt >> release_notes.md
+          else
+            echo "Checksums will be added manually" >> release_notes.md
+          fi
+          
+          cat >> release_notes.md << 'FOOTER_EOF'
+          ```
+          
+          </details>
+          FOOTER_EOF
+          
+          echo "✅ Release notes generated"
+          cat release_notes.md
+      
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: Isolate v${{ steps.version.outputs.version }}
+          body_path: release_notes.md
+          draft: true
+          prerelease: false
+          fail_on_unmatched_files: false
+          files: |
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/nsis/*.sig
+            src-tauri/target/release/bundle/msi/*.msi
+            checksums.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Upload artifact for smoke test
+        uses: actions/upload-artifact@v4
         with:
-          tagName: v__VERSION__
-          releaseName: 'Isolate v__VERSION__'
-          releaseBody: 'See the assets to download this version and install.'
-          releaseDraft: true
-          prerelease: false
+          name: isolate-windows
+          path: src-tauri/target/release/bundle/nsis/*.exe
+          retention-days: 1
+          if-no-files-found: warn
+      
+      - name: Summary
+        shell: bash
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          echo "## 🎉 Release v$VERSION created!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Artifacts uploaded:" >> $GITHUB_STEP_SUMMARY
+          echo "- NSIS installer (.exe)" >> $GITHUB_STEP_SUMMARY
+          echo "- MSI installers (.msi)" >> $GITHUB_STEP_SUMMARY
+          echo "- Checksums (checksums.txt)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Smoke Tests:" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Version check passed" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Smoke test passed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "⚠️ **Release is in DRAFT mode** — review and publish manually." >> $GITHUB_STEP_SUMMARY
+  
+  # Post-build smoke test on fresh runner
+  smoke-test-release:
+    name: Smoke Test Release
+    needs: build
+    uses: ./.github/workflows/smoke-test.yml
+    with:
+      artifact_name: isolate-windows
+      version: ${{ needs.build.outputs.version }}

@@ -4,6 +4,8 @@
 //! using Windows Firewall rules. This forces browsers to fall back to TCP/TLS
 //! which can then be processed by DPI bypass strategies.
 
+#![allow(dead_code)] // Public QUIC blocking API
+
 use tokio::process::Command;
 use tracing::{debug, error, info, warn};
 

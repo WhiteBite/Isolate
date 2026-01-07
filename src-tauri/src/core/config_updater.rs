@@ -2,6 +2,8 @@
 //!
 //! Downloads and updates strategy configurations from remote repository.
 
+#![allow(dead_code)] // Public config updater API
+
 use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info, warn};

@@ -1,0 +1,79 @@
+{
+  "$schema": "../schemas/plugin.schema.json",
+  
+  "_comment_id": "Уникальный идентификатор плагина (kebab-case)",
+  "id": "my-widget",
+  
+  "_comment_name": "Отображаемое имя плагина",
+  "name": "My Widget",
+  
+  "_comment_version": "Версия в формате semver",
+  "version": "1.0.0",
+  
+  "_comment_author": "Автор плагина",
+  "author": "Your Name",
+  
+  "_comment_description": "Краткое описание виджета",
+  "description": "Пример UI виджета для дашборда",
+  
+  "_comment_type": "Тип плагина",
+  "type": "ui-widget",
+  
+  "_comment_icon": "Иконка плагина (emoji)",
+  "icon": "📊",
+  
+  "_comment_contributes": "Что плагин добавляет в UI",
+  "contributes": {
+    "_comment_widgets": "Список виджетов для дашборда",
+    "widgets": [
+      {
+        "_comment_widget_id": "Уникальный ID виджета",
+        "id": "my-main-widget",
+        
+        "_comment_widget_name": "Отображаемое имя виджета",
+        "name": "My Widget",
+        
+        "_comment_slot": "Место размещения: dashboard | sidebar | statusbar",
+        "slot": "dashboard",
+        
+        "_comment_component": "Путь к Svelte компоненту",
+        "component": "ui/MyWidget.svelte",
+        
+        "_comment_defaultSize": "Размер по умолчанию в grid-ячейках",
+        "defaultSize": { "cols": 2, "rows": 1 },
+        
+        "_comment_order": "Порядок отображения (меньше = выше)",
+        "order": 50,
+        
+        "_comment_widget_icon": "Иконка виджета",
+        "icon": "📊"
+      }
+    ],
+    
+    "_comment_settings": "Страницы настроек плагина (опционально)",
+    "settings": [
+      {
+        "id": "my-widget-settings",
+        "name": "My Widget Settings",
+        "component": "ui/MyWidgetSettings.svelte",
+        "icon": "⚙️",
+        "order": 100
+      }
+    ]
+  },
+  
+  "_comment_permissions": "Разрешения плагина",
+  "permissions": {
+    "_comment_http": "Домены для HTTP запросов",
+    "http": ["api.example.com"],
+    
+    "_comment_storage": "Доступ к локальному хранилищу",
+    "storage": true,
+    
+    "_comment_events": "Паттерны событий для подписки/отправки",
+    "events": ["my-widget-*", "status-changed"],
+    
+    "_comment_timeout": "Максимальный таймаут для операций (мс)",
+    "timeout": 10000
+  }
+}

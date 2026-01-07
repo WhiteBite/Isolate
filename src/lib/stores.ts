@@ -1,4 +1,4 @@
-import { writable, derived } from 'svelte/store';
+import { writable } from 'svelte/store';
 
 // Types
 export interface AppStatus {
@@ -21,6 +21,7 @@ export interface Service {
     icon: string;
     enabled: boolean;
     status: 'unknown' | 'working' | 'blocked';
+    ping?: number;
 }
 
 // Stores
@@ -50,7 +51,6 @@ export const settings = writable({
     defaultMode: 'turbo' as 'turbo' | 'deep'
 });
 
-// Derived stores
-export const hasActiveStrategy = derived(appStatus, $status => $status.isActive);
-
-export const optimizationError = derived(optimizationProgress, $progress => $progress.error);
+// Derived stores - kept for potential future use
+// export const hasActiveStrategy = derived(appStatus, $status => $status.isActive);
+// export const optimizationError = derived(optimizationProgress, $progress => $progress.error);

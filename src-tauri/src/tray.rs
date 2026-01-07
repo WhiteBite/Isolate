@@ -156,6 +156,10 @@ fn build_tray_menu<R: Runtime>(app: &impl Manager<R>) -> Result<tauri::menu::Men
     let optimize_deep = MenuItemBuilder::with_id("optimize_deep", "🔍 Deep оптимизация")
         .build(app)?;
     
+    // Quick Test - run connectivity test
+    let quick_test = MenuItemBuilder::with_id("quick_test", "🧪 Quick Test")
+        .build(app)?;
+    
     let separator3 = PredefinedMenuItem::separator(app)?;
     
     // Toggle bypass (dynamic text based on state)
@@ -211,6 +215,7 @@ fn build_tray_menu<R: Runtime>(app: &impl Manager<R>) -> Result<tauri::menu::Men
             &separator2,
             &optimize_turbo,
             &optimize_deep,
+            &quick_test,
             &separator3,
             &toggle_item,
             &separator4,
@@ -249,6 +254,10 @@ fn handle_menu_event<R: Runtime>(app: &AppHandle<R>, id: &str) {
             info!("Tray: Optimize Deep requested");
             emit_event(app, "tray:optimize_deep", ());
             show_main_window(app);
+        }
+        "quick_test" => {
+            info!("Tray: Quick Test requested");
+            emit_event(app, "tray:quick_test", ());
         }
         "toggle_bypass" => {
             info!("Tray: Toggle bypass requested");

@@ -7,6 +7,11 @@
 //! - No blocking detected
 //!
 //! Supports dual-stack IPv4/IPv6 diagnostics.
+//!
+//! NOTE: Some internal structs store diagnostic data for debugging.
+
+// Public API for DPI diagnostics
+#![allow(dead_code)]
 
 use std::net::SocketAddr;
 use std::time::{Duration, Instant};
@@ -18,6 +23,7 @@ use tracing::{debug, info, instrument, warn};
 
 use crate::core::errors::{IsolateError, Result};
 use crate::core::models::{DpiKind, DpiProfile, IpStack, StrategyFamily};
+use crate::core::retry::{with_retry, RetryConfig};
 
 /// Default timeout for all diagnostic operations (5 seconds as per project rules)
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(5);
@@ -81,105 +87,112 @@ pub struct DualStackResult {
     pub ipv6_status: Ipv6Status,
 }
 
-/// Performs DNS resolution test
+/// Performs DNS resolution test (with retry for transient failures)
 #[instrument(skip_all, fields(domain = %domain))]
 async fn test_dns_resolve(domain: &str) -> DnsResult {
     let start = Instant::now();
     let lookup_host = format!("{}:443", domain);
+    let domain_owned = domain.to_string();
 
     debug!("Starting DNS resolution for {}", domain);
 
-    let result = timeout(DEFAULT_TIMEOUT, tokio::net::lookup_host(&lookup_host)).await;
+    // Use retry for DNS resolution (can fail transiently)
+    let result = with_retry(
+        RetryConfig::quick().with_max_retries(2),
+        &format!("dns_resolve:{}", domain),
+        || {
+            let lookup_host = lookup_host.clone();
+            async move {
+                match timeout(DEFAULT_TIMEOUT, tokio::net::lookup_host(&lookup_host)).await {
+                    Ok(Ok(addrs)) => {
+                        let resolved: Vec<SocketAddr> = addrs.collect();
+                        if resolved.is_empty() {
+                            Err("No addresses resolved".to_string())
+                        } else {
+                            Ok(resolved)
+                        }
+                    }
+                    Ok(Err(e)) => Err(e.to_string()),
+                    Err(_) => Err("Timeout".to_string()),
+                }
+            }
+        },
+    )
+    .await;
 
     let latency_ms = start.elapsed().as_millis() as u32;
 
     match result {
-        Ok(Ok(addrs)) => {
-            let resolved: Vec<SocketAddr> = addrs.collect();
-            if resolved.is_empty() {
-                debug!("DNS resolution returned empty for {}", domain);
-                DnsResult {
-                    domain: domain.to_string(),
-                    success: false,
-                    resolved_ips: vec![],
-                    latency_ms,
-                    error: Some("No addresses resolved".to_string()),
-                }
-            } else {
-                debug!("DNS resolved {} to {:?}", domain, resolved);
-                DnsResult {
-                    domain: domain.to_string(),
-                    success: true,
-                    resolved_ips: resolved,
-                    latency_ms,
-                    error: None,
-                }
+        Ok(resolved) => {
+            debug!("DNS resolved {} to {:?}", domain, resolved);
+            DnsResult {
+                domain: domain_owned,
+                success: true,
+                resolved_ips: resolved,
+                latency_ms,
+                error: None,
             }
         }
-        Ok(Err(e)) => {
+        Err(e) => {
             warn!("DNS resolution failed for {}: {}", domain, e);
             DnsResult {
-                domain: domain.to_string(),
+                domain: domain_owned,
                 success: false,
                 resolved_ips: vec![],
                 latency_ms,
-                error: Some(e.to_string()),
-            }
-        }
-        Err(_) => {
-            warn!("DNS resolution timeout for {}", domain);
-            DnsResult {
-                domain: domain.to_string(),
-                success: false,
-                resolved_ips: vec![],
-                latency_ms: DEFAULT_TIMEOUT.as_millis() as u32,
-                error: Some("Timeout".to_string()),
+                error: Some(e),
             }
         }
     }
 }
 
-/// Performs TCP connection test to port 443
+/// Performs TCP connection test to port 443 (with retry for transient failures)
 #[instrument(skip_all, fields(host = %host, port = %port))]
 async fn test_tcp_connect(host: &str, port: u16) -> TcpResult {
     let start = Instant::now();
     let addr = format!("{}:{}", host, port);
+    let host_owned = host.to_string();
 
     debug!("Starting TCP connection to {}", addr);
 
-    let result = timeout(DEFAULT_TIMEOUT, TcpStream::connect(&addr)).await;
+    // Use retry for TCP connections (can fail transiently)
+    let result = with_retry(
+        RetryConfig::quick().with_max_retries(2),
+        &format!("tcp_connect:{}", &addr),
+        || {
+            let addr = addr.clone();
+            async move {
+                match timeout(DEFAULT_TIMEOUT, TcpStream::connect(&addr)).await {
+                    Ok(Ok(_stream)) => Ok(()),
+                    Ok(Err(e)) => Err(e.to_string()),
+                    Err(_) => Err("Timeout".to_string()),
+                }
+            }
+        },
+    )
+    .await;
 
     let latency_ms = start.elapsed().as_millis() as u32;
 
     match result {
-        Ok(Ok(_stream)) => {
+        Ok(()) => {
             debug!("TCP connection successful to {}", addr);
             TcpResult {
-                host: host.to_string(),
+                host: host_owned,
                 port,
                 success: true,
                 latency_ms,
                 error: None,
             }
         }
-        Ok(Err(e)) => {
+        Err(e) => {
             warn!("TCP connection failed to {}: {}", addr, e);
             TcpResult {
-                host: host.to_string(),
+                host: host_owned,
                 port,
                 success: false,
                 latency_ms,
-                error: Some(e.to_string()),
-            }
-        }
-        Err(_) => {
-            warn!("TCP connection timeout to {}", addr);
-            TcpResult {
-                host: host.to_string(),
-                port,
-                success: false,
-                latency_ms: DEFAULT_TIMEOUT.as_millis() as u32,
-                error: Some("Timeout".to_string()),
+                error: Some(e),
             }
         }
     }

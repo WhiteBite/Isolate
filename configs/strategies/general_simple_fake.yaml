@@ -1,0 +1,43 @@
+id: "zapret_simple_fake"
+name: "Simple Fake"
+description: "Простейшая стратегия с fake пакетами. Минимальное влияние на производительность, подходит для слабого DPI."
+family: fake
+engine: zapret
+label: simple
+
+mode_capabilities:
+  supports_socks: false
+  supports_global: true
+
+global_template:
+  binary: "binaries/winws.exe"
+  args:
+    - "--wf-tcp=80,443"
+    - "--wf-udp=443"
+    # QUIC fake
+    - "--filter-udp=443"
+    - "--hostlist=hostlists/general.txt"
+    - "--hostlist-exclude=hostlists/exclude.txt"
+    - "--dpi-desync=fake"
+    - "--dpi-desync-repeats=6"
+    - "--dpi-desync-fake-quic=binaries/quic_initial_www_google_com.bin"
+    - "--new"
+    # TCP fake
+    - "--filter-tcp=80,443"
+    - "--hostlist=hostlists/general.txt"
+    - "--hostlist-exclude=hostlists/exclude.txt"
+    - "--dpi-desync=fake"
+    - "--dpi-desync-repeats=6"
+    - "--dpi-desync-fake-tls=binaries/tls_clienthello_www_google_com.bin"
+  env: {}
+  requires_admin: true
+
+requirements:
+  min_rights: "admin"
+  os: [windows]
+  binaries:
+    - "binaries/winws.exe"
+    - "binaries/WinDivert64.sys"
+
+weight_hint: 15
+services: [general]

@@ -5,9 +5,10 @@
     "identifier": "com.isolate.app",
     "plugins": {
         "updater": {
-            "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IFBMQUNFSE9MREVSCg==",
+            "_comment": "TODO: Generate real minisign keypair with `tauri signer generate -w ~/.tauri/isolate.key` and replace pubkey",
+            "pubkey": "",
             "endpoints": [
-                "https://github.com/aspect-build/isolate/releases/latest/download/latest.json"
+                "https://github.com/WhiteBite/Isolate/releases/latest/download/latest.json"
             ],
             "windows": {
                 "installMode": "passive"
@@ -29,8 +30,8 @@
                 "height": 800,
                 "resizable": true,
                 "fullscreen": false,
-                "decorations": true,
-                "transparent": false,
+                "decorations": false,
+                "transparent": true,
                 "center": true,
                 "minWidth": 900,
                 "minHeight": 650
@@ -41,7 +42,7 @@
             "iconAsTemplate": true
         },
         "security": {
-            "csp": null
+            "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'"
         }
     },
     "bundle": {

@@ -1,0 +1,42 @@
+# Twitter/X Service Definition
+id: "twitter"
+name: "Twitter/X"
+enabled_by_default: true
+critical: false
+
+tests:
+  - type: https_head
+    url: "https://twitter.com"
+    timeout_ms: 5000
+
+  - type: https_head
+    url: "https://x.com"
+    timeout_ms: 5000
+
+  - type: https_head
+    url: "https://api.twitter.com"
+    timeout_ms: 5000
+
+  - type: tcp_connect
+    host: "twitter.com"
+    port: 443
+    timeout_ms: 3000
+
+  - type: tcp_connect
+    host: "x.com"
+    port: 443
+    timeout_ms: 3000
+
+  - type: tcp_connect
+    host: "pbs.twimg.com"
+    port: 443
+    timeout_ms: 3000
+
+  - type: dns
+    domain: "twitter.com"
+    timeout_ms: 3000
+
+  - type: dns
+    domain: "x.com"
+    timeout_ms: 3000
+

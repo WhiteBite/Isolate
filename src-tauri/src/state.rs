@@ -5,19 +5,26 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use tokio_util::sync::CancellationToken;
 use tracing::{debug, info};
 
 use crate::core::app_routing::AppRouter;
+use crate::core::auto_failover::AutoFailover;
+use crate::core::automation::{DomainMonitor, MonitorConfig, StrategyOptimizer};
 use crate::core::config::ConfigManager;
 use crate::core::domain_routing::DomainRouter;
 use crate::core::env_info::collect_env_info;
 use crate::core::errors::{IsolateError, Result};
+use crate::core::event_bus::{create_event_bus, SharedEventBus};
+use crate::core::managers::{
+    BlockedStrategiesManager, LockedStrategiesManager, StrategyCacheManager, StrategyHistoryManager,
+};
 use crate::core::models::EnvInfo;
 use crate::core::monitor::Monitor;
-use crate::core::orchestrator::{create_orchestrator, SharedOrchestrator};
 use crate::core::storage::Storage;
 use crate::core::strategy_engine::{create_engine, SharedStrategyEngine};
 use crate::core::telemetry::TelemetryService;
+use crate::plugins::{create_hostlist_registry, create_plugin_manager, HostlistRegistry, PluginManager, StrategyRegistry};
 use crate::services::{ServiceChecker, ServiceRegistry};
 
 // ============================================================================
@@ -39,8 +46,6 @@ const SERVICES_DIR: &str = "services";
 
 /// Глобальное состояние приложения
 pub struct AppState {
-    /// Оркестратор оптимизации
-    pub orchestrator: SharedOrchestrator,
     /// Движок стратегий
     pub strategy_engine: SharedStrategyEngine,
     /// Менеджер конфигураций
@@ -63,6 +68,30 @@ pub struct AppState {
     pub service_registry: Arc<ServiceRegistry>,
     /// Service checker (new services system)
     pub service_checker: Arc<ServiceChecker>,
+    /// Hostlist registry for plugin hostlists
+    pub hostlist_registry: Arc<HostlistRegistry>,
+    /// Strategy registry for plugin strategies
+    pub strategy_registry: Arc<StrategyRegistry>,
+    /// Plugin manager for hot reload
+    pub plugin_manager: Arc<PluginManager>,
+    /// Cancellation token for tests (per-session, not global)
+    pub tests_cancel_token: Arc<RwLock<CancellationToken>>,
+    /// Blocked strategies manager (user + default blocks)
+    pub blocked_manager: Arc<BlockedStrategiesManager>,
+    /// Locked strategies manager (per-domain locks)
+    pub locked_manager: Arc<LockedStrategiesManager>,
+    /// Strategy history manager (success/failure tracking)
+    pub history_manager: Arc<StrategyHistoryManager>,
+    /// Strategy cache manager (env_key -> strategy cache)
+    pub cache_manager: Arc<StrategyCacheManager>,
+    /// Strategy optimizer (one-time optimization)
+    pub optimizer: Arc<StrategyOptimizer>,
+    /// Domain monitor (continuous monitoring)
+    pub domain_monitor: Arc<DomainMonitor>,
+    /// Centralized event bus for pub/sub
+    pub event_bus: SharedEventBus,
+    /// Auto failover manager
+    pub auto_failover: Arc<AutoFailover>,
 }
 
 impl AppState {
@@ -94,6 +123,35 @@ impl AppState {
         let storage = Arc::new(Storage::new().await?);
         debug!("Storage initialized");
 
+        // 4.5. Создаём менеджеры стратегий
+        let blocked_manager = Arc::new(
+            BlockedStrategiesManager::new(storage.clone())
+                .await
+                .map_err(|e| IsolateError::Storage(format!("Failed to create blocked manager: {}", e)))?
+        );
+        debug!("Blocked strategies manager created");
+
+        let locked_manager = Arc::new(
+            LockedStrategiesManager::new(storage.clone(), blocked_manager.clone())
+                .await
+                .map_err(|e| IsolateError::Storage(format!("Failed to create locked manager: {}", e)))?
+        );
+        debug!("Locked strategies manager created");
+
+        let history_manager = Arc::new(
+            StrategyHistoryManager::new(storage.clone())
+                .await
+                .map_err(|e| IsolateError::Storage(format!("Failed to create history manager: {}", e)))?
+        );
+        debug!("Strategy history manager created");
+
+        let cache_manager = Arc::new(
+            StrategyCacheManager::new(storage.clone())
+                .await
+                .map_err(|e| IsolateError::Storage(format!("Failed to create cache manager: {}", e)))?
+        );
+        debug!("Strategy cache manager created");
+
         // 5. Создаём StrategyEngine
         let strategy_engine = create_engine();
         debug!("Strategy engine created");
@@ -106,9 +164,39 @@ impl AppState {
         let telemetry = Arc::new(TelemetryService::new());
         debug!("Telemetry service created");
 
-        // 6. Создаём Orchestrator
-        let orchestrator = create_orchestrator(strategy_engine.clone(), storage.clone());
-        debug!("Orchestrator created");
+        // 6.5. Создаём StrategyOptimizer
+        let optimizer = Arc::new(StrategyOptimizer::new(
+            strategy_engine.clone(),
+            cache_manager.clone(),
+            blocked_manager.clone(),
+            history_manager.clone(),
+        ));
+        debug!("Strategy optimizer created");
+
+        // 6.6. Создаём DomainMonitor
+        let domain_monitor = Arc::new(DomainMonitor::new(
+            locked_manager.clone(),
+            blocked_manager.clone(),
+            history_manager.clone(),
+            MonitorConfig::default(),
+        ));
+        debug!("Domain monitor created");
+
+        // 6.7. Создаём EventBus
+        let event_bus = create_event_bus();
+        debug!("Event bus created");
+
+        // 6.8. Создаём AutoFailover
+        let settings = storage.get_settings().await.unwrap_or_default();
+        let auto_failover = Arc::new(AutoFailover::with_config(
+            crate::core::auto_failover::FailoverConfig {
+                max_failures: settings.failover_max_failures,
+                cooldown_secs: settings.failover_cooldown_secs,
+                backup_strategies: Vec::new(), // Will use learned strategies
+            }
+        ));
+        auto_failover.set_enabled(settings.auto_failover_enabled).await;
+        debug!("Auto failover created");
 
         // 7. Собираем EnvInfo
         let env_info = collect_env_info().await;
@@ -141,7 +229,7 @@ impl AppState {
         };
         
         // Создаём директорию плагинов если не существует
-        if !plugins_dir.exists() {
+        if !tokio::fs::try_exists(&plugins_dir).await.unwrap_or(false) {
             tokio::fs::create_dir_all(&plugins_dir)
                 .await
                 .map_err(|e| IsolateError::Config(format!("Failed to create plugins dir: {}", e)))?;
@@ -164,8 +252,28 @@ impl AppState {
         let service_checker = Arc::new(ServiceChecker::new(service_registry.clone()));
         debug!("Service checker created");
 
+        // 12. Создаём HostlistRegistry и загружаем hostlists из плагинов
+        let hostlist_registry = create_hostlist_registry();
+        if let Err(e) = Self::load_hostlists_from_plugins(&hostlist_registry, &plugins_dir).await {
+            tracing::warn!(error = %e, "Failed to load hostlists from plugins");
+        }
+        debug!("Hostlist registry initialized");
+
+        // 13. Создаём StrategyRegistry и загружаем стратегии из плагинов
+        let strategy_registry = Arc::new(StrategyRegistry::new());
+        if let Err(e) = Self::load_strategies_from_plugins(&strategy_registry, &plugins_dir).await {
+            tracing::warn!(error = %e, "Failed to load strategies from plugins");
+        }
+        debug!("Strategy registry initialized");
+
+        // 14. Создаём PluginManager для hot reload
+        let plugin_manager = create_plugin_manager(&plugins_dir);
+        if let Err(e) = plugin_manager.init().await {
+            tracing::warn!(error = %e, "Failed to initialize plugin manager");
+        }
+        debug!("Plugin manager initialized");
+
         let state = Self {
-            orchestrator,
             strategy_engine,
             config_manager,
             storage,
@@ -177,6 +285,18 @@ impl AppState {
             plugins_dir,
             service_registry,
             service_checker,
+            hostlist_registry,
+            strategy_registry,
+            plugin_manager,
+            tests_cancel_token: Arc::new(RwLock::new(CancellationToken::new())),
+            blocked_manager,
+            locked_manager,
+            history_manager,
+            cache_manager,
+            optimizer,
+            domain_monitor,
+            event_bus,
+            auto_failover,
         };
 
         info!("Application state initialized successfully");
@@ -256,6 +376,199 @@ impl AppState {
         let _ = self.storage.cleanup_expired_cache().await;
 
         info!("Application state shutdown complete");
+        Ok(())
+    }
+
+    /// Загружает hostlists из плагинов
+    async fn load_hostlists_from_plugins(
+        registry: &Arc<HostlistRegistry>,
+        plugins_dir: &PathBuf,
+    ) -> Result<()> {
+        use crate::plugins::{get_all_plugins_async, PluginType};
+
+        let plugins = get_all_plugins_async(plugins_dir).await;
+        let mut loaded_count = 0;
+
+        for plugin_info in plugins {
+            if !plugin_info.enabled || plugin_info.error.is_some() {
+                continue;
+            }
+
+            let manifest = &plugin_info.manifest;
+            let plugin_path = PathBuf::from(&plugin_info.path);
+
+            // Load hostlists from contributes.hostlists (new format)
+            for hostlist_def in &manifest.contributes.hostlists {
+                match registry
+                    .register(&manifest.id, plugin_path.clone(), hostlist_def.clone())
+                    .await
+                {
+                    Ok(()) => {
+                        loaded_count += 1;
+                        debug!(
+                            plugin_id = %manifest.id,
+                            hostlist_id = %hostlist_def.id,
+                            "Loaded hostlist from plugin"
+                        );
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            plugin_id = %manifest.id,
+                            hostlist_id = %hostlist_def.id,
+                            error = %e,
+                            "Failed to load hostlist from plugin"
+                        );
+                    }
+                }
+            }
+
+            // Also load from legacy hostlist field (for backward compatibility)
+            if manifest.plugin_type == PluginType::HostlistProvider {
+                if let Some(ref hostlist_def) = manifest.hostlist {
+                    match registry
+                        .register(&manifest.id, plugin_path.clone(), hostlist_def.clone())
+                        .await
+                    {
+                        Ok(()) => {
+                            loaded_count += 1;
+                            debug!(
+                                plugin_id = %manifest.id,
+                                hostlist_id = %hostlist_def.id,
+                                "Loaded legacy hostlist from plugin"
+                            );
+                        }
+                        Err(e) => {
+                            tracing::warn!(
+                                plugin_id = %manifest.id,
+                                hostlist_id = %hostlist_def.id,
+                                error = %e,
+                                "Failed to load legacy hostlist from plugin"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
+        info!(count = loaded_count, "Loaded hostlists from plugins");
+        Ok(())
+    }
+
+    /// Загружает стратегии из плагинов
+    async fn load_strategies_from_plugins(
+        registry: &Arc<StrategyRegistry>,
+        plugins_dir: &PathBuf,
+    ) -> Result<()> {
+        use crate::plugins::{
+            get_all_plugins_async, PluginType, PluginStrategyDefinition, PluginStrategyConfig,
+            StrategyFamily, StrategySource,
+        };
+
+        let plugins = get_all_plugins_async(plugins_dir).await;
+        let mut loaded_count = 0;
+
+        for plugin_info in plugins {
+            if !plugin_info.enabled || plugin_info.error.is_some() {
+                continue;
+            }
+
+            let manifest = &plugin_info.manifest;
+
+            // Skip non-strategy plugins
+            if manifest.plugin_type != PluginType::StrategyProvider {
+                continue;
+            }
+
+            // Load strategies from contributes.strategies (new format)
+            for strategy_def in &manifest.contributes.strategies {
+                let plugin_strategy = PluginStrategyDefinition {
+                    id: strategy_def.id.clone(),
+                    name: strategy_def.name.clone(),
+                    description: None,
+                    family: StrategyFamily::from(strategy_def.family.as_str()),
+                    engine: "winws".to_string(),
+                    target_services: Vec::new(),
+                    priority: 0,
+                    config: PluginStrategyConfig::default(),
+                    author: None,
+                    label: None,
+                    source_plugin: Some(manifest.id.clone()),
+                };
+
+                match registry
+                    .register(
+                        plugin_strategy,
+                        StrategySource::Plugin {
+                            plugin_id: manifest.id.clone(),
+                        },
+                    )
+                    .await
+                {
+                    Ok(()) => {
+                        loaded_count += 1;
+                        debug!(
+                            plugin_id = %manifest.id,
+                            strategy_id = %strategy_def.id,
+                            "Loaded strategy from plugin"
+                        );
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            plugin_id = %manifest.id,
+                            strategy_id = %strategy_def.id,
+                            error = %e,
+                            "Failed to load strategy from plugin"
+                        );
+                    }
+                }
+            }
+
+            // Also load from legacy strategy field (for backward compatibility)
+            if let Some(ref strategy_def) = manifest.strategy {
+                let plugin_strategy = PluginStrategyDefinition {
+                    id: strategy_def.id.clone(),
+                    name: strategy_def.name.clone(),
+                    description: None,
+                    family: StrategyFamily::from(strategy_def.family.as_str()),
+                    engine: "winws".to_string(),
+                    target_services: Vec::new(),
+                    priority: 0,
+                    config: PluginStrategyConfig::default(),
+                    author: None,
+                    label: None,
+                    source_plugin: Some(manifest.id.clone()),
+                };
+
+                match registry
+                    .register(
+                        plugin_strategy,
+                        StrategySource::Plugin {
+                            plugin_id: manifest.id.clone(),
+                        },
+                    )
+                    .await
+                {
+                    Ok(()) => {
+                        loaded_count += 1;
+                        debug!(
+                            plugin_id = %manifest.id,
+                            strategy_id = %strategy_def.id,
+                            "Loaded legacy strategy from plugin"
+                        );
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            plugin_id = %manifest.id,
+                            strategy_id = %strategy_def.id,
+                            error = %e,
+                            "Failed to load legacy strategy from plugin"
+                        );
+                    }
+                }
+            }
+        }
+
+        info!(count = loaded_count, "Loaded strategies from plugins");
         Ok(())
     }
 }

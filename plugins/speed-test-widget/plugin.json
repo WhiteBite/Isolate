@@ -1,0 +1,22 @@
+{
+  "id": "speed-test-widget",
+  "name": "Speed Test Widget",
+  "version": "1.0.0",
+  "author": "Isolate Team",
+  "description": "Виджет для тестирования скорости интернет-соединения",
+  "type": "ui-widget",
+  "icon": "⚡",
+  "contributes": {
+    "widgets": [{
+      "id": "speed-test",
+      "name": "Speed Test",
+      "slot": "dashboard",
+      "component": "ui/SpeedTestWidget.svelte",
+      "defaultSize": { "cols": 2, "rows": 1 }
+    }]
+  },
+  "permissions": {
+    "http": ["*"],
+    "storage": true
+  }
+}

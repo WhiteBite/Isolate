@@ -2,4 +2,8 @@ export { default as StatusWidget } from './StatusWidget.svelte';
 export { default as HealthWidget } from './HealthWidget.svelte';
 export { default as MethodWidget } from './MethodWidget.svelte';
 export { default as QuickActionsWidget } from './QuickActionsWidget.svelte';
+export { default as NetworkStatsWidget } from './NetworkStatsWidget.svelte';
+export { default as LatencyWidget } from './LatencyWidget.svelte';
 export { default as DashboardSkeleton } from './DashboardSkeleton.svelte';
+export { default as ConnectionStatsWidget } from './ConnectionStatsWidget.svelte';
+export { default as StrategyMetricsWidget } from './StrategyMetricsWidget.svelte';

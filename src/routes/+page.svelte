@@ -1,5 +1,6 @@
 <script lang="ts">
   import { browser } from '$app/environment';
+  import { goto } from '$app/navigation';
   import { 
     BentoGrid, 
     BentoWidget,
@@ -7,8 +8,14 @@
     HealthWidget,
     MethodWidget,
     QuickActionsWidget,
-    DashboardSkeleton
+    NetworkStatsWidget,
+    LatencyWidget,
+    DashboardSkeleton,
+    ScanningIndicator,
+    PluginSlot,
+    ConnectionStatsWidget
   } from '$lib/components';
+  import FailoverStatusWidget from '$lib/components/widgets/FailoverStatusWidget.svelte';
   import { 
     appStatus, 
     optimizationProgress, 
@@ -16,18 +23,10 @@
     services,
   } from '$lib/stores';
   import { logs } from '$lib/stores/logs';
-
-  // Service icons mapping
-  const serviceIcons: Record<string, string> = {
-    youtube: '📺',
-    discord: '💬',
-    telegram: '✈️',
-    twitch: '🎮',
-    google: '🔍',
-    instagram: '📷',
-    twitter: '🐦',
-    default: '🌐'
-  };
+  import { getWidgetOrder, saveWidgetOrder } from '$lib/stores/layout';
+  import { getServiceIconEmoji } from '$lib/utils/icons';
+  import { waitForBackend } from '$lib/utils/backend';
+  import { mockDashboardServices } from '$lib/mocks';
 
   // Backend ServiceStatus type
   interface ServiceStatus {
@@ -39,13 +38,59 @@
     from_cache: boolean;
   }
 
+  // Widget definitions for drag-n-drop
+  const DEFAULT_WIDGET_ORDER = ['status', 'health', 'method', 'actions', 'failover', 'network', 'latency', 'connections'];
+  
+  interface WidgetConfig {
+    id: string;
+    colspan: 1 | 2 | 3 | 4;
+    rowspan: 1 | 2;
+    title?: string;
+    icon?: string;
+  }
+  
+  const widgetConfigs: Record<string, WidgetConfig> = {
+    status: { id: 'status', colspan: 2, rowspan: 2 },
+    health: { id: 'health', colspan: 2, rowspan: 1, title: 'Health Monitor', icon: '💚' },
+    method: { id: 'method', colspan: 1, rowspan: 1, title: 'Active Method', icon: '⚡' },
+    actions: { id: 'actions', colspan: 1, rowspan: 1, title: 'Quick Actions', icon: '🚀' },
+    failover: { id: 'failover', colspan: 1, rowspan: 1, title: 'Auto Recovery', icon: '🔄' },
+    network: { id: 'network', colspan: 2, rowspan: 1, title: 'Network Stats', icon: '📊' },
+    latency: { id: 'latency', colspan: 2, rowspan: 1, title: 'Latency Monitor', icon: '📈' },
+    connections: { id: 'connections', colspan: 2, rowspan: 1, title: 'Connection Stats', icon: '🔗' }
+  };
+
+  // Widget order state - load from centralized layout store
+  let widgetOrder = $state<string[]>(browser ? getWidgetOrder() : DEFAULT_WIDGET_ORDER);
+  
+  // Handle widget reorder
+  function handleReorder(newOrder: string[]) {
+    widgetOrder = newOrder;
+    saveWidgetOrder(newOrder);
+    logs.debug('dashboard', `Widget order saved: ${newOrder.join(', ')}`);
+  }
+
   // Cleanup functions
   let cleanupFns: (() => void)[] = [];
   let healthCheckInterval: ReturnType<typeof setInterval> | null = null;
-  let initialized = $state(false);
+  let networkStatsInterval: ReturnType<typeof setInterval> | null = null;
+  let initialized = false; // Not $state - should reset on component remount
+  let isInitializing = false; // Guard against concurrent initialization
   
   // Loading state for skeleton
   let isLoading = $state(true);
+  
+  // Helper to clear all intervals safely
+  function clearAllIntervals() {
+    if (healthCheckInterval) {
+      clearInterval(healthCheckInterval);
+      healthCheckInterval = null;
+    }
+    if (networkStatsInterval) {
+      clearInterval(networkStatsInterval);
+      networkStatsInterval = null;
+    }
+  }
 
   // Local reactive copies of store values
   let appStatusValue = $state<{isActive: boolean; currentStrategy: string | null; currentStrategyName: string | null}>({
@@ -65,6 +110,22 @@
   let isCheckingHealth = $state(false);
   let isScanning = $state(false);
   let isTesting = $state(false);
+
+  // Network stats state
+  let networkStats = $state({
+    downloadSpeed: 0,
+    uploadSpeed: 0,
+    totalDownload: 0,
+    totalUpload: 0,
+    activeConnections: 0,
+    isSimulated: true // Mark as simulated data
+  });
+
+  // Latency history state for chart
+  let latencyHistory = $state<number[]>([]);
+  let currentLatency = $derived(latencyHistory.length > 0 ? latencyHistory[latencyHistory.length - 1] : undefined);
+
+  // Network stats interval is declared above with healthCheckInterval
 
   // Quick actions with loading states
   let quickActions = $derived([
@@ -102,6 +163,17 @@
       const results = await invoke<ServiceStatus[]>('check_all_registry_services');
       
       if (results && results.length > 0) {
+        // Calculate average latency from all accessible services
+        const latencies = results
+          .filter(r => r.accessible && r.avg_latency_ms !== null)
+          .map(r => r.avg_latency_ms as number);
+        
+        if (latencies.length > 0) {
+          const avgLatency = Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length);
+          // Add to history, keep last 30 points
+          latencyHistory = [...latencyHistory.slice(-29), avgLatency];
+        }
+        
         // Update services store with real status
         services.update(currentServices => {
           const updatedServices = [...currentServices];
@@ -120,7 +192,7 @@
             const serviceData = {
               id: result.service_id,
               name: result.service_name,
-              icon: serviceIcons[result.service_id.toLowerCase()] || serviceIcons.default,
+              icon: getServiceIconEmoji(result.service_id),
               enabled: true,
               status,
               ping: result.avg_latency_ms ?? undefined
@@ -145,26 +217,15 @@
     }
   }
 
-  // Wait for backend to be ready with retry logic
-  async function waitForBackend(retries = 10): Promise<boolean> {
-    const { invoke } = await import('@tauri-apps/api/core');
-    
-    for (let i = 0; i < retries; i++) {
-      try {
-        const ready = await invoke<boolean>('is_backend_ready');
-        if (ready) return true;
-      } catch {
-        // Backend not ready yet
-      }
-      await new Promise(r => setTimeout(r, 200));
-    }
-    return false;
-  }
-
   // Initialize dashboard data
   async function initializeDashboard() {
-    if (!browser || initialized) return;
-    initialized = true;
+    // Guard: only run in browser and only once per mount
+    if (!browser) return;
+    if (initialized || isInitializing) return;
+    isInitializing = true;
+    
+    // Clear any existing intervals before creating new ones (safety measure)
+    clearAllIntervals();
     
     const isTauri = '__TAURI__' in window || '__TAURI_INTERNALS__' in window;
     
@@ -178,12 +239,10 @@
     
     if (!isTauri) {
       // Mock services for browser preview
-      services.set([
-        { id: 'youtube', name: 'YouTube', icon: '📺', enabled: true, status: 'working', ping: 45 },
-        { id: 'discord', name: 'Discord', icon: '💬', enabled: true, status: 'working', ping: 32 },
-        { id: 'telegram', name: 'Telegram', icon: '✈️', enabled: true, status: 'unknown', ping: 120 },
-        { id: 'twitch', name: 'Twitch', icon: '🎮', enabled: true, status: 'blocked' }
-      ]);
+      services.set(mockDashboardServices);
+      
+      // Mock latency history for browser preview
+      latencyHistory = [45, 52, 48, 55, 42, 38, 65, 58, 45, 52, 48, 55, 42, 38, 65, 58, 45, 52, 48, 55];
       
       // Add demo logs
       logs.info('system', 'Dashboard loaded');
@@ -192,11 +251,13 @@
       // Short delay for browser preview to show skeleton
       await new Promise(r => setTimeout(r, 500));
       isLoading = false;
+      initialized = true;
+      isInitializing = false;
       return;
     }
     
     // Wait for backend to be ready before making any calls
-    const backendReady = await waitForBackend();
+    const backendReady = await waitForBackend(10, 200);
     if (!backendReady) {
       logs.error('system', 'Backend failed to initialize after retries');
       isLoading = false;
@@ -233,7 +294,7 @@
           services.set(registryServices.map(s => ({
             id: s.id,
             name: s.name,
-            icon: serviceIcons[s.id.toLowerCase()] || serviceIcons.default,
+            icon: getServiceIconEmoji(s.id),
             enabled: true,
             status: 'unknown' as const
           })));
@@ -251,7 +312,7 @@
             services.set(loadedServices.map(s => ({
               id: s.id,
               name: s.name,
-              icon: serviceIcons[s.id.toLowerCase()] || serviceIcons.default,
+              icon: getServiceIconEmoji(s.id),
               enabled: true,
               status: 'unknown' as const
             })));
@@ -266,8 +327,37 @@
         checkServicesHealth();
       }, 30000);
 
+      // Start network stats simulation (updates every second when active)
+      // TODO: Replace with real network stats from backend when available
+      networkStatsInterval = setInterval(() => {
+        if (appStatusValue.isActive) {
+          // Simulate realistic network traffic when protection is active
+          const baseDownload = 50000 + Math.random() * 200000; // 50-250 KB/s
+          const baseUpload = 10000 + Math.random() * 50000;    // 10-60 KB/s
+          
+          networkStats = {
+            downloadSpeed: Math.round(baseDownload + (Math.random() - 0.5) * 20000),
+            uploadSpeed: Math.round(baseUpload + (Math.random() - 0.5) * 10000),
+            totalDownload: networkStats.totalDownload + Math.round(baseDownload),
+            totalUpload: networkStats.totalUpload + Math.round(baseUpload),
+            activeConnections: Math.floor(3 + Math.random() * 8),
+            isSimulated: true // Mark as simulated
+          };
+        } else {
+          // Minimal traffic when inactive
+          networkStats = {
+            downloadSpeed: Math.round(Math.random() * 5000),
+            uploadSpeed: Math.round(Math.random() * 2000),
+            totalDownload: networkStats.totalDownload,
+            totalUpload: networkStats.totalUpload,
+            activeConnections: Math.floor(Math.random() * 2),
+            isSimulated: true // Mark as simulated
+          };
+        }
+      }, 1000);
+
       // Subscribe to optimization events
-      unlistenProgress = await listen('optimization:progress', (event) => {
+      unlistenProgress = await listen('automation:progress', (event) => {
         const payload = event.payload as { stage: string; percent: number; message: string };
         optimizationProgress.set({
           step: payload.stage,
@@ -279,7 +369,7 @@
         logs.debug('optimization', payload.message);
       });
       
-      unlistenComplete = await listen('optimization:complete', (event) => {
+      unlistenComplete = await listen('automation:complete', (event) => {
         const result = event.payload as {strategy_id: string; strategy_name: string; score: number};
         appStatus.set({
           isActive: true,
@@ -301,7 +391,7 @@
         checkServicesHealth();
       });
       
-      unlistenFailed = await listen('optimization:failed', (event) => {
+      unlistenFailed = await listen('automation:error', (event) => {
         isOptimizing.set(false);
         isScanning = false; // Reset scan loading state
         optimizationProgress.set({
@@ -349,24 +439,38 @@
       
       // Data loaded successfully
       isLoading = false;
+      initialized = true;
+      isInitializing = false;
     } catch (e) {
       logs.error('system', `Failed to initialize: ${e}`);
       isLoading = false;
+      initialized = true; // Mark as initialized even on error to prevent infinite retries
+      isInitializing = false;
     }
   }
 
   // Use $effect with cleanup for proper lifecycle management
+  // CRITICAL: Guard prevents re-initialization on reactive updates
   $effect(() => {
+    // Guard: prevent re-initialization if already initialized or initializing
+    // This prevents memory leaks from duplicate intervals/subscriptions
+    if (initialized || isInitializing) return;
+    
     initializeDashboard();
     
     // Cleanup function returned from $effect
+    // This runs when component unmounts or before effect re-runs
     return () => {
+      // Clear all store subscriptions
       cleanupFns.forEach(fn => fn());
       cleanupFns = [];
-      if (healthCheckInterval) {
-        clearInterval(healthCheckInterval);
-        healthCheckInterval = null;
-      }
+      
+      // Clear all intervals
+      clearAllIntervals();
+      
+      // Reset flags for potential remount
+      initialized = false;
+      isInitializing = false;
     };
   });
 
@@ -397,7 +501,7 @@
       
       try {
         const { invoke } = await import('@tauri-apps/api/core');
-        await invoke('run_optimization', { mode: 'turbo' });
+        await invoke('run_optimization_v2');
       } catch (e) {
         logs.error('optimization', `Failed: ${e}`);
         isOptimizing.set(false);
@@ -424,7 +528,7 @@
         });
         try {
           const { invoke } = await import('@tauri-apps/api/core');
-          await invoke('run_optimization', { mode: 'deep' });
+          await invoke('run_optimization_v2');
         } catch (e) {
           logs.error('system', `Scan failed: ${e}`);
           isOptimizing.set(false);
@@ -470,10 +574,10 @@
         }
         break;
       case 'proxy':
-        window.location.href = '/proxies';
+        goto('/proxies');
         break;
       case 'settings':
-        window.location.href = '/settings';
+        goto('/settings');
         break;
     }
   }
@@ -483,55 +587,86 @@
   <!-- Page Header -->
   <div class="mb-8">
     <h1 class="text-3xl font-bold text-white tracking-tight">Dashboard</h1>
-    <p class="text-sm text-zinc-500 mt-2">Monitor and control your network protection</p>
+    <p class="text-sm text-zinc-400 mt-2">Monitor and control your network protection</p>
   </div>
 
   <!-- Skeleton while loading -->
   {#if isLoading}
     <DashboardSkeleton />
   {:else}
-    <!-- Bento Grid -->
-    <BentoGrid columns={4} gap={4}>
-      <!-- Global Status Widget (2x2) - Main Control -->
-      <BentoWidget colspan={2} rowspan={2}>
-        <div class="relative h-full">
-          <!-- Glow background when active -->
-          {#if appStatusValue.isActive && !isOptimizingValue}
-            <div class="absolute inset-0 bg-neon-green/5 rounded-xl blur-2xl animate-pulse-glow pointer-events-none"></div>
-          {/if}
-          <StatusWidget 
-            active={appStatusValue.isActive}
-            loading={isOptimizingValue}
-            onToggle={handleToggle}
-          />
-        </div>
-      </BentoWidget>
-
-      <!-- Health Monitor Widget (2x1) -->
-      <BentoWidget colspan={2} title="Health Monitor" icon="💚">
-        <HealthWidget services={healthServices.length > 0 ? healthServices : undefined} />
-      </BentoWidget>
-
-      <!-- Active Method Widget (1x1) -->
-      <BentoWidget title="Active Method" icon="⚡">
-        <MethodWidget 
-          method={currentMethod}
-          methodName={appStatusValue.currentStrategyName || undefined}
-          active={appStatusValue.isActive}
-        />
-      </BentoWidget>
-
-      <!-- Quick Actions Widget (1x1) -->
-      <BentoWidget title="Quick Actions" icon="🚀">
-        <QuickActionsWidget actions={quickActions} onAction={handleQuickAction} />
-      </BentoWidget>
+    <!-- Bento Grid with Drag-n-Drop -->
+    <BentoGrid columns={4} gap={4} draggable={true} order={widgetOrder} onReorder={handleReorder}>
+      {#each widgetOrder as widgetId, index (widgetId)}
+        {#if widgetId === 'status'}
+          <!-- Global Status Widget (2x2) - Main Control -->
+          <BentoWidget colspan={2} rowspan={2} widgetId="status" {index}>
+            <div class="relative h-full">
+              <!-- Glow background when active -->
+              {#if appStatusValue.isActive && !isOptimizingValue}
+                <div class="absolute inset-0 bg-neon-green/5 rounded-xl blur-2xl animate-pulse-glow pointer-events-none"></div>
+              {/if}
+              <StatusWidget 
+                active={appStatusValue.isActive}
+                loading={isOptimizingValue}
+                onToggle={handleToggle}
+              />
+            </div>
+          </BentoWidget>
+        {:else if widgetId === 'health'}
+          <!-- Health Monitor Widget (2x1) -->
+          <BentoWidget colspan={2} title="Health Monitor" icon="💚" widgetId="health" {index}>
+            <HealthWidget services={healthServices.length > 0 ? healthServices : undefined} />
+          </BentoWidget>
+        {:else if widgetId === 'method'}
+          <!-- Active Method Widget (1x1) -->
+          <BentoWidget title="Active Method" icon="⚡" widgetId="method" {index}>
+            <MethodWidget 
+              method={currentMethod}
+              methodName={appStatusValue.currentStrategyName || undefined}
+              active={appStatusValue.isActive}
+            />
+          </BentoWidget>
+        {:else if widgetId === 'actions'}
+          <!-- Quick Actions Widget (1x1) -->
+          <BentoWidget title="Quick Actions" icon="🚀" widgetId="actions" {index}>
+            <QuickActionsWidget actions={quickActions} onAction={handleQuickAction} />
+          </BentoWidget>
+        {:else if widgetId === 'failover'}
+          <!-- Auto Recovery Widget (1x1) -->
+          <BentoWidget title="Auto Recovery" icon="🔄" widgetId="failover" {index}>
+            <FailoverStatusWidget compact={false} />
+          </BentoWidget>
+        {:else if widgetId === 'network'}
+          <!-- Network Stats Widget (2x1) -->
+          <BentoWidget colspan={2} title="Network Stats" icon="📊" widgetId="network" {index}>
+            <NetworkStatsWidget stats={networkStats} />
+          </BentoWidget>
+        {:else if widgetId === 'latency'}
+          <!-- Latency Monitor Widget (2x1) -->
+          <BentoWidget colspan={2} title="Latency Monitor" icon="📈" widgetId="latency" {index}>
+            <LatencyWidget 
+              history={latencyHistory} 
+              currentLatency={currentLatency}
+              label="Avg Service Latency"
+            />
+          </BentoWidget>
+        {:else if widgetId === 'connections'}
+          <!-- Connection Stats Widget (2x1) -->
+          <BentoWidget colspan={2} title="Connection Stats" icon="🔗" widgetId="connections" {index}>
+            <ConnectionStatsWidget />
+          </BentoWidget>
+        {/if}
+      {/each}
     </BentoGrid>
 
     <!-- Progress Bar (shown during optimization) -->
     {#if isOptimizingValue}
       <div class="mt-6 p-4 bg-void-50 border border-glass-border rounded-xl">
         <div class="flex items-center justify-between mb-2">
-          <span class="text-sm text-text-secondary">{optimizationProgressValue.message || 'Optimizing...'}</span>
+          <div class="flex items-center gap-3">
+            <ScanningIndicator active={true} text="" variant="dots" />
+            <span class="text-sm text-text-secondary">{optimizationProgressValue.message || 'Optimizing...'}</span>
+          </div>
           <span class="text-sm text-electric font-mono">{optimizationProgressValue.progress}%</span>
         </div>
         <div class="h-1.5 bg-void-200 rounded-full overflow-hidden">
@@ -555,5 +690,14 @@
         </div>
       </div>
     {/if}
+
+    <!-- Plugin Widgets -->
+    <div class="mt-6">
+      <PluginSlot location="dashboard">
+        {#snippet fallback()}
+          <!-- Empty state - no plugins with dashboard UI -->
+        {/snippet}
+      </PluginSlot>
+    </div>
   {/if}
 </div>

@@ -3,8 +3,11 @@
 //! Provides service registry and availability checking functionality.
 //! Services are loaded from plugin.json files in the plugins directory.
 
-pub mod checker;
 pub mod registry;
 
-pub use checker::{CheckResult, ServiceChecker, ServiceStatus};
+// Re-export checker from core module (unified implementation)
+pub use crate::core::checker::{
+    CheckResult, CheckerError, EndpointChecker, ServiceChecker, ServiceStatus,
+    Endpoint, HttpMethod,
+};
 pub use registry::{Service, ServiceEndpoint, ServiceRegistry};

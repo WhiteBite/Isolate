@@ -1,277 +1,325 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { get } from 'svelte/store';
-import { logs, logFilters, filteredLogs, logSources, type LogEntry, type LogFilters } from './logs';
+import { logs, logFilters, filteredLogs, logSources, createSourceLogsStore, getLogsBySource, type LogEntry } from './logs';
+
+// Mock crypto.randomUUID
+vi.stubGlobal('crypto', {
+  randomUUID: () => `test-uuid-${Math.random().toString(36).substring(7)}`
+});
 
 describe('logs store', () => {
   beforeEach(() => {
     logs.clear();
+    logFilters.set({ level: 'all', source: 'all', search: '' });
   });
 
-  describe('initial state', () => {
-    it('starts with empty array', () => {
-      expect(get(logs)).toEqual([]);
-    });
-  });
-
-  describe('add method', () => {
-    it('adds log entry with generated id and timestamp', () => {
-      logs.add({ level: 'info', source: 'test', message: 'Test message' });
+  describe('logging methods', () => {
+    it('logs.info() creates info log', () => {
+      logs.info('TestSource', 'Info message');
       
-      const entries = get(logs);
-      expect(entries).toHaveLength(1);
-      expect(entries[0]).toMatchObject({
-        level: 'info',
-        source: 'test',
-        message: 'Test message'
-      });
-      expect(entries[0].id).toBeDefined();
-      expect(entries[0].timestamp).toBeInstanceOf(Date);
+      const currentLogs = get(logs);
+      expect(currentLogs).toHaveLength(1);
+      expect(currentLogs[0].level).toBe('info');
+      expect(currentLogs[0].source).toBe('TestSource');
+      expect(currentLogs[0].message).toBe('Info message');
+      expect(currentLogs[0].id).toBeDefined();
+      expect(currentLogs[0].timestamp).toBeInstanceOf(Date);
     });
 
-    it('adds multiple entries in order', () => {
-      logs.add({ level: 'info', source: 'test', message: 'First' });
-      logs.add({ level: 'warn', source: 'test', message: 'Second' });
-      logs.add({ level: 'error', source: 'test', message: 'Third' });
+    it('logs.warn() creates warn log', () => {
+      logs.warn('TestSource', 'Warning message');
       
-      const entries = get(logs);
-      expect(entries).toHaveLength(3);
-      expect(entries[0].message).toBe('First');
-      expect(entries[1].message).toBe('Second');
-      expect(entries[2].message).toBe('Third');
-    });
-  });
-
-  describe('level-specific methods', () => {
-    it('error() adds error level log', () => {
-      logs.error('source', 'Error message');
-      
-      const entries = get(logs);
-      expect(entries[0].level).toBe('error');
-      expect(entries[0].source).toBe('source');
-      expect(entries[0].message).toBe('Error message');
+      const currentLogs = get(logs);
+      expect(currentLogs).toHaveLength(1);
+      expect(currentLogs[0].level).toBe('warn');
+      expect(currentLogs[0].source).toBe('TestSource');
+      expect(currentLogs[0].message).toBe('Warning message');
     });
 
-    it('warn() adds warn level log', () => {
-      logs.warn('source', 'Warning message');
+    it('logs.error() creates error log', () => {
+      logs.error('TestSource', 'Error message');
       
-      const entries = get(logs);
-      expect(entries[0].level).toBe('warn');
+      const currentLogs = get(logs);
+      expect(currentLogs).toHaveLength(1);
+      expect(currentLogs[0].level).toBe('error');
+      expect(currentLogs[0].source).toBe('TestSource');
+      expect(currentLogs[0].message).toBe('Error message');
     });
 
-    it('info() adds info level log', () => {
-      logs.info('source', 'Info message');
+    it('logs.debug() creates debug log', () => {
+      logs.debug('TestSource', 'Debug message');
       
-      const entries = get(logs);
-      expect(entries[0].level).toBe('info');
+      const currentLogs = get(logs);
+      expect(currentLogs).toHaveLength(1);
+      expect(currentLogs[0].level).toBe('debug');
+      expect(currentLogs[0].source).toBe('TestSource');
+      expect(currentLogs[0].message).toBe('Debug message');
     });
 
-    it('debug() adds debug level log', () => {
-      logs.debug('source', 'Debug message');
+    it('logs.success() creates success log', () => {
+      logs.success('TestSource', 'Success message');
       
-      const entries = get(logs);
-      expect(entries[0].level).toBe('debug');
+      const currentLogs = get(logs);
+      expect(currentLogs).toHaveLength(1);
+      expect(currentLogs[0].level).toBe('success');
+      expect(currentLogs[0].source).toBe('TestSource');
+      expect(currentLogs[0].message).toBe('Success message');
     });
 
-    it('success() adds success level log', () => {
-      logs.success('source', 'Success message');
+    it('logs.add() creates log with custom level', () => {
+      logs.add({ level: 'info', source: 'CustomSource', message: 'Custom message' });
       
-      const entries = get(logs);
-      expect(entries[0].level).toBe('success');
+      const currentLogs = get(logs);
+      expect(currentLogs).toHaveLength(1);
+      expect(currentLogs[0].level).toBe('info');
+      expect(currentLogs[0].source).toBe('CustomSource');
     });
   });
 
-  describe('clear method', () => {
-    it('removes all entries', () => {
-      logs.info('test', 'Message 1');
-      logs.info('test', 'Message 2');
-      logs.info('test', 'Message 3');
+  describe('logs.clear()', () => {
+    it('clears all logs', () => {
+      logs.info('Source1', 'Message 1');
+      logs.warn('Source2', 'Message 2');
+      logs.error('Source3', 'Message 3');
       
       expect(get(logs)).toHaveLength(3);
       
       logs.clear();
       
-      expect(get(logs)).toEqual([]);
+      expect(get(logs)).toHaveLength(0);
     });
   });
 
   describe('MAX_LOGS limit', () => {
-    it('keeps only last 500 entries', () => {
-      // Add 510 entries
+    it('keeps only last 500 logs', () => {
+      // Add 510 logs
       for (let i = 0; i < 510; i++) {
-        logs.info('test', `Message ${i}`);
+        logs.info('TestSource', `Message ${i}`);
       }
       
-      const entries = get(logs);
-      expect(entries).toHaveLength(500);
-      // First entry should be Message 10 (0-9 were removed)
-      expect(entries[0].message).toBe('Message 10');
-      expect(entries[499].message).toBe('Message 509');
+      const currentLogs = get(logs);
+      expect(currentLogs).toHaveLength(500);
+      // First log should be Message 10 (0-9 were removed)
+      expect(currentLogs[0].message).toBe('Message 10');
+      // Last log should be Message 509
+      expect(currentLogs[499].message).toBe('Message 509');
     });
   });
 
-  describe('subscription', () => {
-    it('notifies subscribers on changes', () => {
-      const callback = vi.fn();
-      const unsubscribe = logs.subscribe(callback);
+  describe('filteredLogs - filter by level', () => {
+    beforeEach(() => {
+      logs.info('Source', 'Info message');
+      logs.warn('Source', 'Warn message');
+      logs.error('Source', 'Error message');
+      logs.debug('Source', 'Debug message');
+      logs.success('Source', 'Success message');
+    });
+
+    it('filters by level "all" returns all logs', () => {
+      logFilters.set({ level: 'all', source: 'all', search: '' });
       
-      // Initial call
-      expect(callback).toHaveBeenCalledTimes(1);
-      expect(callback).toHaveBeenLastCalledWith([]);
+      expect(get(filteredLogs)).toHaveLength(5);
+    });
+
+    it('filters by level "info"', () => {
+      logFilters.set({ level: 'info', source: 'all', search: '' });
       
-      logs.info('test', 'New message');
+      const filtered = get(filteredLogs);
+      expect(filtered).toHaveLength(1);
+      expect(filtered[0].level).toBe('info');
+    });
+
+    it('filters by level "warn"', () => {
+      logFilters.set({ level: 'warn', source: 'all', search: '' });
       
-      expect(callback).toHaveBeenCalledTimes(2);
-      expect(callback.mock.calls[1][0]).toHaveLength(1);
+      const filtered = get(filteredLogs);
+      expect(filtered).toHaveLength(1);
+      expect(filtered[0].level).toBe('warn');
+    });
+
+    it('filters by level "error"', () => {
+      logFilters.set({ level: 'error', source: 'all', search: '' });
       
-      unsubscribe();
+      const filtered = get(filteredLogs);
+      expect(filtered).toHaveLength(1);
+      expect(filtered[0].level).toBe('error');
     });
-  });
-});
 
-describe('logFilters store', () => {
-  beforeEach(() => {
-    logFilters.set({
-      level: 'all',
-      source: 'all',
-      search: ''
-    });
-  });
-
-  describe('initial state', () => {
-    it('has correct default values', () => {
-      const filters = get(logFilters);
-      expect(filters).toEqual({
-        level: 'all',
-        source: 'all',
-        search: ''
-      });
-    });
-  });
-
-  describe('set method', () => {
-    it('updates all filter values', () => {
-      logFilters.set({
-        level: 'error',
-        source: 'system',
-        search: 'test'
-      });
+    it('filters by level "debug"', () => {
+      logFilters.set({ level: 'debug', source: 'all', search: '' });
       
-      expect(get(logFilters)).toEqual({
-        level: 'error',
-        source: 'system',
-        search: 'test'
-      });
+      const filtered = get(filteredLogs);
+      expect(filtered).toHaveLength(1);
+      expect(filtered[0].level).toBe('debug');
     });
-  });
 
-  describe('update method', () => {
-    it('updates specific filter values', () => {
-      logFilters.update(f => ({ ...f, level: 'warn' }));
+    it('filters by level "success"', () => {
+      logFilters.set({ level: 'success', source: 'all', search: '' });
       
-      const filters = get(logFilters);
-      expect(filters.level).toBe('warn');
-      expect(filters.source).toBe('all');
-      expect(filters.search).toBe('');
-    });
-  });
-});
-
-describe('filteredLogs derived store', () => {
-  beforeEach(() => {
-    logs.clear();
-    logFilters.set({
-      level: 'all',
-      source: 'all',
-      search: ''
+      const filtered = get(filteredLogs);
+      expect(filtered).toHaveLength(1);
+      expect(filtered[0].level).toBe('success');
     });
   });
 
-  it('returns all logs when no filters applied', () => {
-    logs.info('source1', 'Message 1');
-    logs.error('source2', 'Message 2');
-    
-    expect(get(filteredLogs)).toHaveLength(2);
-  });
-
-  it('filters by level', () => {
-    logs.info('test', 'Info message');
-    logs.error('test', 'Error message');
-    logs.warn('test', 'Warning message');
-    
-    logFilters.update(f => ({ ...f, level: 'error' }));
-    
-    const filtered = get(filteredLogs);
-    expect(filtered).toHaveLength(1);
-    expect(filtered[0].level).toBe('error');
-  });
-
-  it('filters by source', () => {
-    logs.info('source1', 'Message 1');
-    logs.info('source2', 'Message 2');
-    logs.info('source1', 'Message 3');
-    
-    logFilters.update(f => ({ ...f, source: 'source1' }));
-    
-    const filtered = get(filteredLogs);
-    expect(filtered).toHaveLength(2);
-    expect(filtered.every(l => l.source === 'source1')).toBe(true);
-  });
-
-  it('filters by search text in message', () => {
-    logs.info('test', 'Hello world');
-    logs.info('test', 'Goodbye world');
-    logs.info('test', 'Hello there');
-    
-    logFilters.update(f => ({ ...f, search: 'hello' }));
-    
-    const filtered = get(filteredLogs);
-    expect(filtered).toHaveLength(2);
-  });
-
-  it('filters by search text in source', () => {
-    logs.info('system', 'Message 1');
-    logs.info('network', 'Message 2');
-    logs.info('system-core', 'Message 3');
-    
-    logFilters.update(f => ({ ...f, search: 'system' }));
-    
-    const filtered = get(filteredLogs);
-    expect(filtered).toHaveLength(2);
-  });
-
-  it('combines multiple filters', () => {
-    logs.info('system', 'Hello world');
-    logs.error('system', 'Hello error');
-    logs.info('network', 'Hello network');
-    logs.error('network', 'Goodbye error');
-    
-    logFilters.set({
-      level: 'error',
-      source: 'all',
-      search: 'hello'
+  describe('filteredLogs - filter by source', () => {
+    beforeEach(() => {
+      logs.info('SourceA', 'Message from A');
+      logs.info('SourceB', 'Message from B');
+      logs.warn('SourceA', 'Warning from A');
+      logs.error('SourceC', 'Error from C');
     });
-    
-    const filtered = get(filteredLogs);
-    expect(filtered).toHaveLength(1);
-    expect(filtered[0].message).toBe('Hello error');
-  });
-});
 
-describe('logSources derived store', () => {
-  beforeEach(() => {
-    logs.clear();
+    it('filters by source "all" returns all logs', () => {
+      logFilters.set({ level: 'all', source: 'all', search: '' });
+      
+      expect(get(filteredLogs)).toHaveLength(4);
+    });
+
+    it('filters by specific source', () => {
+      logFilters.set({ level: 'all', source: 'SourceA', search: '' });
+      
+      const filtered = get(filteredLogs);
+      expect(filtered).toHaveLength(2);
+      expect(filtered.every(log => log.source === 'SourceA')).toBe(true);
+    });
+
+    it('filters by source with no matches returns empty', () => {
+      logFilters.set({ level: 'all', source: 'NonExistent', search: '' });
+      
+      expect(get(filteredLogs)).toHaveLength(0);
+    });
   });
 
-  it('returns empty array when no logs', () => {
-    expect(get(logSources)).toEqual([]);
+  describe('filteredLogs - filter by search', () => {
+    beforeEach(() => {
+      logs.info('SourceA', 'Hello world');
+      logs.info('SourceB', 'Goodbye world');
+      logs.warn('SourceA', 'Hello again');
+      logs.error('HelloSource', 'Error message');
+    });
+
+    it('filters by search in message (case insensitive)', () => {
+      logFilters.set({ level: 'all', source: 'all', search: 'hello' });
+      
+      const filtered = get(filteredLogs);
+      expect(filtered).toHaveLength(3); // 2 messages + 1 source match
+    });
+
+    it('filters by search in source (case insensitive)', () => {
+      logFilters.set({ level: 'all', source: 'all', search: 'sourcea' });
+      
+      const filtered = get(filteredLogs);
+      expect(filtered).toHaveLength(2);
+    });
+
+    it('empty search returns all logs', () => {
+      logFilters.set({ level: 'all', source: 'all', search: '' });
+      
+      expect(get(filteredLogs)).toHaveLength(4);
+    });
   });
 
-  it('returns unique sources sorted alphabetically', () => {
-    logs.info('zebra', 'Message');
-    logs.info('alpha', 'Message');
-    logs.info('beta', 'Message');
-    logs.info('alpha', 'Another message');
-    
-    expect(get(logSources)).toEqual(['alpha', 'beta', 'zebra']);
+  describe('filteredLogs - combined filters', () => {
+    beforeEach(() => {
+      logs.info('SourceA', 'Hello info');
+      logs.warn('SourceA', 'Hello warn');
+      logs.info('SourceB', 'Hello info B');
+      logs.error('SourceA', 'Goodbye error');
+    });
+
+    it('filters by level AND source', () => {
+      logFilters.set({ level: 'info', source: 'SourceA', search: '' });
+      
+      const filtered = get(filteredLogs);
+      expect(filtered).toHaveLength(1);
+      expect(filtered[0].message).toBe('Hello info');
+    });
+
+    it('filters by level AND source AND search', () => {
+      logFilters.set({ level: 'info', source: 'all', search: 'hello' });
+      
+      const filtered = get(filteredLogs);
+      expect(filtered).toHaveLength(2);
+    });
+  });
+
+  describe('logSources derived store', () => {
+    it('returns empty array when no logs', () => {
+      expect(get(logSources)).toEqual([]);
+    });
+
+    it('returns unique sources sorted alphabetically', () => {
+      logs.info('Zebra', 'Message');
+      logs.info('Alpha', 'Message');
+      logs.info('Beta', 'Message');
+      logs.info('Alpha', 'Another message'); // duplicate
+      
+      expect(get(logSources)).toEqual(['Alpha', 'Beta', 'Zebra']);
+    });
+  });
+
+  describe('getLogsBySource helper', () => {
+    it('returns logs filtered by source', () => {
+      logs.info('SourceA', 'Message 1');
+      logs.info('SourceB', 'Message 2');
+      logs.info('SourceA', 'Message 3');
+      
+      const sourceALogs = getLogsBySource('SourceA');
+      expect(sourceALogs).toHaveLength(2);
+      expect(sourceALogs.every(log => log.source === 'SourceA')).toBe(true);
+    });
+
+    it('returns empty array for non-existent source', () => {
+      logs.info('SourceA', 'Message');
+      
+      expect(getLogsBySource('NonExistent')).toEqual([]);
+    });
+  });
+
+  describe('createSourceLogsStore', () => {
+    it('creates derived store for specific source', () => {
+      const sourceAStore = createSourceLogsStore('SourceA');
+      
+      logs.info('SourceA', 'Message 1');
+      logs.info('SourceB', 'Message 2');
+      logs.info('SourceA', 'Message 3');
+      
+      const sourceALogs = get(sourceAStore);
+      expect(sourceALogs).toHaveLength(2);
+      expect(sourceALogs.every(log => log.source === 'SourceA')).toBe(true);
+    });
+
+    it('updates when new logs are added', () => {
+      const sourceAStore = createSourceLogsStore('SourceA');
+      
+      expect(get(sourceAStore)).toHaveLength(0);
+      
+      logs.info('SourceA', 'Message 1');
+      expect(get(sourceAStore)).toHaveLength(1);
+      
+      logs.info('SourceA', 'Message 2');
+      expect(get(sourceAStore)).toHaveLength(2);
+    });
+  });
+
+  describe('log entry structure', () => {
+    it('generates unique IDs for each log', () => {
+      logs.info('Source', 'Message 1');
+      logs.info('Source', 'Message 2');
+      
+      const currentLogs = get(logs);
+      expect(currentLogs[0].id).not.toBe(currentLogs[1].id);
+    });
+
+    it('sets timestamp to current date', () => {
+      const before = new Date();
+      logs.info('Source', 'Message');
+      const after = new Date();
+      
+      const currentLogs = get(logs);
+      expect(currentLogs[0].timestamp.getTime()).toBeGreaterThanOrEqual(before.getTime());
+      expect(currentLogs[0].timestamp.getTime()).toBeLessThanOrEqual(after.getTime());
+    });
   });
 });

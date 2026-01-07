@@ -65,15 +65,15 @@
       <div class="flex items-center gap-3">
         <!-- Status text - subtle -->
         <span class="text-[10px] uppercase tracking-wider font-medium
-                     {service.status === 'healthy' ? 'text-zinc-500' : ''}
-                     {service.status === 'degraded' ? 'text-zinc-500' : ''}
-                     {service.status === 'down' ? 'text-zinc-500' : ''}">
+                     {service.status === 'healthy' ? 'text-zinc-400' : ''}
+                     {service.status === 'degraded' ? 'text-zinc-400' : ''}
+                     {service.status === 'down' ? 'text-zinc-400' : ''}">
           {statusConfig[service.status].label}
         </span>
 
         <!-- Ping value -->
         {#if service.ping !== undefined}
-          <span class="text-xs font-mono text-zinc-500 min-w-[45px] text-right">
+          <span class="text-xs font-mono text-zinc-400 min-w-[45px] text-right">
             {service.ping}ms
           </span>
         {:else}

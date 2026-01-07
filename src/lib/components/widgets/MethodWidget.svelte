@@ -22,7 +22,7 @@
       icon: '🌐',
       label: 'Direct',
       description: 'No bypass active',
-      color: 'text-zinc-500',
+      color: 'text-zinc-400',
       glowColor: ''
     },
     zapret: {
@@ -70,7 +70,7 @@
           <span class="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]"></span>
         {/if}
       </h4>
-      <p class="text-sm text-zinc-500">
+      <p class="text-sm text-zinc-400">
         {config.description}
       </p>
     </div>
@@ -81,19 +81,19 @@
     <div class="flex items-center gap-2 text-xs">
       <span class="text-zinc-600">via</span>
       {#if method === 'direct'}
-        <span class="text-zinc-500">Direct Connection</span>
+        <span class="text-zinc-400">Direct Connection</span>
       {:else if method === 'proxy' && proxyName}
         <span class="px-2 py-0.5 rounded bg-zinc-800/80 text-zinc-300 text-xs">
           {proxyName}
           {#if proxyLocation}
-            <span class="text-zinc-500">({proxyLocation})</span>
+            <span class="text-zinc-400">({proxyLocation})</span>
           {/if}
         </span>
       {:else if method === 'vless'}
         <span class="px-2 py-0.5 rounded bg-zinc-800/80 text-zinc-300 text-xs">
           VLESS Tunnel
           {#if proxyLocation}
-            <span class="text-zinc-500">({proxyLocation})</span>
+            <span class="text-zinc-400">({proxyLocation})</span>
           {/if}
         </span>
       {:else}

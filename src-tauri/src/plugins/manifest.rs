@@ -11,6 +11,27 @@ pub enum PluginType {
     ServiceChecker,
     StrategyProvider,
     HostlistProvider,
+    UiWidget,
+    ScriptPlugin,
+}
+
+/// Plugin contributions - what the plugin provides
+///
+/// A plugin can contribute multiple types of resources:
+/// - Services for availability checking
+/// - Hostlists with domain lists
+/// - Strategies for DPI bypass (future)
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct PluginContributes {
+    /// Service definitions for service-checker plugins
+    #[serde(default)]
+    pub services: Vec<ServiceDefinition>,
+    /// Hostlist definitions
+    #[serde(default)]
+    pub hostlists: Vec<HostlistDefinition>,
+    /// Strategy definitions (for future use)
+    #[serde(default)]
+    pub strategies: Vec<StrategyDefinition>,
 }
 
 /// Plugin manifest (plugin.json)
@@ -23,12 +44,15 @@ pub struct PluginManifest {
     pub description: Option<String>,
     #[serde(rename = "type")]
     pub plugin_type: PluginType,
-    /// Service definition (for service-checker type)
+    /// Service definition (for service-checker type) - LEGACY, use contributes.services
     pub service: Option<ServiceDefinition>,
-    /// Strategy definition (for strategy-provider type)
+    /// Strategy definition (for strategy-provider type) - LEGACY, use contributes.strategies
     pub strategy: Option<StrategyDefinition>,
-    /// Hostlist definition (for hostlist-provider type)
+    /// Hostlist definition (for hostlist-provider type) - LEGACY, use contributes.hostlists
     pub hostlist: Option<HostlistDefinition>,
+    /// New unified contributions system
+    #[serde(default)]
+    pub contributes: PluginContributes,
     #[serde(default)]
     pub permissions: Permissions,
 }
@@ -58,7 +82,7 @@ fn default_method() -> String {
     "GET".to_string()
 }
 
-/// Strategy definition
+/// Legacy strategy definition (simple reference to config file)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StrategyDefinition {
     pub id: String,
@@ -67,12 +91,207 @@ pub struct StrategyDefinition {
     pub config_file: String,
 }
 
-/// Hostlist definition
+// ============================================================================
+// Strategy Plugin Types (Level 1)
+// ============================================================================
+
+/// Strategy family enumeration
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "lowercase")]
+pub enum StrategyFamily {
+    Zapret,
+    Vless,
+    Shadowsocks,
+    Custom,
+}
+
+impl Default for StrategyFamily {
+    fn default() -> Self {
+        StrategyFamily::Custom
+    }
+}
+
+impl std::fmt::Display for StrategyFamily {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            StrategyFamily::Zapret => write!(f, "zapret"),
+            StrategyFamily::Vless => write!(f, "vless"),
+            StrategyFamily::Shadowsocks => write!(f, "shadowsocks"),
+            StrategyFamily::Custom => write!(f, "custom"),
+        }
+    }
+}
+
+impl From<&str> for StrategyFamily {
+    fn from(s: &str) -> Self {
+        match s.to_lowercase().as_str() {
+            "zapret" => StrategyFamily::Zapret,
+            "vless" => StrategyFamily::Vless,
+            "shadowsocks" => StrategyFamily::Shadowsocks,
+            _ => StrategyFamily::Custom,
+        }
+    }
+}
+
+/// Full strategy definition for plugin strategies
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PluginStrategyDefinition {
+    /// Unique identifier
+    pub id: String,
+    /// Human-readable name
+    pub name: String,
+    /// Description of what this strategy does
+    #[serde(default)]
+    pub description: Option<String>,
+    /// Strategy family (zapret, vless, shadowsocks, custom)
+    #[serde(default)]
+    pub family: StrategyFamily,
+    /// Engine to use (winws, sing-box, etc.)
+    #[serde(default = "default_engine")]
+    pub engine: String,
+    /// Target services this strategy is designed for
+    #[serde(default)]
+    pub target_services: Vec<String>,
+    /// Priority for sorting (higher = more preferred)
+    #[serde(default)]
+    pub priority: i32,
+    /// Strategy configuration
+    pub config: PluginStrategyConfig,
+    /// Author of the strategy
+    #[serde(default)]
+    pub author: Option<String>,
+    /// Label (recommended, experimental, etc.)
+    #[serde(default)]
+    pub label: Option<String>,
+    /// Source plugin ID (set automatically when loaded)
+    #[serde(skip)]
+    pub source_plugin: Option<String>,
+}
+
+fn default_engine() -> String {
+    "winws".to_string()
+}
+
+/// Strategy configuration
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct PluginStrategyConfig {
+    /// Command-line arguments for the engine
+    #[serde(default)]
+    pub args: Vec<String>,
+    /// Reference to hostlist ID
+    #[serde(default)]
+    pub hostlist: Option<String>,
+    /// Port configuration
+    #[serde(default)]
+    pub ports: Option<StrategyPorts>,
+    /// Profiles for multi-profile strategies (zapret)
+    #[serde(default)]
+    pub profiles: Option<Vec<StrategyProfile>>,
+}
+
+/// Port configuration for strategy
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct StrategyPorts {
+    /// TCP port filter (e.g., "80,443")
+    #[serde(default)]
+    pub tcp: Option<String>,
+    /// UDP port filter (e.g., "443,50000-50100")
+    #[serde(default)]
+    pub udp: Option<String>,
+}
+
+/// DPI bypass profile configuration (for zapret strategies)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StrategyProfile {
+    /// WinDivert filter expression
+    pub filter: String,
+    /// Path to hostlist file (relative)
+    #[serde(default)]
+    pub hostlist: Option<String>,
+    /// Path to hostlist exclude file
+    #[serde(default)]
+    pub hostlist_exclude: Option<String>,
+    /// Inline hostlist domains (comma-separated)
+    #[serde(default)]
+    pub hostlist_domains: Option<String>,
+    /// Desync attack type
+    pub desync: String,
+    /// Number of fake packet repeats
+    #[serde(default)]
+    pub repeats: Option<u32>,
+    /// Split sequence overlap
+    #[serde(default)]
+    pub split_seqovl: Option<u32>,
+    /// Split position
+    #[serde(default)]
+    pub split_pos: Option<String>,
+    /// Fooling method
+    #[serde(default)]
+    pub fooling: Option<String>,
+    /// Path to fake TLS ClientHello file
+    #[serde(default)]
+    pub fake_tls: Option<String>,
+    /// Path to fake QUIC Initial file
+    #[serde(default)]
+    pub fake_quic: Option<String>,
+    /// TTL value for desync packets
+    #[serde(default)]
+    pub ttl: Option<u8>,
+    /// Auto TTL configuration
+    #[serde(default)]
+    pub autottl: Option<String>,
+    /// Additional raw arguments
+    #[serde(default)]
+    pub extra_args: Option<Vec<String>>,
+}
+
+/// Hostlist format type
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum HostlistFormat {
+    /// Plain domain list (one domain per line)
+    #[default]
+    Plain,
+    /// Wildcard patterns (*.example.com)
+    Wildcard,
+    /// Regular expressions
+    Regex,
+}
+
+/// Hostlist definition for plugins
+///
+/// Defines a list of domains that can be provided by a plugin.
+/// Supports inline domains, external files, and remote updates.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HostlistDefinition {
+    /// Unique identifier for the hostlist
     pub id: String,
+    /// Human-readable name
     pub name: String,
-    pub file: String,
+    /// Optional description
+    #[serde(default)]
+    pub description: Option<String>,
+    /// Format of domain entries
+    #[serde(default)]
+    pub format: HostlistFormat,
+    /// Inline domain list (for small lists)
+    #[serde(default)]
+    pub domains: Vec<String>,
+    /// External file path (relative to plugin directory)
+    #[serde(default)]
+    pub file: Option<String>,
+    /// Remote URL for updates
+    #[serde(default)]
+    pub update_url: Option<String>,
+    /// Update interval in seconds (0 = no auto-update)
+    #[serde(default)]
+    pub update_interval: Option<u64>,
+    /// Category for grouping (e.g., "social", "video", "gaming")
+    #[serde(default)]
+    pub category: Option<String>,
+    /// Tags for filtering
+    #[serde(default)]
+    pub tags: Vec<String>,
 }
 
 /// Plugin permissions
@@ -254,7 +473,7 @@ mod tests {
         let hostlist: HostlistDefinition = serde_json::from_str(json).unwrap();
         assert_eq!(hostlist.id, "youtube-hosts");
         assert_eq!(hostlist.name, "YouTube Hosts");
-        assert_eq!(hostlist.file, "youtube.txt");
+        assert_eq!(hostlist.file, Some("youtube.txt".to_string()));
     }
 
     // ==================== Permissions Tests ====================
@@ -468,6 +687,7 @@ mod tests {
             service: None,
             strategy: None,
             hostlist: None,
+            contributes: PluginContributes::default(),
             permissions: Permissions::default(),
         };
         let info = LoadedPluginInfo {
@@ -492,6 +712,7 @@ mod tests {
             service: None,
             strategy: None,
             hostlist: None,
+            contributes: PluginContributes::default(),
             permissions: Permissions::default(),
         };
         let info = LoadedPluginInfo {
@@ -521,6 +742,7 @@ mod tests {
                 config_file: "config.yaml".to_string(),
             }),
             hostlist: None,
+            contributes: PluginContributes::default(),
             permissions: Permissions {
                 http: vec!["https://example.com".to_string()],
                 filesystem: true,

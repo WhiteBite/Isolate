@@ -2,12 +2,17 @@
 //!
 //! Manages application autostart via Windows Registry.
 //! Uses HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Run
+//!
+//! NOTE: This module provides autorun functionality for Windows.
+//! Functions are called from Tauri commands.
+
+// Public API for autorun management
+#![allow(dead_code)]
 
 use crate::core::errors::IsolateError;
 use tracing::{debug, error, info};
 
 /// Registry key path for Windows autorun
-#[allow(dead_code)]
 const AUTORUN_REGISTRY_KEY: &str = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Run";
 
 /// Application name in registry

@@ -1,6 +1,11 @@
 //! Environment information detection for Isolate
 //!
 //! Detects ASN, country, Wi-Fi SSID, and admin privileges.
+//!
+//! NOTE: Some functions are prepared for future environment detection features.
+
+// Public API for environment detection
+#![allow(dead_code)]
 
 use std::time::Duration;
 

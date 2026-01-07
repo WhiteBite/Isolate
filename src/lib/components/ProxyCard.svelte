@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { toasts } from '$lib/stores/toast';
+  import { getProxyFlag, getProxyCountryName } from '$lib/utils/countries';
+  
   interface Props {
     id: string;
     name: string;
@@ -11,6 +14,8 @@
     onEdit?: (() => void) | null;
     onDelete?: (() => void) | null;
     onToggle?: (() => void) | null;
+    onCopy?: (() => void) | null;
+    onShare?: (() => void) | null;
   }
 
   let {
@@ -25,43 +30,35 @@
     onEdit = null,
     onDelete = null,
     onToggle = null,
+    onCopy = null,
+    onShare = null,
   }: Props = $props();
+  
+  let copying = $state(false);
+  
+  async function handleCopy(e: MouseEvent) {
+    e.stopPropagation();
+    if (onCopy) {
+      onCopy();
+    } else {
+      // Default: copy server:port
+      copying = true;
+      try {
+        await navigator.clipboard.writeText(`${server}:${port}`);
+        toasts.success('Address copied');
+      } catch {
+        toasts.error('Failed to copy');
+      }
+      copying = false;
+    }
+  }
 
-  // Расширенный маппинг кодов стран на emoji флаги
-  const countryFlags: Record<string, string> = {
-    // Северная Америка
-    'US': '🇺🇸', 'CA': '🇨🇦', 'MX': '🇲🇽',
-    // Европа
-    'GB': '🇬🇧', 'DE': '🇩🇪', 'NL': '🇳🇱', 'FR': '🇫🇷', 'IT': '🇮🇹', 'ES': '🇪🇸',
-    'PT': '🇵🇹', 'PL': '🇵🇱', 'RU': '🇷🇺', 'UA': '🇺🇦', 'FI': '🇫🇮', 'SE': '🇸🇪',
-    'NO': '🇳🇴', 'DK': '🇩🇰', 'CH': '🇨🇭', 'AT': '🇦🇹', 'BE': '🇧🇪', 'IE': '🇮🇪',
-    'CZ': '🇨🇿', 'RO': '🇷🇴', 'HU': '🇭🇺', 'BG': '🇧🇬', 'GR': '🇬🇷', 'LU': '🇱🇺',
-    'EE': '🇪🇪', 'LV': '🇱🇻', 'LT': '🇱🇹', 'SK': '🇸🇰', 'SI': '🇸🇮', 'HR': '🇭🇷',
-    'RS': '🇷🇸', 'MD': '🇲🇩', 'BY': '🇧🇾', 'IS': '🇮🇸', 'AL': '🇦🇱', 'MK': '🇲🇰',
-    'ME': '🇲🇪', 'BA': '🇧🇦', 'XK': '🇽🇰', 'MT': '🇲🇹', 'CY': '🇨🇾',
-    // Азия
-    'JP': '🇯🇵', 'SG': '🇸🇬', 'HK': '🇭🇰', 'KR': '🇰🇷', 'TW': '🇹🇼', 'CN': '🇨🇳',
-    'IN': '🇮🇳', 'ID': '🇮🇩', 'TH': '🇹🇭', 'VN': '🇻🇳', 'MY': '🇲🇾', 'PH': '🇵🇭',
-    'KZ': '🇰🇿', 'GE': '🇬🇪', 'AM': '🇦🇲', 'AZ': '🇦🇿', 'UZ': '🇺🇿', 'KG': '🇰🇬',
-    'MN': '🇲🇳', 'NP': '🇳🇵', 'BD': '🇧🇩', 'LK': '🇱🇰', 'PK': '🇵🇰', 'MM': '🇲🇲',
-    'KH': '🇰🇭', 'LA': '🇱🇦', 'BN': '🇧🇳', 'MO': '🇲🇴',
-    // Ближний Восток
-    'AE': '🇦🇪', 'IL': '🇮🇱', 'TR': '🇹🇷', 'SA': '🇸🇦', 'QA': '🇶🇦', 'KW': '🇰🇼',
-    'BH': '🇧🇭', 'OM': '🇴🇲', 'JO': '🇯🇴', 'LB': '🇱🇧', 'IQ': '🇮🇶', 'IR': '🇮🇷',
-    // Океания
-    'AU': '🇦🇺', 'NZ': '🇳🇿', 'FJ': '🇫🇯',
-    // Южная Америка
-    'BR': '🇧🇷', 'AR': '🇦🇷', 'CL': '🇨🇱', 'CO': '🇨🇴', 'PE': '🇵🇪', 'VE': '🇻🇪',
-    'EC': '🇪🇨', 'UY': '🇺🇾', 'PY': '🇵🇾', 'BO': '🇧🇴',
-    // Африка
-    'ZA': '🇿🇦', 'EG': '🇪🇬', 'NG': '🇳🇬', 'KE': '🇰🇪', 'MA': '🇲🇦', 'TN': '🇹🇳',
-    'GH': '🇬🇭', 'TZ': '🇹🇿', 'UG': '🇺🇬', 'ET': '🇪🇹',
-  };
-
-  let flag = $derived(country ? (countryFlags[country.toUpperCase()] || '🌐') : '🌐');
+  // Use getProxyFlag for automatic country detection from server hostname
+  let flag = $derived(getProxyFlag(country, server));
+  let countryName = $derived(getProxyCountryName(country, server));
   
   // Ping color with gradient effect
-  let pingColor = $derived(ping === null ? 'text-zinc-500' 
+  let pingColor = $derived(ping === null ? 'text-zinc-400' 
     : ping < 50 ? 'text-emerald-400' 
     : ping < 100 ? 'text-green-400' 
     : ping < 200 ? 'text-yellow-400' 
@@ -105,7 +102,7 @@
 
   <!-- Флаг + Название -->
   <div class="flex items-center gap-3 min-w-0 flex-1">
-    <div class="relative">
+    <div class="relative" title={countryName}>
       <span class="text-2xl flex-shrink-0 drop-shadow-sm">{flag}</span>
       {#if active}
         <div class="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-zinc-900"></div>
@@ -113,7 +110,7 @@
     </div>
     <div class="min-w-0">
       <div class="text-zinc-100 font-medium truncate group-hover:text-white transition-colors">{name}</div>
-      <div class="text-zinc-500 text-sm truncate font-mono">{server}:{port}</div>
+      <div class="text-zinc-400 text-sm truncate font-mono">{server}:{port}</div>
     </div>
   </div>
 
@@ -138,11 +135,46 @@
 
   <!-- Кнопки действий -->
   <div class="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+    <!-- Share/QR button -->
+    {#if onShare}
+      <button
+        class="p-2 rounded-lg text-zinc-400 hover:text-indigo-400 hover:bg-indigo-500/10 transition-all duration-200"
+        onclick={(e) => { e.stopPropagation(); onShare?.(); }}
+        title="Share QR code"
+        aria-label="Share {name} QR code"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+            d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+        </svg>
+      </button>
+    {/if}
+    <!-- Copy button -->
+    <button
+      class="p-2 rounded-lg text-zinc-400 hover:text-emerald-400 hover:bg-emerald-500/10 transition-all duration-200"
+      onclick={handleCopy}
+      title="Copy address"
+      aria-label="Copy {name} address"
+      disabled={copying}
+    >
+      {#if copying}
+        <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+        </svg>
+      {:else}
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+            d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+        </svg>
+      {/if}
+    </button>
     {#if onEdit}
       <button
-        class="p-2 rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-white/5 transition-all duration-200"
+        class="p-2 rounded-lg text-zinc-400 hover:text-zinc-200 hover:bg-white/5 transition-all duration-200"
         onclick={(e) => { e.stopPropagation(); onEdit?.(); }}
-        title="Редактировать"
+        title="Edit"
+        aria-label="Edit {name}"
       >
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
@@ -152,9 +184,10 @@
     {/if}
     {#if onDelete}
       <button
-        class="p-2 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-all duration-200"
+        class="p-2 rounded-lg text-zinc-400 hover:text-red-400 hover:bg-red-500/10 transition-all duration-200"
         onclick={(e) => { e.stopPropagation(); onDelete?.(); }}
-        title="Удалить"
+        title="Delete"
+        aria-label="Delete {name}"
       >
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 

@@ -3,6 +3,8 @@
 //! Monitors active strategy health and detects degradation.
 //! Emits events to frontend for status updates.
 
+#![allow(dead_code)] // Public monitoring API
+
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -223,8 +225,13 @@ impl Monitor {
                             timestamp: chrono::Utc::now().to_rfc3339(),
                         };
 
+                        // Emit both events for compatibility
                         if let Err(e) = app_handle.emit("monitor:health_check", &health_result) {
                             error!("Failed to emit health_check event: {}", e);
+                        }
+                        // Also emit strategy:health for frontend convenience
+                        if let Err(e) = app_handle.emit("strategy:health", &health_result) {
+                            error!("Failed to emit strategy:health event: {}", e);
                         }
 
                         debug!(

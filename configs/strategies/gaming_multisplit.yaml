@@ -1,0 +1,169 @@
+# Gaming Multisplit Strategy - стратегия для игровых сервисов
+# Steam, Epic Games, Riot Games, Blizzard, EA, Ubisoft, Xbox, PlayStation, Nintendo, Wargaming, Gaijin
+id: "zapret_gaming_multisplit"
+name: "Gaming Multisplit"
+description: "Стратегия с multisplit фрагментацией для игровых сервисов с поддержкой GameFilter портов (Steam, Epic, Riot, Blizzard, Wargaming и др.)"
+family: sni_frag
+engine: zapret
+label: gaming
+
+mode_capabilities:
+  supports_socks: false
+  supports_global: true
+
+global_template:
+  binary: "binaries/winws.exe"
+  args:
+    # ============================================
+    # WinDivert фильтры - GameFilter порты
+    # ============================================
+    # TCP порты:
+    #   80, 443 - Web/HTTPS
+    #   3074 - Xbox Live
+    #   3478-3480 - STUN/TURN (voice chat, P2P)
+    #   3724 - Blizzard/WoW
+    #   5222-5223 - XMPP (Riot, EA chat)
+    #   6112-6119 - Blizzard games
+    #   6667 - IRC (legacy game chat)
+    #   8080-8081 - Game launchers
+    #   9000-9010 - Various game servers
+    #   27000-27050 - Steam/Source engine
+    #   28960 - Call of Duty
+    # UDP порты:
+    #   443 - QUIC
+    #   3074 - Xbox Live
+    #   3478-3480 - STUN/TURN
+    #   3658 - PlayStation
+    #   5060-5062 - SIP (voice)
+    #   6672-6673 - Ubisoft
+    #   9000-9010 - Various game servers
+    #   27000-27100 - Steam/Source
+    #   30000-30100 - Wargaming
+    #   50000-65535 - Dynamic game ports
+    - "--wf-tcp=80,443,3074,3478-3480,3724,5222,5223,6112-6119,6667,8080,8081,9000-9010,27000-27050,28960"
+    - "--wf-udp=443,3074,3478-3480,3658,5060-5062,6672,6673,9000-9010,27000-27100,30000-30100"
+    # ============================================
+    # QUIC/UDP fake для игровых сервисов
+    # ============================================
+    - "--filter-udp=443"
+    - "--hostlist=hostlists/gaming.txt"
+    - "--hostlist-exclude=hostlists/exclude.txt"
+    - "--ipset-exclude=hostlists/ipset-exclude.txt"
+    - "--dpi-desync=fake"
+    - "--dpi-desync-repeats=6"
+    - "--dpi-desync-fake-quic=binaries/quic_initial_www_google_com.bin"
+    - "--new"
+    # ============================================
+    # STUN/TURN порты (voice chat, matchmaking)
+    # ============================================
+    - "--filter-udp=3478-3480"
+    - "--dpi-desync=fake"
+    - "--dpi-desync-any-protocol"
+    - "--dpi-desync-repeats=6"
+    - "--new"
+    # ============================================
+    # Xbox Live / PlayStation UDP
+    # ============================================
+    - "--filter-udp=3074,3658"
+    - "--dpi-desync=fake"
+    - "--dpi-desync-any-protocol"
+    - "--dpi-desync-repeats=6"
+    - "--new"
+    # ============================================
+    # Steam/Source UDP (game servers, voice)
+    # ============================================
+    - "--filter-udp=27000-27100"
+    - "--dpi-desync=fake"
+    - "--dpi-desync-any-protocol"
+    - "--dpi-desync-cutoff=d3"
+    - "--dpi-desync-repeats=6"
+    - "--new"
+    # ============================================
+    # Wargaming UDP (WoT, WoWs)
+    # ============================================
+    - "--filter-udp=30000-30100"
+    - "--dpi-desync=fake"
+    - "--dpi-desync-any-protocol"
+    - "--dpi-desync-cutoff=d3"
+    - "--dpi-desync-repeats=6"
+    - "--new"
+    # ============================================
+    # TCP multisplit для HTTPS (основной трафик)
+    # ============================================
+    - "--filter-tcp=443"
+    - "--hostlist=hostlists/gaming.txt"
+    - "--hostlist-exclude=hostlists/exclude.txt"
+    - "--ipset-exclude=hostlists/ipset-exclude.txt"
+    - "--dpi-desync=fake,multisplit"
+    - "--dpi-desync-split-pos=1,midsld"
+    - "--dpi-desync-fake-tls=binaries/tls_clienthello_www_google_com.bin"
+    - "--new"
+    # ============================================
+    # HTTP fallback
+    # ============================================
+    - "--filter-tcp=80"
+    - "--hostlist=hostlists/gaming.txt"
+    - "--hostlist-exclude=hostlists/exclude.txt"
+    - "--ipset-exclude=hostlists/ipset-exclude.txt"
+    - "--dpi-desync=fake,multisplit"
+    - "--dpi-desync-split-pos=1,midsld"
+    - "--new"
+    # ============================================
+    # Steam/Source TCP (27000-27050)
+    # ============================================
+    - "--filter-tcp=27000-27050"
+    - "--dpi-desync=fake,multisplit"
+    - "--dpi-desync-any-protocol"
+    - "--dpi-desync-split-pos=1"
+    - "--new"
+    # ============================================
+    # Blizzard TCP (3724, 6112-6119)
+    # ============================================
+    - "--filter-tcp=3724,6112-6119"
+    - "--dpi-desync=fake,multisplit"
+    - "--dpi-desync-any-protocol"
+    - "--dpi-desync-split-pos=1"
+    - "--new"
+    # ============================================
+    # Xbox Live TCP (3074)
+    # ============================================
+    - "--filter-tcp=3074"
+    - "--dpi-desync=fake,multisplit"
+    - "--dpi-desync-any-protocol"
+    - "--dpi-desync-split-pos=1"
+    - "--new"
+    # ============================================
+    # XMPP/Chat ports (5222-5223) - Riot, EA
+    # ============================================
+    - "--filter-tcp=5222,5223"
+    - "--dpi-desync=fake,multisplit"
+    - "--dpi-desync-any-protocol"
+    - "--dpi-desync-split-pos=1"
+  env: {}
+  requires_admin: true
+
+requirements:
+  min_rights: "admin"
+  os:
+    - windows
+  binaries:
+    - "binaries/winws.exe"
+    - "binaries/WinDivert64.sys"
+    - "binaries/tls_clienthello_www_google_com.bin"
+    - "binaries/quic_initial_www_google_com.bin"
+
+weight_hint: 6
+services:
+  - steam
+  - epic_games
+  - riot_games
+  - blizzard
+  - ea_origin
+  - ubisoft
+  - xbox
+  - playstation
+  - nintendo
+  - discord
+  - wargaming
+  - gaijin
+  - twitch

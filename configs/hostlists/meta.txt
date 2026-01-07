@@ -1,0 +1,45 @@
+# Meta platforms domains (Instagram, Facebook, WhatsApp)
+# Source: Isolate project
+
+# === Instagram ===
+instagram.com
+www.instagram.com
+i.instagram.com
+graph.instagram.com
+cdninstagram.com
+scontent.cdninstagram.com
+static.cdninstagram.com
+
+# === Facebook ===
+facebook.com
+www.facebook.com
+m.facebook.com
+web.facebook.com
+fb.com
+fb.me
+fbcdn.net
+fbsbx.com
+fbcdn.com
+static.xx.fbcdn.net
+scontent.xx.fbcdn.net
+video.xx.fbcdn.net
+connect.facebook.net
+graph.facebook.com
+api.facebook.com
+
+# === WhatsApp ===
+whatsapp.com
+www.whatsapp.com
+web.whatsapp.com
+wa.me
+api.whatsapp.com
+static.whatsapp.net
+media.whatsapp.net
+mmg.whatsapp.net
+pps.whatsapp.net
+v.whatsapp.net
+
+# === Messenger ===
+messenger.com
+www.messenger.com
+m.messenger.com

@@ -1,0 +1,37 @@
+{
+  "id": "speed-widget",
+  "name": "Speed Monitor",
+  "version": "1.0.0",
+  "type": "ui-widget",
+  "author": "Isolate Team",
+  "description": "Real-time connection speed monitoring widget",
+  "icon": "⚡",
+  "contributes": {
+    "widgets": [
+      {
+        "id": "speed-monitor",
+        "name": "Speed Monitor",
+        "slot": "dashboard",
+        "component": "ui/SpeedWidget.svelte",
+        "defaultSize": { "cols": 2, "rows": 1 },
+        "order": 10,
+        "icon": "⚡"
+      }
+    ],
+    "settings": [
+      {
+        "id": "speed-settings",
+        "name": "Speed Monitor Settings",
+        "component": "ui/SpeedSettings.svelte",
+        "icon": "⚙️",
+        "order": 100
+      }
+    ]
+  },
+  "permissions": {
+    "http": ["cloudflare.com", "*.cloudflare.com"],
+    "storage": true,
+    "events": ["speed-*", "status-changed"],
+    "timeout": 15000
+  }
+}

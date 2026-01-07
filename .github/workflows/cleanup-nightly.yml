@@ -20,6 +20,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: cleanup-nightly
+  cancel-in-progress: false
+
 jobs:
   cleanup:
     name: Cleanup old nightly releases
@@ -96,9 +100,12 @@ jobs:
             console.log(`\n🗑️ Releases to delete (${toDelete.length}):`);
             toDelete.forEach(r => console.log(`  ❌ ${r.tag} (${r.date})`));
             
-            // Delete old releases and their tags
+            // Delete old releases and their tags with rate limiting
             let deletedCount = 0;
             let errorCount = 0;
+            
+            // Helper function for delay
+            const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
             
             for (const release of toDelete) {
               if (dryRun) {
@@ -115,6 +122,9 @@ jobs:
                 });
                 console.log(`✅ Deleted release: ${release.tag}`);
                 
+                // Rate limiting: wait 1 second between API calls
+                await delay(1000);
+                
                 // Delete tag
                 try {
                   await github.rest.git.deleteRef({
@@ -123,6 +133,9 @@ jobs:
                     ref: `tags/${release.tag}`
                   });
                   console.log(`✅ Deleted tag: ${release.tag}`);
+                  
+                  // Rate limiting: wait 1 second between API calls
+                  await delay(1000);
                 } catch (tagError) {
                   console.log(`⚠️ Could not delete tag ${release.tag}: ${tagError.message}`);
                 }
@@ -131,6 +144,9 @@ jobs:
               } catch (error) {
                 console.error(`❌ Failed to delete ${release.tag}: ${error.message}`);
                 errorCount++;
+                
+                // On error, wait longer to avoid rate limit issues
+                await delay(2000);
               }
             }
             

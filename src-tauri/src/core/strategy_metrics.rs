@@ -403,6 +403,8 @@ struct MetricsState {
     rate_data: VecDeque<RateDataPoint>,
     /// Handle для background task
     snapshot_task_running: bool,
+    /// Cancellation token для graceful shutdown
+    shutdown_token: Option<tokio_util::sync::CancellationToken>,
 }
 
 impl Default for MetricsState {
@@ -414,6 +416,7 @@ impl Default for MetricsState {
             collecting: false,
             rate_data: VecDeque::with_capacity(120), // ~2 минуты данных
             snapshot_task_running: false,
+            shutdown_token: None,
         }
     }
 }
@@ -475,56 +478,76 @@ impl MetricsCollector {
         // Запускаем background snapshot task если ещё не запущен
         if !state.snapshot_task_running {
             state.snapshot_task_running = true;
+            
+            // Создаём cancellation token для graceful shutdown
+            let shutdown_token = tokio_util::sync::CancellationToken::new();
+            state.shutdown_token = Some(shutdown_token.clone());
+            
             let state_clone = self.state.clone();
             tokio::spawn(async move {
-                Self::snapshot_background_task(state_clone).await;
+                Self::snapshot_background_task(state_clone, shutdown_token).await;
             });
         }
     }
 
-    /// Background task для периодических снимков
-    async fn snapshot_background_task(state: Arc<RwLock<MetricsState>>) {
+    /// Background task для периодических снимков с graceful shutdown
+    async fn snapshot_background_task(
+        state: Arc<RwLock<MetricsState>>,
+        shutdown_token: tokio_util::sync::CancellationToken,
+    ) {
         let mut interval = interval(tokio::time::Duration::from_secs(SNAPSHOT_INTERVAL_SECS));
         
         loop {
-            interval.tick().await;
-            
-            let mut state_guard = state.write().await;
-            
-            // Проверяем, активен ли сбор
-            if !state_guard.collecting {
-                state_guard.snapshot_task_running = false;
-                debug!("Snapshot background task stopped - collection inactive");
-                break;
-            }
+            tokio::select! {
+                _ = shutdown_token.cancelled() => {
+                    debug!("Snapshot background task received shutdown signal");
+                    break;
+                }
+                _ = interval.tick() => {
+                    let mut state_guard = state.write().await;
+                    
+                    // Проверяем, активен ли сбор
+                    if !state_guard.collecting {
+                        state_guard.snapshot_task_running = false;
+                        debug!("Snapshot background task stopped - collection inactive");
+                        break;
+                    }
 
-            // Обновляем rate метрики и делаем снимок
-            Self::update_rate_metrics(&mut state_guard);
-            
-            // Делаем снимок текущих метрик
-            if let Some(ref mut metrics) = state_guard.current {
-                metrics.update_uptime();
-                
-                let snapshot = MetricsSnapshot::from(&*metrics);
-                let strategy_id = metrics.strategy_id.clone();
-                let uptime_secs = metrics.uptime_secs;
-                let bytes_sent_per_second = metrics.bytes_sent_per_second;
-                
-                state_guard.snapshots.push(snapshot);
-                
-                debug!(
-                    strategy_id = %strategy_id,
-                    uptime_secs,
-                    bytes_sent_per_second,
-                    "Periodic snapshot taken"
-                );
-            }
+                    // Обновляем rate метрики и делаем снимок
+                    Self::update_rate_metrics(&mut state_guard);
+                    
+                    // Делаем снимок текущих метрик
+                    if let Some(ref mut metrics) = state_guard.current {
+                        metrics.update_uptime();
+                        
+                        let snapshot = MetricsSnapshot::from(&*metrics);
+                        let strategy_id = metrics.strategy_id.clone();
+                        let uptime_secs = metrics.uptime_secs;
+                        let bytes_sent_per_second = metrics.bytes_sent_per_second;
+                        
+                        state_guard.snapshots.push(snapshot);
+                        
+                        debug!(
+                            strategy_id = %strategy_id,
+                            uptime_secs,
+                            bytes_sent_per_second,
+                            "Periodic snapshot taken"
+                        );
+                    }
 
-            // Автоочистка старых данных
-            let cutoff = Utc::now() - Duration::days(MAX_DATA_AGE_DAYS);
-            state_guard.snapshots.cleanup_older_than(cutoff);
-            state_guard.history.retain(|e| e.timestamp >= cutoff);
+                    // Автоочистка старых данных
+                    let cutoff = Utc::now() - Duration::days(MAX_DATA_AGE_DAYS);
+                    state_guard.snapshots.cleanup_older_than(cutoff);
+                    state_guard.history.retain(|e| e.timestamp >= cutoff);
+                }
+            }
         }
+        
+        // Помечаем task как остановленный
+        let mut state_guard = state.write().await;
+        state_guard.snapshot_task_running = false;
+        state_guard.shutdown_token = None;
+        debug!("Snapshot background task exited cleanly");
     }
 
     /// Обновляет rate метрики на основе накопленных данных
@@ -583,8 +606,15 @@ impl MetricsCollector {
     /// Останавливает сбор метрик
     ///
     /// Текущие метрики сохраняются в историю.
+    /// Background task останавливается через cancellation token.
     pub async fn stop_collection(&self) {
         let mut state = self.state.write().await;
+
+        // Отменяем background task через cancellation token
+        if let Some(ref token) = state.shutdown_token {
+            token.cancel();
+            debug!("Sent shutdown signal to background task");
+        }
 
         // Создаём entry до того как берём mutable borrow
         let entry_and_log = if let Some(ref mut metrics) = state.current {
@@ -614,6 +644,7 @@ impl MetricsCollector {
         state.current = None;
         state.collecting = false;
         state.rate_data.clear();
+        state.shutdown_token = None;
     }
 
     /// Делает снимок текущих метрик

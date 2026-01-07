@@ -35,6 +35,8 @@ const HTTP_TIMEOUT_SECS: u64 = 5;
 const MIN_CONFIDENCE_LEVEL: f64 = 0.95;
 /// Ключ для хранения результатов A/B тестов
 const AB_TEST_RESULTS_KEY: &str = "ab_test_results";
+/// Максимальное количество сохранённых результатов
+const MAX_STORED_RESULTS: usize = 100;
 
 /// Статус A/B теста
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -280,15 +282,60 @@ impl ABTestManager {
         Ok(())
     }
     
-    /// Сохраняет результаты в storage
+    /// Сохраняет результаты в storage (с лимитом на количество)
     async fn save_results_to_storage(&self) -> Result<()> {
         if let Some(ref storage) = self.storage {
             let results = self.results.read().await;
-            let results_vec: Vec<ABTestResult> = results.values().cloned().collect();
+            let mut results_vec: Vec<ABTestResult> = results.values().cloned().collect();
+            
+            // Сортируем по времени (новые первые) и ограничиваем количество
+            results_vec.sort_by(|a, b| b.completed_at.cmp(&a.completed_at));
+            if results_vec.len() > MAX_STORED_RESULTS {
+                results_vec.truncate(MAX_STORED_RESULTS);
+                debug!(
+                    truncated_to = MAX_STORED_RESULTS,
+                    "Truncated A/B test results to max limit"
+                );
+            }
+            
             storage.set_setting(AB_TEST_RESULTS_KEY, &results_vec).await?;
             debug!(count = results_vec.len(), "Saved A/B test results to storage");
         }
         Ok(())
+    }
+    
+    /// Очищает старые результаты, оставляя только последние MAX_STORED_RESULTS
+    pub async fn cleanup_old_results(&self) -> Result<usize> {
+        let removed_count = {
+            let mut results = self.results.write().await;
+            if results.len() <= MAX_STORED_RESULTS {
+                return Ok(0);
+            }
+            
+            // Сортируем по времени и удаляем старые
+            let mut sorted: Vec<_> = results.iter()
+                .map(|(k, v)| (k.clone(), v.completed_at.clone()))
+                .collect();
+            sorted.sort_by(|a, b| b.1.cmp(&a.1));
+            
+            let to_remove: Vec<_> = sorted.iter()
+                .skip(MAX_STORED_RESULTS)
+                .map(|(k, _)| k.clone())
+                .collect();
+            
+            let count = to_remove.len();
+            for key in to_remove {
+                results.remove(&key);
+            }
+            count
+        };
+        
+        if removed_count > 0 {
+            info!(removed = removed_count, "Cleaned up old A/B test results");
+            self.save_results_to_storage().await?;
+        }
+        
+        Ok(removed_count)
     }
 
     /// Запускает A/B тест
@@ -625,14 +672,19 @@ impl ABTestManager {
             result.min_latency_ms = *result.latencies.iter().min().unwrap_or(&0);
             result.max_latency_ms = *result.latencies.iter().max().unwrap_or(&0);
             
-            // Стандартное отклонение
-            let variance: f64 = result.latencies.iter()
-                .map(|&x| {
-                    let diff = x as f64 - result.avg_latency_ms;
-                    diff * diff
-                })
-                .sum::<f64>() / result.latencies.len() as f64;
-            result.std_dev_latency_ms = variance.sqrt();
+            // Стандартное отклонение (Bessel's correction: N-1 для sample variance)
+            let n = result.latencies.len();
+            if n > 1 {
+                let variance: f64 = result.latencies.iter()
+                    .map(|&x| {
+                        let diff = x as f64 - result.avg_latency_ms;
+                        diff * diff
+                    })
+                    .sum::<f64>() / (n - 1) as f64;
+                result.std_dev_latency_ms = variance.sqrt();
+            } else {
+                result.std_dev_latency_ms = 0.0;
+            }
             
             // Медиана
             let mut sorted = result.latencies.clone();
@@ -1174,13 +1226,14 @@ mod tests {
         result.min_latency_ms = *result.latencies.iter().min().unwrap();
         result.max_latency_ms = *result.latencies.iter().max().unwrap();
         
-        // Calculate std dev
+        // Calculate std dev (Bessel's correction: N-1)
+        let n = result.latencies.len();
         let variance: f64 = result.latencies.iter()
             .map(|&x| {
                 let diff = x as f64 - result.avg_latency_ms;
                 diff * diff
             })
-            .sum::<f64>() / result.latencies.len() as f64;
+            .sum::<f64>() / (n - 1) as f64;
         result.std_dev_latency_ms = variance.sqrt();
         
         // Calculate median

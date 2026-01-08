@@ -230,7 +230,7 @@ jobs:
           }
           
       - name: Upload benchmark results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: rust-benchmark-results-${{ github.sha }}
           path: |
@@ -241,14 +241,14 @@ jobs:
           
       - name: Upload baseline (main branch only)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: rust-benchmark-baseline
           path: benchmark-results.json
           retention-days: 90
           
       - name: Upload Criterion HTML reports
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: criterion-reports-${{ github.sha }}
           path: src-tauri/target/criterion/**/report/
@@ -442,7 +442,7 @@ jobs:
           Write-Host $summary
           
       - name: Upload bundle analysis
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: frontend-benchmark-results-${{ github.sha }}
           path: |
@@ -452,7 +452,7 @@ jobs:
           
       - name: Upload baseline (main branch only)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: frontend-benchmark-baseline
           path: bundle-size.json

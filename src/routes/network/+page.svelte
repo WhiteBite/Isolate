@@ -77,10 +77,12 @@
   // Rules
   let rules = $state<NetworkRule[]>([]);
   
-  $effect(() => {
-    if (!browser || initialized) return;
-    initialized = true;
-    loadData();
+  import { onMount } from 'svelte';
+  onMount(() => {
+    if (!initialized) {
+      initialized = true;
+      loadData();
+    }
   });
   
   async function loadData() {
@@ -100,7 +102,7 @@
     }
     
     try {
-      const ready = await waitForBackend(10, 200);
+      const ready = await waitForBackend(30, 300);
       if (!ready) {
         gateways = mockGateways;
         rules = mockNetworkRules;

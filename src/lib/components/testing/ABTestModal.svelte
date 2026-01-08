@@ -103,7 +103,7 @@
     result = null;
     
     try {
-      const ready = await waitForBackend(10, 200);
+      const ready = await waitForBackend(20, 300);
       if (!ready) {
         error = 'Backend not ready';
         return;

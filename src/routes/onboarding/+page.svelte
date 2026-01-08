@@ -63,8 +63,8 @@
   // Step titles for header
   const stepTitles = ['Welcome', 'Services', 'Provider', 'Method', 'Setup'];
 
-  $effect(() => {
-    if (!browser) return;
+  import { onMount } from 'svelte';
+  onMount(() => {
     loadServices();
   });
 
@@ -72,7 +72,7 @@
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       
-      const ready = await waitForBackend(10, 200);
+      const ready = await waitForBackend(30, 300);
       if (!ready) {
         console.warn('[Onboarding] Backend not ready after retries');
         loadingServices = false;

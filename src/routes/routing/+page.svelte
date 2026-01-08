@@ -1,12 +1,10 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { browser } from '$app/environment';
+  import { onMount } from 'svelte';
 
   // Redirect to /network (routing merged into network page)
-  $effect(() => {
-    if (browser) {
-      goto('/network', { replaceState: true });
-    }
+  onMount(() => {
+    goto('/network', { replaceState: true });
   });
 </script>
 

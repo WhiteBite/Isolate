@@ -39,8 +39,8 @@
   );
 
   // Initialize
-  $effect(() => {
-    if (!browser) return;
+  import { onMount } from 'svelte';
+  onMount(() => {
     isTauri = '__TAURI__' in window || '__TAURI_INTERNALS__' in window;
     if (isTauri) {
       startPolling();

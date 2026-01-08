@@ -68,8 +68,8 @@
   }
 
   // Initialize
-  $effect(() => {
-    if (!browser) return;
+  import { onMount } from 'svelte';
+  onMount(() => {
     isTauri = '__TAURI__' in window || '__TAURI_INTERNALS__' in window;
     isDemoMode = !isTauri;
     loadSystemInfo();
@@ -84,7 +84,7 @@
         const { invoke } = await import('@tauri-apps/api/core');
         
         // Wait for backend
-        const ready = await waitForBackend(10, 200);
+        const ready = await waitForBackend(30, 300);
         if (!ready) {
           console.warn('[Diagnostics] Backend not ready after retries');
           return;
@@ -110,7 +110,7 @@
       if (isTauri) {
         const { invoke } = await import('@tauri-apps/api/core');
         
-        const ready = await waitForBackend(10, 200);
+        const ready = await waitForBackend(20, 300);
         if (!ready) {
           console.warn('[Diagnostics] Backend not ready for conflict check');
           return;
@@ -141,7 +141,7 @@
         const { invoke } = await import('@tauri-apps/api/core');
         
         // Wait for backend
-        const ready = await waitForBackend(10, 200);
+        const ready = await waitForBackend(20, 300);
         if (!ready) {
           console.warn('[Diagnostics] Backend not ready for diagnostics');
           toasts.error('Backend not ready');

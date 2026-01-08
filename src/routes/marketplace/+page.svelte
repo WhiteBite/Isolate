@@ -1,12 +1,10 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { browser } from '$app/environment';
+  import { onMount } from 'svelte';
 
   // Redirect to unified plugins page with marketplace tab
-  $effect(() => {
-    if (browser) {
-      goto('/plugins?tab=marketplace', { replaceState: true });
-    }
+  onMount(() => {
+    goto('/plugins?tab=marketplace', { replaceState: true });
   });
 </script>
 

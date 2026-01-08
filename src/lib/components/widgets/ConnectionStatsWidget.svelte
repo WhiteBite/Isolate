@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { browser } from '$app/environment';
   import { connectionStats, type ConnectionHistoryPoint } from '$lib/stores/connectionStats.svelte';
 
   interface Props {
@@ -13,14 +12,13 @@
   let history = $derived(connectionStats.history);
 
   // Initialize store on mount
-  $effect(() => {
-    if (browser) {
-      connectionStats.init();
-      
-      return () => {
-        connectionStats.cleanup();
-      };
-    }
+  import { onMount } from 'svelte';
+  onMount(() => {
+    connectionStats.init();
+    
+    return () => {
+      connectionStats.cleanup();
+    };
   });
 
   // Format bytes to human readable

@@ -137,8 +137,9 @@
     return unsubscribe;
   });
   
-  $effect(() => {
-    if (!browser || initialized) return;
+  import { onMount } from 'svelte';
+  onMount(() => {
+    if (initialized) return;
     initialized = true;
     
     isTauri = '__TAURI__' in window || '__TAURI_INTERNALS__' in window;
@@ -174,7 +175,7 @@
       const { invoke } = await import('@tauri-apps/api/core');
       
       // Wait for backend to be ready
-      const ready = await waitForBackend(10, 200);
+      const ready = await waitForBackend(30, 300);
       if (!ready) {
         console.warn('[Settings] Backend not ready after retries');
         return;

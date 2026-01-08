@@ -143,7 +143,7 @@
       const { invoke } = await import('@tauri-apps/api/core');
       const { listen } = await import('@tauri-apps/api/event');
 
-      const ready = await waitForBackend(10, 200);
+      const ready = await waitForBackend(30, 300);
       if (!ready) {
         console.warn('[Testing] Backend not ready after retries');
         return;

@@ -257,7 +257,8 @@
     }
     
     // Wait for backend to be ready before making any calls
-    const backendReady = await waitForBackend(10, 200);
+    // Backend initialization includes binary integrity verification which can take 3-5 seconds
+    const backendReady = await waitForBackend(30, 300);
     if (!backendReady) {
       logs.error('system', 'Backend failed to initialize after retries');
       isLoading = false;

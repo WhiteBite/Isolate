@@ -95,9 +95,11 @@
     loadError = null;
     logs.info('services', 'Loading services from backend...');
     
-    const ready = await waitForBackend(10, 200);
+    // Wait up to 9 seconds (30 retries * 300ms) for backend to be ready
+    // Backend initialization includes binary integrity verification which can take time
+    const ready = await waitForBackend(30, 300);
     if (!ready) {
-      const errorMsg = 'Backend not ready. Please wait and try again.';
+      const errorMsg = 'Backend not ready after 9 seconds. Please restart the application.';
       logs.error('services', 'Failed to load services - backend not ready');
       loadError = errorMsg;
       loading = false;
@@ -138,7 +140,7 @@
     scanning = true;
     logs.info('services', 'Starting check of all services...');
     
-    const ready = await waitForBackend(5, 200);
+    const ready = await waitForBackend(15, 300);
     if (!ready) {
       logs.error('services', 'Backend not ready');
       toasts.error('Backend not ready. Please wait and try again.');

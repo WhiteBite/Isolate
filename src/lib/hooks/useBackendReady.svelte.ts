@@ -30,9 +30,9 @@ export interface BackendReadyOptions {
 }
 
 const DEFAULT_OPTIONS: Required<BackendReadyOptions> = {
-  maxRetries: 10,
-  initialDelay: 100,
-  maxDelay: 2000,
+  maxRetries: 20,
+  initialDelay: 150,
+  maxDelay: 3000,
   backoffMultiplier: 1.5,
 };
 

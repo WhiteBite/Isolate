@@ -37,12 +37,13 @@
   function getInvoke() { const t = (window as any).__TAURI__; return t?.core?.invoke; }
   function setTab(t: string) { goto(`/plugins?tab=${t}`, { replaceState: true, noScroll: true }); }
 
-  $effect(() => { if (browser && !initialized) { initialized = true; load(); } });
+  import { onMount } from 'svelte';
+  onMount(() => { if (!initialized) { initialized = true; load(); } });
 
   async function load() {
     loading = true;
     try {
-      const ready = await waitForBackend(10, 200);
+      const ready = await waitForBackend(30, 300);
       if (!ready) { loading = false; return; }
       const inv = getInvoke();
       if (!inv) { loading = false; return; }

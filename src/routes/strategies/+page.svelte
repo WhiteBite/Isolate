@@ -77,7 +77,7 @@
     loading = true;
     try {
       const { invoke } = await import('@tauri-apps/api/core');
-      const ready = await waitForBackend(10, 200);
+      const ready = await waitForBackend(30, 300);
       if (!ready) return;
       
       const loadedStrategies = await invoke<any[]>('get_strategies');

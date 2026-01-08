@@ -1162,7 +1162,12 @@ impl StrategyEngine {
         Ok(())
     }
 
-    /// Останавливает процесс стратегии
+    /// Останавливает процесс стратегии с двухэтапным graceful shutdown
+    ///
+    /// ## Graceful Shutdown Process
+    /// 1. Отправляем мягкий сигнал завершения (taskkill на Windows, SIGTERM на Unix)
+    /// 2. Ждём завершения с таймаутом
+    /// 3. Если процесс не завершился — принудительный kill
     async fn stop_process(&self, strategy_id: &str) -> Result<()> {
         let mut process = {
             let mut processes = self.processes.write().await;
@@ -1175,11 +1180,31 @@ impl StrategyEngine {
         debug!(strategy_id, "Stopping strategy process");
 
         if let Some(ref mut child) = process.child {
-            // Пытаемся graceful shutdown через kill
-            // На Windows это отправит TerminateProcess
-            let _ = child.start_kill();
+            // Stage 1: Graceful termination signal
+            #[cfg(windows)]
+            {
+                if let Some(pid) = child.id() {
+                    debug!(strategy_id, pid, "Sending graceful terminate signal via taskkill");
+                    // taskkill без /F отправляет WM_CLOSE, что позволяет процессу
+                    // корректно завершиться и освободить ресурсы (включая WinDivert)
+                    let _ = tokio::process::Command::new("taskkill")
+                        .args(["/PID", &pid.to_string()])
+                        .output()
+                        .await;
+                }
+            }
 
-            // Ждём завершения с таймаутом
+            #[cfg(not(windows))]
+            {
+                use nix::sys::signal::{kill, Signal};
+                use nix::unistd::Pid;
+                if let Some(pid) = child.id() {
+                    debug!(strategy_id, pid, "Sending SIGTERM");
+                    let _ = kill(Pid::from_raw(pid as i32), Signal::SIGTERM);
+                }
+            }
+
+            // Stage 2: Wait for graceful shutdown with timeout
             let shutdown_result = tokio::time::timeout(
                 tokio::time::Duration::from_millis(SHUTDOWN_TIMEOUT_MS),
                 child.wait(),
@@ -1188,18 +1213,25 @@ impl StrategyEngine {
 
             match shutdown_result {
                 Ok(Ok(status)) => {
-                    debug!(strategy_id, ?status, "Process exited gracefully");
+                    debug!(strategy_id, ?status, "Process terminated gracefully");
                 }
                 Ok(Err(e)) => {
-                    warn!(strategy_id, error = %e, "Error waiting for process");
+                    warn!(strategy_id, error = %e, "Error waiting for process, force killing");
+                    // Stage 3: Force kill on error
+                    let _ = child.kill().await;
+                    let _ = child.wait().await;
                 }
                 Err(_) => {
-                    // Таймаут - принудительное завершение
-                    warn!(strategy_id, "Process did not exit gracefully, killing");
+                    // Stage 3: Force kill on timeout
+                    warn!(strategy_id, timeout_ms = SHUTDOWN_TIMEOUT_MS, "Graceful shutdown timeout, force killing");
                     let _ = child.kill().await;
+                    let _ = child.wait().await;
                 }
             }
         }
+
+        // WinDivert guard будет автоматически освобождён через Drop
+        // когда process выйдет из scope
 
         info!(strategy_id, "Strategy process stopped");
         Ok(())

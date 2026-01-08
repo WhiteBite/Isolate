@@ -9,11 +9,18 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum StrategyFamily {
+    /// DNS bypass strategies
     DnsBypass,
+    /// SNI fragmentation strategies
     SniFrag,
+    /// TLS fragmentation strategies
     TlsFrag,
+    /// VLESS proxy strategies
     Vless,
+    /// Hybrid strategies combining multiple techniques
     Hybrid,
+    /// Fake packet strategies (alias for compatibility with YAML configs)
+    Fake,
 }
 
 /// Engine type for strategy execution
@@ -151,6 +158,7 @@ mod tests {
             (StrategyFamily::TlsFrag, "\"tls_frag\""),
             (StrategyFamily::Vless, "\"vless\""),
             (StrategyFamily::Hybrid, "\"hybrid\""),
+            (StrategyFamily::Fake, "\"fake\""),
         ];
 
         for (family, expected_json) in families {

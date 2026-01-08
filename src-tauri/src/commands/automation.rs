@@ -10,6 +10,7 @@ use tracing::{error, info};
 
 use crate::commands::rate_limiter;
 use crate::commands::state_guard::get_state_or_error;
+use crate::commands::validation::{validate_domain, validate_not_empty, validate_strategy_id};
 use crate::core::automation::{
     AutomationEvent, DomainStatus, MonitorConfig, OptimizationResult,
 };
@@ -114,8 +115,24 @@ pub async fn start_domain_monitor(
 ) -> Result<(), IsolateError> {
     let state = get_state_or_error(&app)?;
     
+    // Validate domains list is not empty
     if domains.is_empty() {
         return Err(IsolateError::Validation("At least one domain is required".into()));
+    }
+    
+    // Validate maximum number of domains (prevent DoS)
+    const MAX_DOMAINS: usize = 100;
+    if domains.len() > MAX_DOMAINS {
+        return Err(IsolateError::Validation(
+            format!("Too many domains: maximum {} allowed, got {}", MAX_DOMAINS, domains.len())
+        ));
+    }
+    
+    // Validate each domain format
+    for (i, domain) in domains.iter().enumerate() {
+        validate_domain(domain).map_err(|e| {
+            IsolateError::Validation(format!("Invalid domain at position {}: {}", i + 1, e))
+        })?;
     }
     
     info!(domains = ?domains, "Starting domain monitor");
@@ -193,6 +210,10 @@ pub async fn get_domain_status(
     domain: String,
 ) -> Result<DomainStatus, IsolateError> {
     let state = get_state_or_error(&app)?;
+    
+    // Validate domain format
+    validate_domain(&domain)?;
+    
     Ok(state.domain_monitor.get_domain_status(&domain).await)
 }
 
@@ -216,6 +237,10 @@ pub async fn get_blocked_strategies(
     domain: String,
 ) -> Result<Vec<String>, IsolateError> {
     let state = get_state_or_error(&app)?;
+    
+    // Validate domain format
+    validate_domain(&domain)?;
+    
     Ok(state.blocked_manager.get_blocked_for_domain(&domain).await)
 }
 
@@ -227,6 +252,10 @@ pub async fn block_strategy(
     strategy_id: String,
 ) -> Result<(), IsolateError> {
     let state = get_state_or_error(&app)?;
+    
+    // Validate inputs
+    validate_domain(&domain)?;
+    validate_strategy_id(&strategy_id)?;
     
     info!(domain = %domain, strategy_id = %strategy_id, "Blocking strategy");
     state.blocked_manager.block(&domain, &strategy_id).await?;
@@ -242,6 +271,10 @@ pub async fn unblock_strategy(
 ) -> Result<bool, IsolateError> {
     let state = get_state_or_error(&app)?;
     
+    // Validate inputs
+    validate_domain(&domain)?;
+    validate_strategy_id(&strategy_id)?;
+    
     info!(domain = %domain, strategy_id = %strategy_id, "Unblocking strategy");
     Ok(state.blocked_manager.unblock(&domain, &strategy_id).await?)
 }
@@ -254,6 +287,9 @@ pub async fn get_locked_strategy(
     protocol: String,
 ) -> Result<Option<String>, IsolateError> {
     let state = get_state_or_error(&app)?;
+    
+    // Validate domain format
+    validate_domain(&domain)?;
     
     let proto = Protocol::from_str(&protocol).ok_or_else(|| {
         IsolateError::Validation(format!("Invalid protocol: {}", protocol))
@@ -271,6 +307,10 @@ pub async fn lock_strategy(
     protocol: String,
 ) -> Result<(), IsolateError> {
     let state = get_state_or_error(&app)?;
+    
+    // Validate inputs
+    validate_domain(&domain)?;
+    validate_strategy_id(&strategy_id)?;
     
     let proto = Protocol::from_str(&protocol).ok_or_else(|| {
         IsolateError::Validation(format!("Invalid protocol: {}", protocol))
@@ -290,6 +330,9 @@ pub async fn unlock_strategy(
 ) -> Result<Option<String>, IsolateError> {
     let state = get_state_or_error(&app)?;
     
+    // Validate domain format
+    validate_domain(&domain)?;
+    
     let proto = Protocol::from_str(&protocol).ok_or_else(|| {
         IsolateError::Validation(format!("Invalid protocol: {}", protocol))
     })?;
@@ -305,6 +348,10 @@ pub async fn get_automation_history(
     domain: String,
 ) -> Result<HashMap<String, StrategyStats>, IsolateError> {
     let state = get_state_or_error(&app)?;
+    
+    // Validate domain format
+    validate_domain(&domain)?;
+    
     Ok(state.history_manager.get_domain_history(&domain).await)
 }
 
@@ -327,6 +374,19 @@ pub async fn invalidate_strategy_cache(
     let state = get_state_or_error(&app)?;
     
     if let Some(key) = env_key {
+        // Validate env_key format (alphanumeric with underscores/hyphens, max 128 chars)
+        validate_not_empty(&key, "Environment key")?;
+        if key.len() > 128 {
+            return Err(IsolateError::Validation(
+                "Environment key exceeds maximum length of 128 characters".to_string()
+            ));
+        }
+        if !key.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == ':') {
+            return Err(IsolateError::Validation(
+                "Environment key can only contain alphanumeric characters, underscores, hyphens, and colons".to_string()
+            ));
+        }
+        
         info!(env_key = %key, "Invalidating strategy cache");
         state.cache_manager.invalidate(&key).await?;
     } else {

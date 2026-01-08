@@ -45,6 +45,9 @@ pub async fn get_service_status(
     state: State<'_, Arc<AppState>>,
     service_id: String,
 ) -> Result<NewServiceStatus, IsolateError> {
+    // Validate service_id
+    validate_service_id(&service_id)?;
+    
     info!(service_id = %service_id, "Getting service status");
     
     state
@@ -60,6 +63,9 @@ pub async fn check_single_service(
     state: State<'_, Arc<AppState>>,
     service_id: String,
 ) -> Result<NewServiceStatus, IsolateError> {
+    // Validate service_id
+    validate_service_id(&service_id)?;
+    
     info!(service_id = %service_id, "Checking service (fresh)");
     
     let result = state
@@ -337,6 +343,9 @@ pub async fn unregister_custom_service(
     state: State<'_, Arc<AppState>>,
     service_id: String,
 ) -> Result<(), IsolateError> {
+    // Validate service_id
+    validate_service_id(&service_id)?;
+    
     info!(service_id = %service_id, "Unregistering custom service");
     
     state

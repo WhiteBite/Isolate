@@ -4,6 +4,7 @@ use std::sync::Arc;
 use tauri::{AppHandle, Emitter, State};
 use tracing::info;
 
+use crate::commands::validation::validate_strategy_id;
 use crate::core::errors::IsolateError;
 use crate::core::models::Strategy;
 use crate::core::storage::{StrategyHistoryEntry, StrategyStats};
@@ -48,6 +49,9 @@ pub async fn apply_strategy(
 ) -> Result<(), IsolateError> {
     // Rate limit: max 1 call per 5 seconds
     crate::commands::rate_limiter::check_rate_limit("apply_strategy", 5)?;
+    
+    // Validate strategy_id to prevent path traversal and injection attacks
+    validate_strategy_id(&strategy_id)?;
     
     info!("Applying strategy: {}", strategy_id);
     
@@ -194,6 +198,31 @@ pub async fn record_strategy_result(
     success: bool,
     latency_ms: Option<f64>,
 ) -> Result<(), IsolateError> {
+    // Validate strategy_id
+    validate_strategy_id(&strategy_id)?;
+    
+    // Validate service_id (similar format to strategy_id)
+    crate::commands::validation::validate_not_empty(&service_id, "Service ID")?;
+    if service_id.len() > 64 {
+        return Err(IsolateError::Validation(
+            "Service ID exceeds maximum length of 64 characters".to_string()
+        ));
+    }
+    if !service_id.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
+        return Err(IsolateError::Validation(
+            "Service ID can only contain alphanumeric characters, underscores, and hyphens".to_string()
+        ));
+    }
+    
+    // Validate latency if provided
+    if let Some(latency) = latency_ms {
+        if latency < 0.0 || latency > 300_000.0 {
+            return Err(IsolateError::Validation(
+                "Latency must be between 0 and 300000 ms".to_string()
+            ));
+        }
+    }
+    
     info!(
         strategy_id = %strategy_id,
         service_id = %service_id,
@@ -217,7 +246,11 @@ pub async fn get_strategy_history(
     strategy_id: String,
     limit: Option<u32>,
 ) -> Result<Vec<StrategyHistoryEntry>, IsolateError> {
-    let limit = limit.unwrap_or(50);
+    // Validate strategy_id
+    validate_strategy_id(&strategy_id)?;
+    
+    // Validate and cap limit to prevent excessive queries
+    let limit = limit.unwrap_or(50).min(1000);
     
     info!(strategy_id = %strategy_id, limit, "Getting strategy history");
     
@@ -235,6 +268,9 @@ pub async fn get_strategy_statistics(
     state: State<'_, Arc<AppState>>,
     strategy_id: String,
 ) -> Result<StrategyStats, IsolateError> {
+    // Validate strategy_id
+    validate_strategy_id(&strategy_id)?;
+    
     info!(strategy_id = %strategy_id, "Getting strategy statistics");
     
     state
@@ -264,6 +300,9 @@ pub async fn clear_strategy_history(
     state: State<'_, Arc<AppState>>,
     strategy_id: String,
 ) -> Result<(), IsolateError> {
+    // Validate strategy_id
+    validate_strategy_id(&strategy_id)?;
+    
     info!(strategy_id = %strategy_id, "Clearing strategy history");
     
     state

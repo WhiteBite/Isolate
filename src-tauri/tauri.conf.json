@@ -5,8 +5,9 @@
     "identifier": "com.isolate.app",
     "plugins": {
         "updater": {
-            "_comment": "TODO: Generate real minisign keypair with `tauri signer generate -w ~/.tauri/isolate.key` and replace pubkey",
-            "pubkey": "",
+            "_comment": "IMPORTANT: For production, generate keypair with `tauri signer generate -w ~/.tauri/isolate.key` and set pubkey. Empty pubkey disables updater.",
+            "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IElTT0xBVEVfREVWX0tFWQpSV1FBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE9Cg==",
+            "_pubkey_note": "This is a PLACEHOLDER key for development. Replace with real key before release!",
             "endpoints": [
                 "https://github.com/WhiteBite/Isolate/releases/latest/download/latest.json"
             ],

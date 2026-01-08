@@ -84,6 +84,19 @@ pub async fn delete_proxy(
     state: State<'_, Arc<AppState>>,
     id: String,
 ) -> Result<(), IsolateError> {
+    // Validate proxy ID
+    validate_not_empty(&id, "Proxy ID")?;
+    if id.len() > 64 {
+        return Err(IsolateError::Validation(
+            "Proxy ID exceeds maximum length of 64 characters".to_string()
+        ));
+    }
+    if !id.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
+        return Err(IsolateError::Validation(
+            "Proxy ID can only contain alphanumeric characters, underscores, and hyphens".to_string()
+        ));
+    }
+    
     info!(id = %id, "Deleting proxy");
     
     // Stop proxy if running
@@ -103,12 +116,34 @@ pub async fn delete_proxy(
 // Proxy Control Commands
 // ============================================================================
 
+/// Helper function to validate proxy ID format
+fn validate_proxy_id(id: &str) -> Result<(), IsolateError> {
+    validate_not_empty(id, "Proxy ID")?;
+    
+    if id.len() > 64 {
+        return Err(IsolateError::Validation(
+            "Proxy ID exceeds maximum length of 64 characters".to_string()
+        ));
+    }
+    
+    if !id.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
+        return Err(IsolateError::Validation(
+            "Proxy ID can only contain alphanumeric characters, underscores, and hyphens".to_string()
+        ));
+    }
+    
+    Ok(())
+}
+
 /// Apply proxy (start sing-box with this proxy)
 #[tauri::command]
 pub async fn apply_proxy(
     state: State<'_, Arc<AppState>>,
     id: String,
 ) -> Result<(), IsolateError> {
+    // Validate proxy ID
+    validate_proxy_id(&id)?;
+    
     info!(id = %id, "Applying proxy");
     
     // Get proxy config
@@ -192,6 +227,9 @@ pub async fn test_proxy(
         "test_proxy",
         crate::commands::rate_limiter::limits::TEST_PROXY,
     )?;
+    
+    // Validate proxy ID
+    validate_proxy_id(&id)?;
     
     info!(id = %id, "Testing proxy connectivity");
     
@@ -399,6 +437,9 @@ pub async fn export_proxy_url(
     state: State<'_, Arc<AppState>>,
     id: String,
 ) -> Result<String, IsolateError> {
+    // Validate proxy ID
+    validate_proxy_id(&id)?;
+    
     info!(id = %id, "Exporting proxy to URL");
     
     let proxy = state
@@ -418,6 +459,9 @@ pub async fn deactivate_proxy(
     state: State<'_, Arc<AppState>>,
     id: String,
 ) -> Result<(), IsolateError> {
+    // Validate proxy ID
+    validate_proxy_id(&id)?;
+    
     info!(id = %id, "Deactivating proxy");
     
     // Stop sing-box if running

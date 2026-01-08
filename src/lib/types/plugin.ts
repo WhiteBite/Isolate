@@ -102,7 +102,7 @@ export interface PluginPermissions {
 // Plugin Manifest
 // ============================================================================
 
-export type PluginType = 'service-checker' | 'ui-plugin' | 'script-plugin' | 'hostlist-provider' | 'strategy-config';
+export type PluginType = 'service-checker' | 'strategy-provider' | 'hostlist-provider' | 'ui-widget' | 'script-plugin';
 
 export interface PluginManifest {
   /** Unique plugin ID (kebab-case) */

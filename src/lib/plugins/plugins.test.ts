@@ -59,7 +59,7 @@ function createTestManifest(overrides: Partial<PluginManifest> = {}): PluginMani
     id: 'test-plugin',
     name: 'Test Plugin',
     version: '1.0.0',
-    type: 'ui-plugin',
+    type: 'ui-widget',
     author: 'Test Author',
     description: 'A test plugin',
     icon: '🧪',
@@ -123,11 +123,11 @@ function createHostlistProviderManifest(): PluginManifest {
 
 describe('Plugin Types', () => {
   describe('PluginManifest validation', () => {
-    it('accepts valid ui-plugin manifest', () => {
+    it('accepts valid ui-widget manifest', () => {
       const manifest = createTestManifest();
       
       expect(manifest.id).toBe('test-plugin');
-      expect(manifest.type).toBe('ui-plugin');
+      expect(manifest.type).toBe('ui-widget');
       expect(manifest.contributes.widgets).toHaveLength(1);
     });
 
@@ -148,10 +148,10 @@ describe('Plugin Types', () => {
     it('validates all plugin types', () => {
       const validTypes: PluginType[] = [
         'service-checker',
-        'ui-plugin', 
+        'ui-widget', 
         'script-plugin',
         'hostlist-provider',
-        'strategy-config'
+        'strategy-provider'
       ];
       
       validTypes.forEach(type => {
@@ -689,7 +689,7 @@ describe('Plugin Scanner', () => {
     });
 
     it('validates plugin type enum', () => {
-      const validTypes = ['service-checker', 'ui-plugin', 'script-plugin', 'hostlist-provider', 'strategy-config'];
+      const validTypes = ['service-checker', 'ui-widget', 'script-plugin', 'hostlist-provider', 'strategy-provider'];
       
       validTypes.forEach(type => {
         const manifest = createTestManifest({ type: type as PluginType });
@@ -699,7 +699,7 @@ describe('Plugin Scanner', () => {
 
     it('rejects invalid plugin types', () => {
       const invalidTypes = ['invalid', 'unknown', 'custom'];
-      const validTypes = ['service-checker', 'ui-plugin', 'script-plugin', 'hostlist-provider', 'strategy-config'];
+      const validTypes = ['service-checker', 'ui-widget', 'script-plugin', 'hostlist-provider', 'strategy-provider'];
       
       invalidTypes.forEach(type => {
         expect(validTypes).not.toContain(type);
@@ -736,7 +736,7 @@ describe('Builtin Plugins', () => {
       const { statusWidgetManifest } = await import('./builtin');
       
       expect(statusWidgetManifest.id).toBe('builtin-status');
-      expect(statusWidgetManifest.type).toBe('ui-plugin');
+      expect(statusWidgetManifest.type).toBe('ui-widget');
       expect(statusWidgetManifest.contributes.widgets).toHaveLength(1);
       expect(statusWidgetManifest.contributes.widgets![0].slot).toBe('dashboard');
     });
@@ -745,7 +745,7 @@ describe('Builtin Plugins', () => {
       const { healthWidgetManifest } = await import('./builtin');
       
       expect(healthWidgetManifest.id).toBe('builtin-health');
-      expect(healthWidgetManifest.type).toBe('ui-plugin');
+      expect(healthWidgetManifest.type).toBe('ui-widget');
       expect(healthWidgetManifest.contributes.widgets).toHaveLength(1);
     });
 

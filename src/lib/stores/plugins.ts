@@ -6,7 +6,7 @@ import { logger } from '$lib/utils/logger';
 // Re-export PluginSlotLocation for components that import from this module
 export type { PluginSlotLocation } from '$lib/types/plugin';
 
-export type PluginType = 'service-checker' | 'hostlist-provider' | 'strategy-config' | 'ui-plugin' | 'script-plugin';
+export type PluginType = 'service-checker' | 'strategy-provider' | 'hostlist-provider' | 'ui-widget' | 'script-plugin';
 
 export type PluginLevel = 1 | 2 | 3;
 
@@ -80,9 +80,9 @@ export function getPluginLevel(type: PluginType): PluginLevel {
   switch (type) {
     case 'service-checker':
     case 'hostlist-provider':
-    case 'strategy-config':
+    case 'strategy-provider':
       return 1;
-    case 'ui-plugin':
+    case 'ui-widget':
       return 2;
     case 'script-plugin':
       return 3;
@@ -115,9 +115,9 @@ export function getLevelColor(level: PluginLevel): string {
 export function getTypeLabel(type: PluginType): string {
   const labels: Record<PluginType, string> = {
     'service-checker': 'Service Checker',
+    'strategy-provider': 'Strategy Provider',
     'hostlist-provider': 'Hostlist Provider',
-    'strategy-config': 'Strategy Config',
-    'ui-plugin': 'UI Plugin',
+    'ui-widget': 'UI Widget',
     'script-plugin': 'Script'
   };
   return labels[type] || 'Unknown';
@@ -127,9 +127,9 @@ export function getTypeLabel(type: PluginType): string {
 export function getTypeIcon(type: PluginType): string {
   const icons: Record<PluginType, string> = {
     'service-checker': '📡',
+    'strategy-provider': '🎯',
     'hostlist-provider': '📋',
-    'strategy-config': '🎯',
-    'ui-plugin': '🎨',
+    'ui-widget': '🎨',
     'script-plugin': '📜'
   };
   return icons[type] || '📦';
@@ -218,9 +218,9 @@ export async function loadPluginsFromBackend(): Promise<PluginInfo[]> {
       .map(bp => {
         const typeMap: Record<string, PluginType> = {
           'service-checker': 'service-checker',
-          'strategy-provider': 'strategy-config',
+          'strategy-provider': 'strategy-provider',
           'hostlist-provider': 'hostlist-provider',
-          'ui-widget': 'ui-plugin',
+          'ui-widget': 'ui-widget',
           'script-plugin': 'script-plugin',
         };
         const rawType = bp.manifest.type;
@@ -257,9 +257,9 @@ export async function loadPluginsFromBackend(): Promise<PluginInfo[]> {
 function getDefaultIcon(type: PluginType): string {
   const icons: Record<PluginType, string> = {
     'service-checker': '📡',
+    'strategy-provider': '🎯',
     'hostlist-provider': '📋',
-    'strategy-config': '🎯',
-    'ui-plugin': '🎨',
+    'ui-widget': '🎨',
     'script-plugin': '📜'
   };
   return icons[type] || '📦';

@@ -32,7 +32,7 @@ function parseManifest(raw: unknown, path: string): PluginManifest | null {
     }
     
     // Validate type
-    const validTypes = ['service-checker', 'ui-plugin', 'script-plugin', 'hostlist-provider', 'strategy-config'];
+    const validTypes = ['service-checker', 'strategy-provider', 'hostlist-provider', 'ui-widget', 'script-plugin'];
     if (!validTypes.includes(manifest.type)) {
       console.warn(`[Scanner] Invalid plugin type "${manifest.type}" at ${path}`);
       return null;
@@ -81,7 +81,7 @@ export async function loadDiscoveredPlugins(): Promise<void> {
   console.log('[Scanner] Loading discovered plugins...');
   
   const manifests = discoverPlugins();
-  const uiPlugins = manifests.filter(m => m.type === 'ui-plugin');
+  const uiPlugins = manifests.filter(m => m.type === 'ui-widget');
   
   for (const manifest of uiPlugins) {
     try {
@@ -115,7 +115,7 @@ export async function reloadPlugin(pluginId: string): Promise<void> {
   const manifests = discoverPlugins();
   const manifest = manifests.find(m => m.id === pluginId);
   
-  if (manifest && manifest.type === 'ui-plugin') {
+  if (manifest && manifest.type === 'ui-widget') {
     const manifestPath = Object.keys(pluginManifests).find(path => {
       const mod = pluginManifests[path] as { default?: PluginManifest } | PluginManifest;
       const m = (mod as { default?: PluginManifest }).default ?? mod;

@@ -15,9 +15,9 @@ export type TypeFilter = 'all' | PluginType;
 export const typeTabs: { id: TypeFilter; label: string; icon: string; color: string; description: string }[] = [
   { id: 'all', label: 'All', icon: '📦', color: 'indigo', description: 'All plugins' },
   { id: 'service-checker', label: 'Services', icon: '📡', color: 'emerald', description: 'Service availability checks' },
-  { id: 'strategy-config', label: 'Strategies', icon: '🎯', color: 'violet', description: 'DPI bypass configurations' },
+  { id: 'strategy-provider', label: 'Strategies', icon: '🎯', color: 'violet', description: 'DPI bypass configurations' },
   { id: 'hostlist-provider', label: 'Hostlists', icon: '📋', color: 'cyan', description: 'Domain lists' },
-  { id: 'ui-plugin', label: 'UI Widgets', icon: '🎨', color: 'pink', description: 'Visual components' },
+  { id: 'ui-widget', label: 'UI Widgets', icon: '🎨', color: 'pink', description: 'Visual components' },
   { id: 'script-plugin', label: 'Scripts', icon: '📜', color: 'amber', description: 'Lua scripts' }
 ];
 

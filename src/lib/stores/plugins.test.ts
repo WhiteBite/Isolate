@@ -31,7 +31,7 @@ function createTestPlugin(overrides: Partial<PluginInfo> & { id: string; name: s
     version: '1.0.0',
     author: 'Test Author',
     description: 'Test plugin',
-    type: 'ui-plugin',
+    type: 'ui-widget',
     enabled: true,
     level: 2,
     ...overrides,
@@ -272,12 +272,12 @@ describe('loadPluginsFromBackend', () => {
   it('filters out plugins with errors', async () => {
     const backendPlugins = [
       {
-        manifest: { id: 'good-plugin', name: 'Good Plugin', version: '1.0.0', author: 'Author', type: 'ui-plugin' },
+        manifest: { id: 'good-plugin', name: 'Good Plugin', version: '1.0.0', author: 'Author', type: 'ui-widget' },
         enabled: true,
         path: '/plugins/good'
       },
       {
-        manifest: { id: 'bad-plugin', name: 'Bad Plugin', version: '1.0.0', author: 'Author', type: 'ui-plugin' },
+        manifest: { id: 'bad-plugin', name: 'Bad Plugin', version: '1.0.0', author: 'Author', type: 'ui-widget' },
         enabled: false,
         path: '/plugins/bad',
         error: 'Failed to load'
@@ -297,12 +297,12 @@ describe('loadPluginsFromBackend', () => {
   it('filters out plugins with invalid manifest', async () => {
     const backendPlugins = [
       {
-        manifest: { id: 'valid', name: 'Valid Plugin', version: '1.0.0', author: 'Author', type: 'ui-plugin' },
+        manifest: { id: 'valid', name: 'Valid Plugin', version: '1.0.0', author: 'Author', type: 'ui-widget' },
         enabled: true,
         path: '/plugins/valid'
       },
       {
-        manifest: { id: '', name: '', version: '1.0.0', author: 'Author', type: 'ui-plugin' },
+        manifest: { id: '', name: '', version: '1.0.0', author: 'Author', type: 'ui-widget' },
         enabled: true,
         path: '/plugins/invalid'
       },
@@ -326,17 +326,17 @@ describe('loadPluginsFromBackend', () => {
   it('filters out plugins with placeholder names', async () => {
     const backendPlugins = [
       {
-        manifest: { id: 'real', name: 'Real Plugin', version: '1.0.0', author: 'Author', type: 'ui-plugin' },
+        manifest: { id: 'real', name: 'Real Plugin', version: '1.0.0', author: 'Author', type: 'ui-widget' },
         enabled: true,
         path: '/plugins/real'
       },
       {
-        manifest: { id: 'invalid', name: 'Invalid Plugin', version: '1.0.0', author: 'Author', type: 'ui-plugin' },
+        manifest: { id: 'invalid', name: 'Invalid Plugin', version: '1.0.0', author: 'Author', type: 'ui-widget' },
         enabled: true,
         path: '/plugins/invalid'
       },
       {
-        manifest: { id: 'unknown', name: 'Unknown', version: '1.0.0', author: 'Author', type: 'ui-plugin' },
+        manifest: { id: 'unknown', name: 'Unknown', version: '1.0.0', author: 'Author', type: 'ui-widget' },
         enabled: true,
         path: '/plugins/unknown'
       }
@@ -369,9 +369,9 @@ describe('loadPluginsFromBackend', () => {
     const result = await loadPluginsFromBackend();
     
     expect(result.find(p => p.id === 'p1')?.type).toBe('service-checker');
-    expect(result.find(p => p.id === 'p2')?.type).toBe('strategy-config');
+    expect(result.find(p => p.id === 'p2')?.type).toBe('strategy-provider');
     expect(result.find(p => p.id === 'p3')?.type).toBe('hostlist-provider');
-    expect(result.find(p => p.id === 'p4')?.type).toBe('ui-plugin');
+    expect(result.find(p => p.id === 'p4')?.type).toBe('ui-widget');
     expect(result.find(p => p.id === 'p5')?.type).toBe('script-plugin');
     expect(result.find(p => p.id === 'p6')?.type).toBe('service-checker'); // fallback
   });
@@ -404,12 +404,12 @@ describe('getPluginLevel helper', () => {
     expect(getPluginLevel('hostlist-provider')).toBe(1);
   });
 
-  it('returns level 1 for strategy-config', () => {
-    expect(getPluginLevel('strategy-config')).toBe(1);
+  it('returns level 1 for strategy-provider', () => {
+    expect(getPluginLevel('strategy-provider')).toBe(1);
   });
 
-  it('returns level 2 for ui-plugin', () => {
-    expect(getPluginLevel('ui-plugin')).toBe(2);
+  it('returns level 2 for ui-widget', () => {
+    expect(getPluginLevel('ui-widget')).toBe(2);
   });
 
   it('returns level 3 for script-plugin', () => {
@@ -479,12 +479,12 @@ describe('getTypeLabel helper', () => {
     expect(getTypeLabel('hostlist-provider')).toBe('Hostlist Provider');
   });
 
-  it('returns "Strategy Config" for strategy-config', () => {
-    expect(getTypeLabel('strategy-config')).toBe('Strategy Config');
+  it('returns "Strategy Provider" for strategy-provider', () => {
+    expect(getTypeLabel('strategy-provider')).toBe('Strategy Provider');
   });
 
-  it('returns "UI Plugin" for ui-plugin', () => {
-    expect(getTypeLabel('ui-plugin')).toBe('UI Plugin');
+  it('returns "UI Widget" for ui-widget', () => {
+    expect(getTypeLabel('ui-widget')).toBe('UI Widget');
   });
 
   it('returns "Script" for script-plugin', () => {
@@ -505,12 +505,12 @@ describe('getTypeIcon helper', () => {
     expect(getTypeIcon('hostlist-provider')).toBe('📋');
   });
 
-  it('returns 🎯 for strategy-config', () => {
-    expect(getTypeIcon('strategy-config')).toBe('🎯');
+  it('returns 🎯 for strategy-provider', () => {
+    expect(getTypeIcon('strategy-provider')).toBe('🎯');
   });
 
-  it('returns 🎨 for ui-plugin', () => {
-    expect(getTypeIcon('ui-plugin')).toBe('🎨');
+  it('returns 🎨 for ui-widget', () => {
+    expect(getTypeIcon('ui-widget')).toBe('🎨');
   });
 
   it('returns 📜 for script-plugin', () => {
@@ -693,8 +693,8 @@ describe('plugin type and level consistency', () => {
     const types: PluginType[] = [
       'service-checker',
       'hostlist-provider',
-      'strategy-config',
-      'ui-plugin',
+      'strategy-provider',
+      'ui-widget',
       'script-plugin'
     ];
     
@@ -707,8 +707,8 @@ describe('plugin type and level consistency', () => {
     const types: PluginType[] = [
       'service-checker',
       'hostlist-provider',
-      'strategy-config',
-      'ui-plugin',
+      'strategy-provider',
+      'ui-widget',
       'script-plugin'
     ];
     
@@ -737,8 +737,8 @@ describe('plugin type and level consistency', () => {
     const types: PluginType[] = [
       'service-checker',
       'hostlist-provider',
-      'strategy-config',
-      'ui-plugin',
+      'strategy-provider',
+      'ui-widget',
       'script-plugin'
     ];
     

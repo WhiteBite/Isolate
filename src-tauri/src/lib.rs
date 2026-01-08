@@ -405,6 +405,7 @@ pub fn run() {
             commands::import_proxy_url,
             commands::export_proxy_url,
             commands::import_subscription,
+            commands::fetch_subscription_content,
             // Routing commands
             commands::get_routing_rules,
             commands::add_routing_rule,

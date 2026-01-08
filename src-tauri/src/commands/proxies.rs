@@ -483,3 +483,48 @@ pub async fn deactivate_proxy(
     info!(id = %id, "Proxy deactivated successfully");
     Ok(())
 }
+
+
+// ============================================================================
+// Subscription Fetch Command (for frontend)
+// ============================================================================
+
+/// Fetch subscription content from URL (CORS-free)
+#[tauri::command]
+pub async fn fetch_subscription_content(url: String) -> Result<String, IsolateError> {
+    // SSRF Protection
+    validate_public_url(&url)?;
+    
+    // Rate limiting
+    crate::commands::rate_limiter::check_rate_limit_with_config(
+        "fetch_subscription_content",
+        crate::commands::rate_limiter::limits::IMPORT_SUBSCRIPTION,
+    )?;
+    
+    info!(url = %url, "Fetching subscription content");
+    
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .user_agent("Isolate/1.0")
+        .build()
+        .network_context("Failed to create HTTP client")?;
+    
+    let response = client
+        .get(&url)
+        .send()
+        .await
+        .network_context("Failed to fetch subscription")?;
+    
+    if !response.status().is_success() {
+        return Err(IsolateError::Network(format!(
+            "HTTP {}: {}", 
+            response.status().as_u16(),
+            response.status().canonical_reason().unwrap_or("Unknown")
+        )));
+    }
+    
+    response
+        .text()
+        .await
+        .network_context("Failed to read response body")
+}

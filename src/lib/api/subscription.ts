@@ -153,20 +153,14 @@ export async function fetchSubscription(url: string): Promise<SubscriptionParseR
     let content: string;
     
     if (isTauri) {
-      // Use Tauri's HTTP client for CORS-free requests
-      const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http');
-      const response = await tauriFetch(url, {
-        method: 'GET',
-        headers: {
-          'User-Agent': 'Isolate/1.0'
-        }
-      });
-      
-      if (!response.ok) {
-        return { success: false, proxies: [], error: `HTTP ${response.status}: ${response.statusText}` };
+      // Use Tauri backend command for CORS-free requests
+      const { invoke } = await import('@tauri-apps/api/core');
+      try {
+        content = await invoke<string>('fetch_subscription_content', { url });
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        return { success: false, proxies: [], error: message };
       }
-      
-      content = await response.text();
     } else {
       // Browser mode - try direct fetch (may fail due to CORS)
       const response = await fetch(url, {

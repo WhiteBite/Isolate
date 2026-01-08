@@ -378,11 +378,11 @@
 
 ### Backend
 
-- [ ] **Strategy Prewarming** → Предзапуск стратегий в фоне для быстрого переключения
-- [ ] **Auto Failover** → Автоматическое переключение на backup стратегию при сбое
-- [ ] **Strategy Metrics Collection** → Сбор метрик производительности в реальном времени (uptime, bytes, connections, errors)
-- [ ] **Strategy Composition** → Комбинирование стратегий для разных сервисов (YouTube через Zapret, Discord через VLESS)
-- [ ] **Process Resource Limits** → Ограничение памяти/CPU для запускаемых процессов
+- [x] **Strategy Prewarming** → ✅ Создан strategy_prewarming.rs (предзапуск стратегий в фоне)
+- [x] **Auto Failover** → ✅ Создан auto_failover.rs + commands/failover.rs + UI (AutoRecoverySettings.svelte, FailoverStatusWidget.svelte)
+- [x] **Strategy Metrics Collection** → ✅ Создан strategy_metrics.rs (сбор метрик в реальном времени)
+- [x] **Strategy Composition** → ✅ Создан strategy_composition.rs + UI (StrategyCompositionSettings.svelte)
+- [x] **Process Resource Limits** → ✅ Создан process_limits.rs + UI (ResourceLimitsSettings.svelte)
 
 ### Frontend
 
@@ -392,20 +392,20 @@
 - [x] **Undo/Redo** → ⏸️ Отложено
 - [x] **Keyboard Shortcuts Overlay** → ✅ Создан KeyboardOverlay.svelte (показывается при удержании Ctrl)
 - [x] **Service Health History** → ✅ Создан ServiceHealthChart.svelte + backend API + интеграция с checker
-- [ ] **Auto-recovery** → Автопереключение на backup при деградации
+- [x] **Auto-recovery UI** → ✅ Создан AutoRecoverySettings.svelte + FailoverStatusWidget.svelte
 
 ### Configs
 
 - [x] **Профили провайдеров** → ✅ Созданы configs/providers/ (6 провайдеров), backend API, UI в Settings и Onboarding
 - [x] **Автообновление hostlists** → ✅ Создан hostlist_updater.rs, UI в Settings → Hostlists tab
-- [ ] **A/B тестирование стратегий** → Сравнение эффективности
+- [x] **A/B тестирование стратегий** → ✅ Расширен ab_testing.rs: Mann-Whitney U тест, доверительные интервалы, улучшенный determine_winner_with_confidence
 
 ### Infrastructure
 
-- [ ] **Nightly builds** → Автоматические ночные сборки
-- [ ] **Performance benchmarks в CI** → Отслеживание регрессий производительности
-- [ ] **Sentry интеграция** → Crash reporting
-- [ ] **Smoke tests после релиза** → Проверка что .exe запускается
+- [x] **Nightly builds** → ✅ Уже реализовано (nightly.yml, cleanup-nightly.yml)
+- [x] **Performance benchmarks в CI** → ✅ Уже реализовано (benchmarks.yml, scoring.rs, strategy_engine.rs benches)
+- [x] **Sentry интеграция** → ✅ Уже реализовано (sentry_integration.rs, crashReporting.ts, PrivacySettings.svelte)
+- [x] **Smoke tests после релиза** → ✅ Уже реализовано (smoke-test.yml, lib.rs --smoke-test flag)
 
 ---
 

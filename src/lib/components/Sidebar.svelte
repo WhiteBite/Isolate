@@ -61,7 +61,9 @@
   }
 
   // Загружаем при монтировании
-  $effect(() => {
+  import { onMount } from 'svelte';
+  
+  onMount(() => {
     loadBadgeCounts();
   });
 

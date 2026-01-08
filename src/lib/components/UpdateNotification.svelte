@@ -1,6 +1,7 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core';
   import { open } from '@tauri-apps/plugin-shell';
+  import { onMount } from 'svelte';
   
   interface GitHubUpdateInfo {
     version: string;
@@ -13,16 +14,36 @@
   let checking = $state(false);
   let dismissed = $state(false);
   let showNotes = $state(false);
+  let hasChecked = false;
   
   async function checkForUpdates() {
-    if (checking) return;
+    if (checking || hasChecked) return;
+    hasChecked = true;
     checking = true;
     
     try {
+      // Wait for backend to be ready
+      let ready = false;
+      for (let i = 0; i < 10; i++) {
+        try {
+          ready = await invoke<boolean>('is_backend_ready');
+          if (ready) break;
+        } catch {
+          // Backend not ready yet
+        }
+        await new Promise(r => setTimeout(r, 500));
+      }
+      
+      if (!ready) {
+        console.warn('[UpdateNotification] Backend not ready, skipping update check');
+        return;
+      }
+      
       const result = await invoke<GitHubUpdateInfo | null>('check_github_updates');
       updateInfo = result;
     } catch (e) {
-      console.error('Failed to check for updates:', e);
+      // Silently ignore update check errors (rate limits, network issues)
+      // console.error('Failed to check for updates:', e);
     } finally {
       checking = false;
     }
@@ -38,9 +59,11 @@
     dismissed = true;
   }
   
-  // Check on mount
-  $effect(() => {
-    checkForUpdates();
+  // Check once on mount
+  onMount(() => {
+    // Delay check to avoid race with other init
+    const timer = setTimeout(checkForUpdates, 2000);
+    return () => clearTimeout(timer);
   });
 </script>
 

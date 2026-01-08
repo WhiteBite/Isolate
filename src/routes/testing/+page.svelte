@@ -219,7 +219,9 @@
   }
 
   // Initialize on mount
-  $effect(() => {
+  import { onMount } from 'svelte';
+  
+  onMount(() => {
     loadData();
     return () => {
       unlistenProgress?.();

@@ -200,7 +200,9 @@
     }
   }
 
-  $effect(() => {
+  import { onMount } from 'svelte';
+  
+  onMount(() => {
     initialize();
     loadServices();
     return () => {

@@ -88,7 +88,9 @@
   }
 
   // Lifecycle
-  $effect(() => {
+  import { onMount } from 'svelte';
+  
+  onMount(() => {
     startPolling();
     return () => stopPolling();
   });

@@ -31,7 +31,9 @@
   });
 
   // Load saved settings from backend on mount
-  $effect(() => {
+  import { onMount } from 'svelte';
+  
+  onMount(() => {
     loadSettings();
   });
   

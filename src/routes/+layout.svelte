@@ -113,8 +113,10 @@
     }
   }
 
-  // Initialize on mount with guard
-  $effect(() => {
+  // Initialize on mount with guard - use onMount to run only once
+  import { onMount } from 'svelte';
+  
+  onMount(() => {
     if (!initialized && !isCheckingOnboarding) {
       checkOnboarding();
     }

@@ -81,8 +81,10 @@
     })
   );
 
-  // Load services on mount
-  $effect(() => {
+  // Load services on mount - use onMount to run only once
+  import { onMount } from 'svelte';
+  
+  onMount(() => {
     loadFromBackend();
   });
 

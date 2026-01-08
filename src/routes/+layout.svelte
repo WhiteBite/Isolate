@@ -11,13 +11,13 @@
   import { initLocale, t } from '$lib/i18n';
   import { 
     ToastContainer, 
-    Sidebar,
     PageTransition,
     UpdateNotification,
     KeyboardOverlay,
     BottomDrawer,
     LogsContent
   } from '$lib/components';
+  import { SidebarNew } from '$lib/components/navigation';
   import { bottomDrawerStore } from '$lib/stores/bottomDrawer.svelte';
   import { lazyComponents, preloadAllLazyComponents } from '$lib/utils/lazyComponent';
   import { waitForBackend, isTauriEnv } from '$lib/hooks/useBackendReady.svelte';
@@ -553,7 +553,7 @@
     <!-- Main Three-Pane Layout -->
     <div class="flex h-screen bg-zinc-950 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-900/15 via-zinc-950 to-zinc-950 overflow-hidden">
       <!-- Sidebar -->
-      <Sidebar bind:collapsed={sidebarCollapsed} />
+      <SidebarNew bind:collapsed={sidebarCollapsed} />
 
       <!-- Main Content Area with Resizable Panels -->
       <div class="flex-1 flex flex-col overflow-hidden">

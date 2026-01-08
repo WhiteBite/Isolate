@@ -1,8 +1,10 @@
 <script lang="ts">
+  import BaseModal from '../BaseModal.svelte';
   import type { Strategy } from './types';
   import { categories, getFamilyColor, getCategoryColor, getLabelInfo, getScoreColor, formatDate } from './types';
 
   interface Props {
+    open: boolean;
     strategy: Strategy;
     onClose: () => void;
     onApply: (id: string) => void;
@@ -10,21 +12,13 @@
     onTest: (id: string) => void;
   }
 
-  let { strategy, onClose, onApply, onStop, onTest }: Props = $props();
+  let { open = $bindable(), strategy, onClose, onApply, onStop, onTest }: Props = $props();
 
   let familyColor = $derived(getFamilyColor(strategy.family));
   let categoryColor = $derived(getCategoryColor(strategy.category));
   let categoryInfo = $derived(categories.find(c => c.id === strategy.category));
   let labelInfo = $derived(getLabelInfo(strategy.label));
   let scoreColor = $derived(getScoreColor(strategy.score));
-
-  function handleBackdropClick() {
-    onClose();
-  }
-
-  function handleModalClick(e: MouseEvent) {
-    e.stopPropagation();
-  }
 
   function handleApplyAndClose() {
     onApply(strategy.id);
@@ -42,22 +36,8 @@
   }
 </script>
 
-<div 
-  class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-  onclick={handleBackdropClick}
-  onkeydown={(e) => e.key === 'Escape' && onClose()}
-  role="presentation"
-  tabindex="-1"
->
-  <div 
-    role="dialog"
-    aria-modal="true"
-    aria-labelledby="strategy-details-title"
-    tabindex="-1"
-    onclick={handleModalClick}
-    onkeydown={(e) => e.key === 'Escape' && onClose()}
-    class="bg-void-50 rounded-xl p-6 max-w-lg w-full border border-glass-border shadow-2xl"
-  >
+<BaseModal bind:open onclose={onClose} class="max-w-lg w-full" ariaLabel="Strategy Details">
+  <div class="p-6">
     <!-- Modal Header -->
     <div class="flex items-start justify-between mb-4">
       <div>
@@ -158,4 +138,4 @@
       </button>
     </div>
   </div>
-</div>
+</BaseModal>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import BaseModal from '$lib/components/BaseModal.svelte';
   import { libraryStore, type AccessMethod, type AccessMethodType } from '$lib/stores/library.svelte';
 
   interface Props {
@@ -6,7 +7,7 @@
     onClose: () => void;
   }
 
-  let { isOpen, onClose }: Props = $props();
+  let { isOpen = $bindable(), onClose }: Props = $props();
 
   let domain = $state('');
   let name = $state('');
@@ -30,31 +31,10 @@
     
     onClose();
   }
-
-  function handleKeydown(event: KeyboardEvent) {
-    if (event.key === 'Escape') {
-      onClose();
-    }
-  }
 </script>
 
-{#if isOpen}
-  <!-- Backdrop -->
-  <div 
-    class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
-    onclick={onClose}
-    onkeydown={handleKeydown}
-    role="presentation"
-  ></div>
-
-  <!-- Modal -->
-  <div 
-    class="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50
-           w-full max-w-md p-6 bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl"
-    role="dialog"
-    aria-modal="true"
-    aria-labelledby="modal-title"
-  >
+<BaseModal bind:open={isOpen} onclose={onClose} class="w-full max-w-md" ariaLabel="Add Rule">
+  <div class="p-6">
     <h2 id="modal-title" class="text-xl font-semibold text-white mb-6">
       Добавить правило
     </h2>
@@ -163,4 +143,4 @@
       </div>
     </form>
   </div>
-{/if}
+</BaseModal>

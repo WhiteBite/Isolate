@@ -225,6 +225,7 @@
 
   {#if selectedStrategyDetails}
     <StrategyDetails
+      open={selectedStrategyDetails !== null}
       strategy={selectedStrategyDetails}
       onClose={closeDetails}
       onApply={applyStrategy}

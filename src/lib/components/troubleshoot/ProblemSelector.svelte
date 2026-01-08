@@ -1,5 +1,6 @@
 <script lang="ts">
   import { troubleshootStore, type ServiceProblem } from '$lib/stores/troubleshoot.svelte';
+  import { libraryStore } from '$lib/stores/library.svelte';
 
   const categoryLabels: Record<string, string> = {
     video: 'Видео',
@@ -34,6 +35,27 @@
       event.preventDefault();
       handleSelect(problem);
     }
+  }
+  
+  /**
+   * Получает текущий метод доступа для сервиса из Library
+   */
+  function getCurrentMethod(serviceId: string): string | null {
+    const rule = libraryStore.rules.find(r => r.id === serviceId);
+    if (!rule) return null;
+    
+    // Возвращаем только если это конкретная стратегия
+    if (rule.currentMethod.type === 'strategy' && rule.currentMethod.strategyName) {
+      return rule.currentMethod.strategyName;
+    }
+    if (rule.currentMethod.type === 'vless') {
+      return 'VLESS';
+    }
+    if (rule.currentMethod.type === 'proxy' && rule.currentMethod.proxyName) {
+      return rule.currentMethod.proxyName;
+    }
+    
+    return null;
   }
 </script>
 
@@ -90,6 +112,7 @@
             aria-label={categoryLabels[category]}
           >
             {#each groupedProblems()[category] as problem (problem.id)}
+              {@const currentMethod = getCurrentMethod(problem.serviceId)}
               <button
                 type="button"
                 role="option"
@@ -117,9 +140,16 @@
                 
                 <!-- Content -->
                 <div class="flex-1 min-w-0">
-                  <h4 class="font-medium text-white {!isDisabled ? 'group-hover:text-blue-400' : ''} transition-colors">
-                    {problem.serviceName}
-                  </h4>
+                  <div class="flex items-center gap-2 mb-0.5">
+                    <h4 class="font-medium text-white {!isDisabled ? 'group-hover:text-blue-400' : ''} transition-colors">
+                      {problem.serviceName}
+                    </h4>
+                    {#if currentMethod}
+                      <span class="px-2 py-0.5 text-xs bg-indigo-500/20 text-indigo-400 rounded border border-indigo-500/30">
+                        {currentMethod}
+                      </span>
+                    {/if}
+                  </div>
                   <p class="text-sm text-white/50 mt-0.5 line-clamp-2">
                     {problem.description}
                   </p>

@@ -23,6 +23,9 @@
     return diff > 0 ? diff : null;
   });
   
+  // Существующий метод из Library
+  let existingMethod = $derived(troubleshootStore.existingMethod);
+  
   let isApplying = $state(false);
   
   async function handleApply() {
@@ -156,11 +159,21 @@
       <h4 class="text-blue-400 font-medium mb-2 flex items-center gap-2">
         <span>ℹ️</span> Что будет изменено
       </h4>
-      <p class="text-blue-400/80 text-sm">
-        Для сервиса <span class="font-medium">{troubleshootStore.selectedProblem?.serviceName}</span> будет 
-        установлена стратегия <span class="font-medium">{troubleshootStore.bestStrategy.name}</span>.
-        Вы сможете изменить это в Library.
-      </p>
+      <div class="text-blue-400/80 text-sm space-y-1">
+        <p>
+          Для сервиса <span class="font-medium">{troubleshootStore.selectedProblem?.serviceName}</span> будет 
+          установлена стратегия <span class="font-medium">{troubleshootStore.bestStrategy.name}</span>.
+        </p>
+        {#if existingMethod && existingMethod.strategyName}
+          <p class="text-amber-400/80">
+            Текущая стратегия: <span class="font-medium">{existingMethod.strategyName}</span> → 
+            <span class="font-medium text-green-400">{troubleshootStore.bestStrategy.name}</span>
+          </p>
+        {/if}
+        <p class="text-blue-400/60 text-xs mt-2">
+          Вы сможете изменить это в Library.
+        </p>
+      </div>
     </div>
   {/if}
 

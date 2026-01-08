@@ -10,8 +10,10 @@
     style?: string;
     ariaLabel?: string;
     ariaDescribedBy?: string;
-    /** Prevent closing with Esc or backdrop click (for critical actions) */
+    /** Prevent closing with Esc or backdrop click (for critical/destructive actions) */
     preventClose?: boolean;
+    /** Show warning for destructive actions */
+    destructive?: boolean;
     children: import('svelte').Snippet;
   }
 
@@ -23,6 +25,7 @@
     ariaLabel, 
     ariaDescribedBy, 
     preventClose = false,
+    destructive = false,
     children 
   }: Props = $props();
 

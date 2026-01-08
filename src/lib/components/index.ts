@@ -23,7 +23,6 @@ export { default as TerminalPanel } from './TerminalPanel.svelte';
 export { default as ContextMenu } from './ContextMenu.svelte';
 export { default as ContextMenuItem } from './ContextMenuItem.svelte';
 export { default as ContextMenuSeparator } from './ContextMenuSeparator.svelte';
-export { default as Sidebar } from './Sidebar.svelte';
 export { default as CommandPalette } from './CommandPalette.svelte';
 
 // Navigation Components

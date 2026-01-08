@@ -30,6 +30,9 @@ pub enum IsolateError {
     #[error("Strategy not found: {0}")]
     StrategyNotFound(String),
     
+    #[error("Not found: {0}")]
+    NotFound(String),
+    
     #[error("Strategy timeout after {0}ms")]
     StrategyTimeout(u32),
     
@@ -343,6 +346,7 @@ impl IsolateError {
             IsolateError::Config(_) => "config",
             IsolateError::Strategy(_) => "strategy",
             IsolateError::StrategyNotFound(_) => "strategy_not_found",
+            IsolateError::NotFound(_) => "not_found",
             IsolateError::StrategyTimeout(_) => "strategy_timeout",
             IsolateError::NoStrategyFound => "no_strategy_found",
             IsolateError::Process(_) => "process",

@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Toast } from '$lib/stores/toast';
-  import { toasts } from '$lib/stores/toast';
+  import { toasts, formatToastMessage } from '$lib/stores/toast';
   import { fly, fade } from 'svelte/transition';
 
   interface Props {
@@ -9,26 +9,32 @@
 
   let { toast }: Props = $props();
 
-  const typeClasses = {
+  const typeClasses: Record<Toast['type'], string> = {
     success: 'border-l-green-500',
     error: 'border-l-red-500',
     warning: 'border-l-yellow-500',
-    info: 'border-l-blue-500'
+    info: 'border-l-blue-500',
+    progress: 'border-l-violet-500'
   };
 
-  const iconPaths = {
+  const iconPaths: Record<Toast['type'], string> = {
     success: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z',
     error: 'M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z',
     warning: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z',
-    info: 'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z'
+    info: 'M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
+    progress: 'M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15'
   };
 
-  const iconColors = {
+  const iconColors: Record<Toast['type'], string> = {
     success: 'text-green-500',
     error: 'text-red-500',
     warning: 'text-yellow-500',
-    info: 'text-blue-500'
+    info: 'text-blue-500',
+    progress: 'text-violet-500'
   };
+
+  // Форматированное сообщение с учётом счётчика дубликатов
+  const displayMessage = $derived(formatToastMessage(toast.message, toast.count));
 
   function handleClose() {
     toasts.dismiss(toast.id);
@@ -44,6 +50,7 @@
   <!-- Icon -->
   <svg
     class="w-5 h-5 flex-shrink-0 {iconColors[toast.type]}"
+    class:animate-spin={toast.type === 'progress'}
     fill="none"
     stroke="currentColor"
     viewBox="0 0 24 24"
@@ -57,7 +64,20 @@
   </svg>
 
   <!-- Message -->
-  <p class="text-sm text-white/90 flex-1">{toast.message}</p>
+  <div class="flex-1">
+    <p class="text-sm text-white/90">{displayMessage}</p>
+    
+    <!-- Progress bar -->
+    {#if toast.type === 'progress' && toast.progress !== undefined}
+      <div class="mt-2 h-1.5 bg-white/10 rounded-full overflow-hidden">
+        <div 
+          class="h-full bg-violet-500 rounded-full transition-all duration-300 ease-out"
+          style="width: {toast.progress}%"
+        ></div>
+      </div>
+      <p class="mt-1 text-xs text-white/40 text-right">{toast.progress}%</p>
+    {/if}
+  </div>
 
   <!-- Close button -->
   <button

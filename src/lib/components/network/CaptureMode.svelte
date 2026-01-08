@@ -1,10 +1,13 @@
 <script lang="ts">
+  import CaptureModeInfo from './CaptureModeInfo.svelte';
+
   interface Props {
     mode: 'system' | 'tun';
     onchange: (mode: 'system' | 'tun') => void;
     systemActive?: boolean;
     tunActive?: boolean;
     disabled?: boolean;
+    showInfo?: boolean;
   }
 
   let { 
@@ -12,11 +15,13 @@
     onchange, 
     systemActive = false, 
     tunActive = false, 
-    disabled = false 
+    disabled = false,
+    showInfo = true
   }: Props = $props();
 </script>
 
-<div class="flex items-center gap-1 p-1 bg-zinc-900/50 rounded-xl border border-white/5">
+<div class="flex flex-col">
+  <div class="flex items-center gap-1 p-1 bg-zinc-900/50 rounded-xl border border-white/5">
   <button
     type="button"
     onclick={() => onchange('system')}
@@ -46,4 +51,9 @@
       <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
     {/if}
   </button>
+  </div>
+
+  {#if showInfo}
+    <CaptureModeInfo {mode} />
+  {/if}
 </div>

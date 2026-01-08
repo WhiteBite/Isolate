@@ -7,7 +7,12 @@
     "loading": "Loading...",
     "error": "Error",
     "success": "Success",
-    "comingSoon": "Coming Soon"
+    "comingSoon": "Coming Soon",
+    "never": "Never",
+    "unknown": "Unknown",
+    "domains": "domains",
+    "updateAvailable": "Update available",
+    "autoUpdate": "Auto-update"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -40,6 +45,8 @@
     "tabs": {
       "general": "General",
       "routing": "Routing",
+      "hotkeys": "Hotkeys",
+      "hostlists": "Hostlists",
       "advanced": "Advanced"
     },
     "general": {
@@ -63,6 +70,27 @@
       "perAppRouting": "Per-App Routing",
       "perAppRoutingDesc": "Route traffic from specific applications through DPI bypass"
     },
+    "hotkeys": {
+      "title": "Keyboard Shortcuts",
+      "conflictWith": "Conflict with",
+      "resetToDefault": "Reset to default",
+      "resetAll": "Reset All to Defaults",
+      "pressKeys": "Press keys...",
+      "helpText": "Click on a shortcut to change it. Press the new key combination, then release. Use Ctrl, Alt, or Shift with any key."
+    },
+    "hostlists": {
+      "title": "Hostlists",
+      "subtitle": "Manage domain lists for DPI bypass",
+      "checkUpdates": "Check Updates",
+      "updateAll": "Update All",
+      "noHostlists": "No hostlists found",
+      "updatesAvailable": "update(s) available",
+      "allUpToDate": "All hostlists are up to date",
+      "updated": "Updated hostlist(s)",
+      "failed": "failed",
+      "noUpdates": "No updates available",
+      "helpText": "Hostlists contain domains that are processed by DPI bypass strategies. Updates are fetched from GitHub repositories with the latest domain lists."
+    },
     "advanced": {
       "title": "Advanced Settings",
       "blockQuic": "Block QUIC",
@@ -74,10 +102,25 @@
       "exportConfig": "Export Config",
       "importConfig": "Import Config",
       "backupNote": "Note: Passwords are not exported for security reasons. You'll need to re-enter them after import.",
-      "dangerZone": "Danger Zone — Advanced Settings",
-      "dangerZoneWarning": "⚠️ These settings can affect system stability. Change only if you know what you're doing.",
+      "expert": "Expert Settings",
+      "expertDesc": "Low-level options for advanced users",
+      "forExperts": "For experts",
+      "expertWarning": "Change these settings only if you understand what they do. Incorrect configuration may cause connection issues or system instability.",
+      "tcpTimestamps": "TCP Timestamps",
+      "tcpTimestampsDesc": "Enable RFC 1323 timestamps (may help bypass some DPI)",
       "windivertMode": "WinDivert Mode",
-      "windivertModeDesc": "Driver operation mode"
+      "windivertModeDesc": "Driver operation mode",
+      "windivertModes": {
+        "normal": "Normal",
+        "autottl": "Auto TTL",
+        "autohostlist": "Auto Hostlist"
+      },
+      "gameFilterMode": "Game Filter Mode",
+      "gameFilterModeDesc": "Port filtering for games (requires restart)",
+      "dnsOverride": "DNS Override",
+      "dnsOverrideDesc": "Custom DNS server (leave empty for system default)",
+      "resetExpert": "Reset Expert Settings",
+      "resetOnboarding": "Reset Onboarding"
     },
     "messages": {
       "saved": "Settings saved successfully",
@@ -86,7 +129,9 @@
       "exportFailed": "Export failed",
       "imported": "Imported",
       "importFailed": "Import failed",
-      "noNewData": "No new data to import (all items already exist)"
+      "noNewData": "No new data to import (all items already exist)",
+      "checkFailed": "Check failed",
+      "updateFailed": "Update failed"
     }
   },
   "diagnostics": {

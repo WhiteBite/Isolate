@@ -384,6 +384,12 @@ pub fn run() {
             commands::set_ipset_auto_update,
             commands::get_ipset_sources,
             commands::restore_ipset_backup,
+            // Ipset manager commands (mode management)
+            commands::get_ipset_stats,
+            commands::get_ipset_mode,
+            commands::set_ipset_mode,
+            commands::load_ipset_from_file,
+            commands::update_ipset_from_url,
             // Hosts management commands
             commands::enable_discord_hosts,
             commands::disable_discord_hosts,
@@ -406,6 +412,16 @@ pub fn run() {
             commands::export_proxy_url,
             commands::import_subscription,
             commands::fetch_subscription_content,
+            // Proxy Chain commands
+            commands::parse_proxy_url_info,
+            commands::batch_import_proxies,
+            commands::get_proxy_chains,
+            commands::save_proxy_chain,
+            commands::apply_proxy_chain,
+            commands::delete_proxy_chain,
+            commands::deactivate_proxy_chain,
+            commands::validate_proxy_chain,
+            commands::get_proxy_chain_stats,
             // Routing commands
             commands::get_routing_rules,
             commands::add_routing_rule,
@@ -424,6 +440,11 @@ pub fn run() {
             commands::run_tests,
             commands::cancel_tests,
             commands::test_strategy,
+            // Troubleshoot commands
+            commands::troubleshoot_service,
+            commands::apply_troubleshoot_result,
+            commands::get_troubleshoot_problems,
+            commands::get_service_strategy_binding,
             // A/B Testing commands
             commands::start_ab_test,
             commands::get_ab_test_status,
@@ -438,6 +459,12 @@ pub fn run() {
             commands::clear_ab_test_results,
             commands::get_ab_test_history,
             commands::get_ab_test_statistics,
+            // AI Pilot commands
+            commands::start_ai_pilot,
+            commands::stop_ai_pilot,
+            commands::get_ai_pilot_status,
+            commands::get_ai_pilot_history,
+            commands::undo_ai_pilot_action,
             // TUN mode commands
             commands::start_tun,
             commands::stop_tun,
@@ -455,6 +482,14 @@ pub fn run() {
             commands::update_tray_tun_status,
             commands::update_tray_proxy_status,
             commands::rebuild_tray_menu,
+            // Tray service protection commands
+            commands::toggle_service_protection,
+            commands::get_top_services,
+            commands::set_profile_mode,
+            commands::get_current_profile,
+            commands::get_all_profiles,
+            commands::get_protected_services,
+            commands::set_services_protection,
             // System Proxy commands
             commands::set_system_proxy,
             commands::clear_system_proxy,
@@ -641,6 +676,24 @@ pub fn run() {
             commands::remove_composition,
             commands::get_strategy_for_service,
             commands::validate_composition,
+            // Dashboard commands
+            commands::get_live_connections,
+            commands::get_traffic_stats,
+            commands::get_protection_issues,
+            commands::fix_issue,
+            // Library commands
+            commands::get_library_rules,
+            commands::get_library_rule,
+            commands::add_library_rule,
+            commands::update_library_rule,
+            commands::delete_library_rule,
+            commands::set_rule_method,
+            commands::toggle_library_rule,
+            commands::get_library_presets,
+            commands::get_library_preset,
+            commands::apply_library_preset,
+            commands::get_rules_for_service,
+            commands::get_rules_by_method,
         ])
         .setup(move |app| {
             let window = app.get_webview_window("main").unwrap();

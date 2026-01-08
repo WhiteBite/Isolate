@@ -79,11 +79,11 @@
     <!-- Waiting for data state -->
     <div class="flex-1 flex flex-col items-center justify-center p-4 rounded-lg bg-zinc-900/30 border border-white/5">
       <div class="flex items-center gap-2 mb-2">
-        <div class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></div>
-        <span class="text-sm text-zinc-400">Waiting for data...</span>
+        <div class="w-2 h-2 rounded-full bg-zinc-500"></div>
+        <span class="text-sm text-zinc-400">Ожидание данных</span>
       </div>
       <p class="text-[10px] text-zinc-600 text-center">
-        Connection statistics will appear when the backend starts monitoring
+        Статистика появится после включения защиты
       </p>
     </div>
   {:else}

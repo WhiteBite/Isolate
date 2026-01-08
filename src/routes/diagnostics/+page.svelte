@@ -13,6 +13,7 @@
 
   // Types
   type ComponentStatus = 'healthy' | 'warning' | 'error' | 'unknown' | 'checking';
+  type ComponentCategory = 'network' | 'dpi' | 'system';
   
   interface SystemComponent {
     id: string;
@@ -21,6 +22,7 @@
     status: ComponentStatus;
     details: string;
     icon: string;
+    category?: ComponentCategory;
   }
 
   interface SystemInfo {
@@ -31,8 +33,50 @@
     adminRights: boolean;
   }
 
+  interface DiagnosticsHistoryEntry {
+    timestamp: string;
+    overallStatus: ComponentStatus;
+    percentage: number;
+    healthy: number;
+    warnings: number;
+    errors: number;
+  }
+
+  // Category definitions for grouping
+  const categoryConfig: Record<ComponentCategory, { title: string; icon: string; description: string }> = {
+    network: { 
+      title: 'Сеть и DNS', 
+      icon: '🌐', 
+      description: 'Проверка интернет-соединения и DNS-резолвинга' 
+    },
+    dpi: { 
+      title: 'DPI-обход', 
+      icon: '⚡', 
+      description: 'Компоненты для обхода блокировок' 
+    },
+    system: { 
+      title: 'Системные компоненты', 
+      icon: '🔧', 
+      description: 'Драйверы и системные настройки' 
+    }
+  };
+
+  // Map component IDs to categories
+  const componentCategories: Record<string, ComponentCategory> = {
+    network: 'network',
+    dns: 'network',
+    windivert: 'system',
+    firewall: 'system',
+    tcp_timestamps: 'system',
+    winws: 'dpi',
+    singbox: 'dpi'
+  };
+
   // State
-  let components = $state<SystemComponent[]>([...mockDiagnosticsComponents]);
+  let components = $state<SystemComponent[]>([...mockDiagnosticsComponents].map(c => ({
+    ...c,
+    category: componentCategories[c.id] || 'system'
+  })));
   let conflicts = $state<ConflictInfo[]>([]);
   let isCheckingConflicts = $state(false);
   
@@ -50,7 +94,27 @@
   let isRunning = $state(false);
   let isTauri = $state(false);
   let lastCheck = $state<string | null>(null);
+  let history = $state<DiagnosticsHistoryEntry[]>([]);
+  let showHistory = $state(false);
   let overallHealth = $derived(calculateOverallHealth());
+
+  // Grouped components by category
+  let groupedComponents = $derived(groupComponentsByCategory());
+
+  function groupComponentsByCategory(): Record<ComponentCategory, SystemComponent[]> {
+    const groups: Record<ComponentCategory, SystemComponent[]> = {
+      network: [],
+      dpi: [],
+      system: []
+    };
+    
+    for (const component of components) {
+      const category = component.category || 'system';
+      groups[category].push(component);
+    }
+    
+    return groups;
+  }
 
   function calculateOverallHealth(): { status: ComponentStatus; percentage: number } {
     const checked = components.filter(c => c.status !== 'unknown' && c.status !== 'checking');
@@ -74,7 +138,74 @@
     isDemoMode = !isTauri;
     loadSystemInfo();
     checkConflicts();
+    loadHistory();
   });
+
+  // History management
+  const HISTORY_KEY = 'isolate_diagnostics_history';
+  const MAX_HISTORY_ENTRIES = 5;
+
+  function loadHistory() {
+    if (!browser) return;
+    try {
+      const stored = localStorage.getItem(HISTORY_KEY);
+      if (stored) {
+        history = JSON.parse(stored);
+      }
+    } catch (e) {
+      console.error('Failed to load diagnostics history:', e);
+      history = [];
+    }
+  }
+
+  function saveToHistory() {
+    if (!browser) return;
+    
+    const entry: DiagnosticsHistoryEntry = {
+      timestamp: new Date().toISOString(),
+      overallStatus: overallHealth.status,
+      percentage: overallHealth.percentage,
+      healthy: components.filter(c => c.status === 'healthy').length,
+      warnings: components.filter(c => c.status === 'warning').length,
+      errors: components.filter(c => c.status === 'error').length
+    };
+    
+    // Add to beginning, keep max entries
+    history = [entry, ...history].slice(0, MAX_HISTORY_ENTRIES);
+    
+    try {
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+    } catch (e) {
+      console.error('Failed to save diagnostics history:', e);
+    }
+  }
+
+  function formatHistoryDate(isoString: string): string {
+    const date = new Date(isoString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    
+    if (diffMins < 1) return 'Только что';
+    if (diffMins < 60) return `${diffMins} мин. назад`;
+    if (diffHours < 24) return `${diffHours} ч. назад`;
+    if (diffDays < 7) return `${diffDays} дн. назад`;
+    
+    return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+  }
+
+  function clearHistory() {
+    if (!browser) return;
+    history = [];
+    try {
+      localStorage.removeItem(HISTORY_KEY);
+      toasts.success('История очищена');
+    } catch (e) {
+      console.error('Failed to clear history:', e);
+    }
+  }
 
   async function loadSystemInfo() {
     if (!browser) return;
@@ -134,7 +265,7 @@
     isRunning = true;
     
     // Reset all to checking
-    components = components.map(c => ({ ...c, status: 'checking' as ComponentStatus, details: 'Checking...' }));
+    components = components.map(c => ({ ...c, status: 'checking' as ComponentStatus, details: 'Проверка...' }));
     
     try {
       if (isTauri) {
@@ -144,7 +275,7 @@
         const ready = await waitForBackend(20, 300);
         if (!ready) {
           console.warn('[Diagnostics] Backend not ready for diagnostics');
-          toasts.error('Backend not ready');
+          toasts.error('Бэкенд не готов');
           return;
         }
         
@@ -155,7 +286,7 @@
           components = components.map(c => ({
             ...c,
             status: (results[c.id]?.status || 'unknown') as ComponentStatus,
-            details: results[c.id]?.details || 'No data'
+            details: results[c.id]?.details || 'Нет данных'
           }));
         }
       } else {
@@ -163,11 +294,12 @@
         await simulateDiagnostics();
       }
       
-      lastCheck = new Date().toLocaleTimeString();
-      toasts.success('Diagnostics completed');
+      lastCheck = new Date().toLocaleTimeString('ru-RU');
+      saveToHistory();
+      toasts.success('Диагностика завершена');
     } catch (e) {
       console.error('Diagnostics failed:', e);
-      toasts.error(`Diagnostics failed: ${e}`);
+      toasts.error(`Ошибка диагностики: ${e}`);
     } finally {
       isRunning = false;
     }
@@ -221,6 +353,146 @@
       case 'warning': return 'from-neon-yellow to-neon-orange';
       case 'error': return 'from-neon-red to-neon-pink';
       default: return 'from-void-200 to-void-300';
+    }
+  }
+
+  // Recommendations based on diagnostics results
+  interface Recommendation {
+    title: string;
+    description: string;
+    action?: string;
+    severity: 'info' | 'warning' | 'error';
+  }
+
+  let recommendations = $derived(generateRecommendations());
+
+  function generateRecommendations(): Recommendation[] {
+    const recs: Recommendation[] = [];
+    const checked = components.filter(c => c.status !== 'unknown' && c.status !== 'checking');
+    
+    if (checked.length === 0) {
+      return [{
+        title: 'Запустите диагностику',
+        description: 'Нажмите "Запустить диагностику" чтобы проверить состояние системы',
+        severity: 'info'
+      }];
+    }
+
+    // Network issues
+    const network = components.find(c => c.id === 'network');
+    if (network?.status === 'error') {
+      recs.push({
+        title: 'Нет подключения к интернету',
+        description: 'Проверьте сетевое подключение. Без интернета обход блокировок невозможен.',
+        action: 'Проверьте Wi-Fi или Ethernet кабель',
+        severity: 'error'
+      });
+    }
+
+    // DNS issues
+    const dns = components.find(c => c.id === 'dns');
+    if (dns?.status === 'error') {
+      recs.push({
+        title: 'Проблемы с DNS',
+        description: 'DNS-сервер не отвечает или блокирует запросы.',
+        action: 'Попробуйте сменить DNS на 8.8.8.8 или 1.1.1.1',
+        severity: 'error'
+      });
+    } else if (dns?.status === 'warning') {
+      recs.push({
+        title: 'DNS работает медленно',
+        description: 'Высокая задержка DNS может замедлять загрузку страниц.',
+        action: 'Рекомендуем использовать DoH (DNS over HTTPS)',
+        severity: 'warning'
+      });
+    }
+
+    // WinDivert issues
+    const windivert = components.find(c => c.id === 'windivert');
+    if (windivert?.status === 'error') {
+      recs.push({
+        title: 'WinDivert не работает',
+        description: 'Драйвер WinDivert необходим для Zapret-стратегий.',
+        action: 'Запустите приложение от имени администратора',
+        severity: 'error'
+      });
+    }
+
+    // Sing-box issues
+    const singbox = components.find(c => c.id === 'singbox');
+    if (singbox?.status === 'warning') {
+      recs.push({
+        title: 'Sing-box не настроен',
+        description: 'Для VLESS-стратегий требуется настройка прокси.',
+        action: 'Перейдите в Маркетплейс и добавьте VLESS-конфигурацию',
+        severity: 'warning'
+      });
+    } else if (singbox?.status === 'error') {
+      recs.push({
+        title: 'Ошибка Sing-box',
+        description: 'Sing-box не найден или повреждён.',
+        action: 'Переустановите приложение или проверьте антивирус',
+        severity: 'error'
+      });
+    }
+
+    // TCP Timestamps
+    const tcpTimestamps = components.find(c => c.id === 'tcp_timestamps');
+    if (tcpTimestamps?.status === 'warning') {
+      recs.push({
+        title: 'TCP Timestamps отключены',
+        description: 'Включение TCP Timestamps улучшает обход некоторых DPI-систем.',
+        action: 'Включите в Настройки → Дополнительно',
+        severity: 'warning'
+      });
+    }
+
+    // Firewall issues
+    const firewall = components.find(c => c.id === 'firewall');
+    if (firewall?.status === 'warning') {
+      recs.push({
+        title: 'Firewall может блокировать',
+        description: 'Windows Firewall может мешать работе Isolate.',
+        action: 'Добавьте исключение для Isolate в настройках Firewall',
+        severity: 'warning'
+      });
+    }
+
+    // All good!
+    if (recs.length === 0 && overallHealth.status === 'healthy') {
+      recs.push({
+        title: 'Всё работает отлично! 🎉',
+        description: 'Система готова к обходу блокировок. Выберите стратегию на главной странице.',
+        severity: 'info'
+      });
+    }
+
+    // Conflicts warning
+    if (conflicts.length > 0) {
+      recs.push({
+        title: `Обнаружено ${conflicts.length} конфликтующих программ`,
+        description: 'VPN или другое ПО может мешать работе Isolate.',
+        action: 'Отключите конфликтующие программы или настройте исключения',
+        severity: 'warning'
+      });
+    }
+
+    return recs;
+  }
+
+  function getRecommendationIcon(severity: 'info' | 'warning' | 'error'): string {
+    switch (severity) {
+      case 'error': return '❌';
+      case 'warning': return '⚠️';
+      case 'info': return '💡';
+    }
+  }
+
+  function getRecommendationColor(severity: 'info' | 'warning' | 'error'): string {
+    switch (severity) {
+      case 'error': return 'border-neon-red/30 bg-neon-red/5';
+      case 'warning': return 'border-neon-yellow/30 bg-neon-yellow/5';
+      case 'info': return 'border-electric/30 bg-electric/5';
     }
   }
 
@@ -353,16 +625,16 @@
   <div class="flex items-center justify-between">
     <div>
       <div class="flex items-center gap-3">
-        <h1 class="text-3xl font-bold text-white">System Diagnostics</h1>
+        <h1 class="text-3xl font-bold text-white">Диагностика системы</h1>
         {#if isDemoMode}
-          <span class="px-2 py-1 text-xs uppercase tracking-wider bg-amber-500/20 text-amber-400 rounded-md font-medium border border-amber-500/30">Demo</span>
+          <span class="px-2 py-1 text-xs uppercase tracking-wider bg-amber-500/20 text-amber-400 rounded-md font-medium border border-amber-500/30">Демо</span>
         {/if}
       </div>
-      <p class="text-text-muted mt-1">Check system components and network health</p>
+      <p class="text-text-muted mt-1">Проверка компонентов системы и сетевого подключения</p>
     </div>
     <div class="flex items-center gap-4">
       {#if lastCheck}
-        <span class="text-text-muted text-sm">Last check: {lastCheck}</span>
+        <span class="text-text-muted text-sm">Последняя проверка: {lastCheck}</span>
       {/if}
       <Button 
         variant="primary" 
@@ -376,7 +648,7 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
             </svg>
           {/if}
-          Run Diagnostics
+          Запустить диагностику
         {/snippet}
       </Button>
     </div>
@@ -412,16 +684,16 @@
         </div>
         
         <div>
-          <h2 class="text-xl font-semibold text-white">System Health</h2>
+          <h2 class="text-xl font-semibold text-white">Состояние системы</h2>
           <p class="text-text-muted">
             {#if overallHealth.status === 'healthy'}
-              All systems operational
+              Все системы работают нормально
             {:else if overallHealth.status === 'warning'}
-              Some components need attention
+              Некоторые компоненты требуют внимания
             {:else if overallHealth.status === 'error'}
-              Critical issues detected
+              Обнаружены критические проблемы
             {:else}
-              Run diagnostics to check
+              Запустите диагностику для проверки
             {/if}
           </p>
         </div>
@@ -431,26 +703,116 @@
       <div class="flex gap-6">
         <div class="text-center">
           <p class="text-2xl font-bold text-neon-green">{components.filter(c => c.status === 'healthy').length}</p>
-          <p class="text-text-muted text-sm">Healthy</p>
+          <p class="text-text-muted text-sm">Норма</p>
         </div>
         <div class="text-center">
           <p class="text-2xl font-bold text-neon-yellow">{components.filter(c => c.status === 'warning').length}</p>
-          <p class="text-text-muted text-sm">Warnings</p>
+          <p class="text-text-muted text-sm">Внимание</p>
         </div>
         <div class="text-center">
           <p class="text-2xl font-bold text-neon-red">{components.filter(c => c.status === 'error').length}</p>
-          <p class="text-text-muted text-sm">Errors</p>
+          <p class="text-text-muted text-sm">Ошибки</p>
         </div>
       </div>
     </div>
   </div>
+
+  <!-- Recommendations Section -->
+  {#if recommendations.length > 0}
+    <div class="bg-void-50 rounded-xl border border-glass-border p-5">
+      <h3 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+        <span>💡</span>
+        Рекомендации
+      </h3>
+      <div class="space-y-3">
+        {#each recommendations as rec}
+          <div class="rounded-lg p-4 border {getRecommendationColor(rec.severity)}">
+            <div class="flex items-start gap-3">
+              <span class="text-xl flex-shrink-0">{getRecommendationIcon(rec.severity)}</span>
+              <div class="flex-1">
+                <h4 class="text-white font-medium">{rec.title}</h4>
+                <p class="text-text-muted text-sm mt-1">{rec.description}</p>
+                {#if rec.action}
+                  <p class="text-electric text-sm mt-2 flex items-center gap-1">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                    </svg>
+                    {rec.action}
+                  </p>
+                {/if}
+              </div>
+            </div>
+          </div>
+        {/each}
+      </div>
+    </div>
+  {/if}
+
+  <!-- History Section -->
+  {#if history.length > 0}
+    <div class="bg-void-50 rounded-xl border border-glass-border p-5">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-semibold text-white flex items-center gap-2">
+          <span>📊</span>
+          История проверок
+        </h3>
+        <div class="flex items-center gap-2">
+          <button
+            onclick={() => showHistory = !showHistory}
+            class="text-text-muted hover:text-white text-sm transition-colors"
+          >
+            {showHistory ? 'Свернуть' : 'Развернуть'}
+          </button>
+          <button
+            onclick={clearHistory}
+            class="text-text-muted hover:text-neon-red text-sm transition-colors"
+            title="Очистить историю"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </button>
+        </div>
+      </div>
+      
+      {#if showHistory}
+        <div class="space-y-2">
+          {#each history as entry, i}
+            <div class="flex items-center justify-between p-3 bg-void-100/50 rounded-lg">
+              <div class="flex items-center gap-3">
+                <span class="text-lg {getStatusColor(entry.overallStatus)}">{getStatusIcon(entry.overallStatus)}</span>
+                <div>
+                  <p class="text-white text-sm">{formatHistoryDate(entry.timestamp)}</p>
+                  <p class="text-text-muted text-xs">
+                    {entry.percentage}% — {entry.healthy} норма, {entry.warnings} внимание, {entry.errors} ошибок
+                  </p>
+                </div>
+              </div>
+              {#if i === 0}
+                <span class="px-2 py-0.5 bg-electric/20 text-electric text-xs rounded-full">Последняя</span>
+              {/if}
+            </div>
+          {/each}
+        </div>
+      {:else}
+        <div class="flex items-center gap-4 text-sm">
+          <div class="flex items-center gap-2">
+            <span class="{getStatusColor(history[0].overallStatus)}">{getStatusIcon(history[0].overallStatus)}</span>
+            <span class="text-text-muted">Последняя: {formatHistoryDate(history[0].timestamp)}</span>
+          </div>
+          <span class="text-text-muted">•</span>
+          <span class="text-text-muted">{history.length} из {MAX_HISTORY_ENTRIES} записей</span>
+        </div>
+      {/if}
+    </div>
+  {/if}
 
   <!-- Software Conflicts Section -->
   {#if isCheckingConflicts}
     <div class="bg-void-50 rounded-xl border border-glass-border p-5">
       <div class="flex items-center gap-3">
         <ScanningIndicator active={true} text="" variant="pulse" />
-        <span class="text-text-muted">Checking for software conflicts...</span>
+        <span class="text-text-muted">Проверка конфликтующего ПО...</span>
       </div>
     </div>
   {:else if conflicts.length > 0}
@@ -462,9 +824,9 @@
           </svg>
         </div>
         <div>
-          <h3 class="text-white font-semibold">Software Conflicts Detected</h3>
+          <h3 class="text-white font-semibold">Обнаружены конфликты ПО</h3>
           <p class="text-text-muted text-sm">
-            {conflicts.length} conflicting {conflicts.length === 1 ? 'program' : 'programs'} found that may interfere with Isolate
+            Найдено {conflicts.length} {conflicts.length === 1 ? 'программа' : 'программ'}, которые могут мешать работе Isolate
           </p>
         </div>
       </div>
@@ -513,53 +875,68 @@
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
         </svg>
-        Re-check Conflicts
+        Перепроверить конфликты
       </button>
     </div>
   {/if}
 
   <!-- Main Grid: Components + System Info -->
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-    <!-- Components Grid (2 columns) -->
-    <div class="lg:col-span-2 space-y-4">
-      <h3 class="text-lg font-semibold text-white">Components</h3>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {#each components as component}
-          <div class="bg-void-50 rounded-xl border border-glass-border p-5 hover:border-electric/30 transition-colors">
-            <div class="flex items-start justify-between mb-3">
-              <div class="flex items-center gap-3">
-                <span class="text-2xl">{component.icon}</span>
-                <div>
-                  <h4 class="text-white font-medium">{component.name}</h4>
-                  <p class="text-text-muted text-sm">{component.description}</p>
-                </div>
-              </div>
-              
-              <!-- Status Badge -->
-              <div class="flex items-center gap-2 px-2.5 py-1 rounded-full border {getStatusBgColor(component.status)}">
-                {#if component.status === 'checking'}
-                  <ScanningIndicator active={true} text="" variant="pulse" />
-                {:else}
-                  <span class="text-sm font-bold {getStatusColor(component.status)}">{getStatusIcon(component.status)}</span>
-                {/if}
-                <span class="text-xs font-medium {getStatusColor(component.status)} capitalize">{component.status}</span>
+    <!-- Components Grid (2 columns) - Grouped by Category -->
+    <div class="lg:col-span-2 space-y-6">
+      {#each Object.entries(groupedComponents) as [category, categoryComponents]}
+        {#if categoryComponents.length > 0}
+          <div class="space-y-4">
+            <!-- Category Header -->
+            <div class="flex items-center gap-3">
+              <span class="text-2xl">{categoryConfig[category as ComponentCategory].icon}</span>
+              <div>
+                <h3 class="text-lg font-semibold text-white">{categoryConfig[category as ComponentCategory].title}</h3>
+                <p class="text-text-muted text-sm">{categoryConfig[category as ComponentCategory].description}</p>
               </div>
             </div>
             
-            <!-- Details -->
-            <div class="mt-3 pt-3 border-t border-glass-border">
-              <p class="text-sm {component.status === 'checking' ? 'text-electric animate-pulse' : 'text-text-muted'}">
-                {component.details}
-              </p>
+            <!-- Category Components -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {#each categoryComponents as component}
+                <div class="bg-void-50 rounded-xl border border-glass-border p-5 hover:border-electric/30 transition-colors">
+                  <div class="flex items-start justify-between mb-3">
+                    <div class="flex items-center gap-3">
+                      <span class="text-2xl">{component.icon}</span>
+                      <div>
+                        <h4 class="text-white font-medium">{component.name}</h4>
+                        <p class="text-text-muted text-sm">{component.description}</p>
+                      </div>
+                    </div>
+                    
+                    <!-- Status Badge -->
+                    <div class="flex items-center gap-2 px-2.5 py-1 rounded-full border {getStatusBgColor(component.status)}">
+                      {#if component.status === 'checking'}
+                        <ScanningIndicator active={true} text="" variant="pulse" />
+                      {:else}
+                        <span class="text-sm font-bold {getStatusColor(component.status)}">{getStatusIcon(component.status)}</span>
+                      {/if}
+                      <span class="text-xs font-medium {getStatusColor(component.status)} capitalize">{component.status}</span>
+                    </div>
+                  </div>
+                  
+                  <!-- Details -->
+                  <div class="mt-3 pt-3 border-t border-glass-border">
+                    <p class="text-sm {component.status === 'checking' ? 'text-electric animate-pulse' : 'text-text-muted'}">
+                      {component.details}
+                    </p>
+                  </div>
+                </div>
+              {/each}
             </div>
           </div>
-        {/each}
-      </div>
+        {/if}
+      {/each}
     </div>
 
     <!-- System Info Sidebar -->
     <div class="space-y-4">
-      <h3 class="text-lg font-semibold text-white">System Information</h3>
+      <h3 class="text-lg font-semibold text-white">Информация о системе</h3>
       
       <div class="bg-void-50 rounded-xl border border-glass-border overflow-hidden">
         <!-- OS Info -->
@@ -571,7 +948,7 @@
               </svg>
             </div>
             <div>
-              <p class="text-text-muted text-sm">Operating System</p>
+              <p class="text-text-muted text-sm">Операционная система</p>
               <p class="text-white font-medium">{systemInfo.os} {systemInfo.osVersion}</p>
             </div>
           </div>
@@ -586,7 +963,7 @@
               </svg>
             </div>
             <div>
-              <p class="text-text-muted text-sm">Architecture</p>
+              <p class="text-text-muted text-sm">Архитектура</p>
               <p class="text-white font-medium">{systemInfo.arch}</p>
             </div>
           </div>
@@ -601,7 +978,7 @@
               </svg>
             </div>
             <div>
-              <p class="text-text-muted text-sm">Memory</p>
+              <p class="text-text-muted text-sm">Память</p>
               <p class="text-white font-medium">{systemInfo.memory}</p>
             </div>
           </div>
@@ -616,9 +993,9 @@
               </svg>
             </div>
             <div>
-              <p class="text-text-muted text-sm">Admin Rights</p>
+              <p class="text-text-muted text-sm">Права администратора</p>
               <p class="font-medium {systemInfo.adminRights ? 'text-neon-green' : 'text-neon-red'}">
-                {systemInfo.adminRights ? 'Elevated' : 'Not Elevated'}
+                {systemInfo.adminRights ? 'Есть' : 'Нет'}
               </p>
             </div>
           </div>
@@ -627,7 +1004,7 @@
 
       <!-- Quick Actions -->
       <div class="bg-void-50 rounded-xl border border-glass-border p-4">
-        <h4 class="text-white font-medium mb-3">Quick Actions</h4>
+        <h4 class="text-white font-medium mb-3">Быстрые действия</h4>
         <div class="space-y-2">
           <button
             onclick={runDiagnostics}
@@ -637,7 +1014,7 @@
             <svg class="w-5 h-5 text-electric" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
-            <span class="text-white text-sm">Re-run All Checks</span>
+            <span class="text-white text-sm">Перезапустить проверки</span>
           </button>
           
           <button
@@ -647,14 +1024,14 @@
             <svg class="w-5 h-5 text-neon-cyan" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
-            <span class="text-white text-sm">Export Report</span>
+            <span class="text-white text-sm">Экспорт отчёта</span>
           </button>
           
           <button
             onclick={autoFix}
             disabled={isFixing || isRunning || isDemoMode}
             class="w-full flex items-center gap-3 px-4 py-3 bg-void-100/50 hover:bg-void-100 rounded-lg text-left transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            title={isDemoMode ? 'Not available in demo mode' : 'Stop strategies, clear proxy, reset network state'}
+            title={isDemoMode ? 'Недоступно в демо-режиме' : 'Остановить стратегии, очистить прокси, сбросить состояние'}
           >
             {#if isFixing}
               <svg class="w-5 h-5 text-neon-yellow animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -666,8 +1043,8 @@
               </svg>
             {/if}
             <div class="flex flex-col">
-              <span class="text-white text-sm">{isFixing ? 'Fixing...' : 'Auto-fix Issues'}</span>
-              <span class="text-text-muted/60 text-xs">Stop strategies, clear proxy, reset state</span>
+              <span class="text-white text-sm">{isFixing ? 'Исправление...' : 'Автоисправление'}</span>
+              <span class="text-text-muted/60 text-xs">Остановить стратегии, очистить прокси</span>
             </div>
           </button>
         </div>
@@ -675,36 +1052,4 @@
     </div>
   </div>
 
-  <!-- Troubleshooting Tips (shown when errors/warnings exist) -->
-  {#if components.some(c => c.status === 'error' || c.status === 'warning')}
-    <div class="bg-void-50 rounded-xl border border-neon-yellow/30 p-5">
-      <div class="flex items-start gap-3">
-        <div class="w-10 h-10 rounded-lg bg-neon-yellow/20 flex items-center justify-center flex-shrink-0">
-          <svg class="w-5 h-5 text-neon-yellow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-        </div>
-        <div>
-          <h4 class="text-white font-medium mb-2">Troubleshooting Tips</h4>
-          <ul class="text-text-muted text-sm space-y-1">
-            {#if components.find(c => c.id === 'windivert')?.status === 'error'}
-              <li>• <span class="text-neon-red">WinDivert:</span> Run as Administrator or reinstall the driver</li>
-            {/if}
-            {#if components.find(c => c.id === 'singbox')?.status === 'warning'}
-              <li>• <span class="text-neon-yellow">Sing-box:</span> Configure proxy settings in Marketplace</li>
-            {/if}
-            {#if components.find(c => c.id === 'network')?.status === 'error'}
-              <li>• <span class="text-neon-red">Network:</span> Check your internet connection</li>
-            {/if}
-            {#if components.find(c => c.id === 'firewall')?.status === 'warning'}
-              <li>• <span class="text-neon-yellow">Firewall:</span> Allow Isolate through Windows Firewall</li>
-            {/if}
-            {#if components.find(c => c.id === 'tcp_timestamps')?.status === 'warning'}
-              <li>• <span class="text-neon-yellow">TCP Timestamps:</span> Enable in Settings → Advanced for better DPI bypass</li>
-            {/if}
-          </ul>
-        </div>
-      </div>
-    </div>
-  {/if}
 </div>

@@ -232,15 +232,68 @@
 {/snippet}
 
 {#snippet emptyState()}
-  <div class="flex flex-col items-center justify-center py-12 px-4 text-center">
-    <div class="w-12 h-12 rounded-xl bg-zinc-800/50 flex items-center justify-center mb-3">
-      <svg class="w-6 h-6 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" 
-          d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
-      </svg>
+  <div class="flex flex-col items-center justify-center p-6 h-full">
+    <div class="w-full max-w-sm bg-gradient-to-br from-zinc-800/50 to-zinc-900/50 rounded-2xl border border-white/5 p-6 text-center">
+      <!-- Icon -->
+      <div class="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 flex items-center justify-center mb-4 ring-1 ring-white/10">
+        <svg class="w-8 h-8 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" 
+            d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+        </svg>
+      </div>
+      
+      <!-- Title -->
+      <h3 class="text-lg font-semibold text-white mb-2">
+        Добавьте первый прокси-сервер
+      </h3>
+      
+      <!-- Description -->
+      <p class="text-sm text-zinc-400 mb-6 leading-relaxed">
+        Gateway — это прокси-сервер для обхода блокировок. 
+        Поддерживаются протоколы VLESS, Shadowsocks, Trojan и другие. 
+        Трафик шифруется и направляется через удалённый сервер.
+      </p>
+      
+      <!-- Actions -->
+      <div class="flex flex-col gap-2">
+        <button
+          onclick={onadd}
+          class="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-500 hover:bg-indigo-400 text-white text-sm font-medium rounded-xl transition-colors"
+        >
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+          </svg>
+          Добавить прокси
+        </button>
+        
+        {#if onimport}
+          <button
+            onclick={onimport}
+            disabled={importing}
+            class="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white text-sm font-medium rounded-xl transition-colors border border-white/5 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {#if importing}
+              <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              Импорт...
+            {:else}
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+                <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
+              </svg>
+              Импортировать из буфера
+            {/if}
+          </button>
+        {/if}
+      </div>
+      
+      <!-- Hint -->
+      <p class="text-xs text-zinc-600 mt-4">
+        Скопируйте ссылку vless:// или ss:// и нажмите «Импортировать»
+      </p>
     </div>
-    <p class="text-sm text-zinc-400 mb-1">No gateways</p>
-    <p class="text-xs text-zinc-600">Add a proxy to get started</p>
   </div>
 {/snippet}
 

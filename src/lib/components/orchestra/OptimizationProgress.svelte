@@ -8,15 +8,40 @@
   }
 
   let { state, queueLength }: Props = $props();
+
+  // Calculate ETA based on elapsed time and progress
+  let eta = $derived.by(() => {
+    if (state.status !== 'learning' || state.progress <= 0 || state.elapsedTime <= 0) {
+      return null;
+    }
+    
+    const remainingPercent = 100 - state.progress;
+    const msPerPercent = state.elapsedTime / state.progress;
+    const remainingMs = remainingPercent * msPerPercent;
+    
+    return Math.round(remainingMs / 1000);
+  });
+
+  function formatTime(seconds: number): string {
+    if (seconds < 60) return `${seconds} сек`;
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return secs > 0 ? `${mins} мин ${secs} сек` : `${mins} мин`;
+  }
+
+  function formatElapsed(ms: number): string {
+    const seconds = Math.floor(ms / 1000);
+    return formatTime(seconds);
+  }
 </script>
 
-<BentoWidget colspan={2} title="Progress" icon="📊">
+<BentoWidget colspan={2} title="Прогресс" icon="📊">
   <div class="space-y-4">
     <!-- Progress bar -->
     <div>
       <div class="flex justify-between items-center mb-2">
         <span class="text-sm text-zinc-400">
-          {state.testedItems} / {state.totalItems || queueLength} strategies
+          {state.testedItems} / {state.totalItems || queueLength} стратегий
         </span>
         <span class="text-sm font-mono text-cyan-400">{state.progress.toFixed(0)}%</span>
       </div>
@@ -28,6 +53,26 @@
         ></div>
       </div>
     </div>
+
+    <!-- Time info -->
+    {#if state.status === 'learning' || state.elapsedTime > 0}
+      <div class="flex items-center justify-between text-xs text-zinc-500">
+        <div class="flex items-center gap-1.5">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span>Прошло: {formatElapsed(state.elapsedTime)}</span>
+        </div>
+        {#if eta !== null && state.status === 'learning'}
+          <div class="flex items-center gap-1.5 text-cyan-400">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+            </svg>
+            <span>Осталось: ~{formatTime(eta)}</span>
+          </div>
+        {/if}
+      </div>
+    {/if}
 
     <!-- Best score -->
     {#if state.bestScore > 0}

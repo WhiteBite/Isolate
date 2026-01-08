@@ -4,7 +4,7 @@
   import { goto } from '$app/navigation';
   import { waitForBackend } from '$lib/utils/backend';
   import { toasts } from '$lib/stores/toast';
-  import { Spinner } from '$lib/components';
+  import { Spinner, BaseModal } from '$lib/components';
   import { installedPlugins, loadPluginsFromBackend, installPlugin, reloadAllPlugins } from '$lib/stores/plugins';
   import { mockMarketPlugins } from '$lib/mocks';
 
@@ -27,6 +27,21 @@
   let selectedId = $state<string | null>(null);
   let selectedMarketId = $state<string | null>(null);
   let searchQuery = $state('');
+
+  // Support for ?selected= query param (from redirect)
+  $effect(() => {
+    const selectedFromUrl = $page.url.searchParams.get('selected');
+    if (selectedFromUrl && localPlugins.length > 0) {
+      const exists = localPlugins.find(p => p.manifest.id === selectedFromUrl);
+      if (exists) {
+        selectedId = selectedFromUrl;
+      }
+    }
+  });
+
+  // Delete confirmation modal state
+  let deleteModalOpen = $state(false);
+  let pluginToDelete = $state<LoadedPlugin | null>(null);
 
   let market = $state<MarketPlugin[]>([...mockMarketPlugins]);
 
@@ -73,9 +88,27 @@
       try { const inv = getInvoke(); if (inv) await inv('set_plugin_enabled', { pluginId: p.manifest.id, enabled: localPlugins[i].enabled }); } catch {} }
   }
 
-  async function del(p: LoadedPlugin) {
-    if (!confirm(`Удалить "${p.manifest.name}"?`)) return;
-    try { const inv = getInvoke(); if (inv) await inv('delete_plugin', { pluginId: p.manifest.id }); await load(); toasts.success('Удалён'); } catch (e) { toasts.error(`${e}`); }
+  async function openDeleteModal(p: LoadedPlugin) {
+    pluginToDelete = p;
+    deleteModalOpen = true;
+  }
+
+  function closeDeleteModal() {
+    deleteModalOpen = false;
+    pluginToDelete = null;
+  }
+
+  async function confirmDelete() {
+    if (!pluginToDelete) return;
+    try {
+      const inv = getInvoke();
+      if (inv) await inv('delete_plugin', { pluginId: pluginToDelete.manifest.id });
+      await load();
+      toasts.success('Удалён');
+    } catch (e) {
+      toasts.error(`${e}`);
+    }
+    closeDeleteModal();
   }
 
   function inst(id: string) { const p = market.find(x => x.id === id); if (p && !p.inst) { p.inst = true; market = [...market]; installPlugin(p as any); toasts.success(`${p.name} установлен`); } }
@@ -122,7 +155,7 @@
         <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-500/20 to-purple-500/20 flex items-center justify-center text-lg">{selected.manifest.service?.icon || '🧩'}</div>
         <div class="flex-1 min-w-0"><div class="text-xs font-medium text-zinc-100">{selected.manifest.name}</div><div class="text-[9px] text-zinc-400">{selected.manifest.author} • v{selected.manifest.version}</div></div>
         <button onclick={() => toggle(selected!)} class="px-2 py-1 text-[10px] font-medium rounded {selected.enabled ? 'bg-amber-500/10 text-amber-400' : 'bg-emerald-500/10 text-emerald-400'}">{selected.enabled ? 'Откл' : 'Вкл'}</button>
-        <button onclick={() => del(selected!)} class="px-2 py-1 text-[10px] font-medium rounded bg-red-500/10 text-red-400">Удалить</button>
+        <button onclick={() => openDeleteModal(selected!)} class="px-2 py-1 text-[10px] font-medium rounded bg-red-500/10 text-red-400">Удалить</button>
       </div>
       <div class="flex-1 p-3 overflow-y-auto space-y-2.5 text-[11px]">
         {#if selected.error}<div class="p-2 bg-red-500/10 border border-red-500/20 rounded text-red-400 text-[10px]">{selected.error}</div>{/if}
@@ -136,11 +169,43 @@
           </div>
         {/if}
         <div><div class="text-[9px] text-zinc-400 mb-1">Разрешения</div>
-          <div class="flex flex-wrap gap-1">
-            {#if selected.manifest.permissions.http?.length}<span class="px-1.5 py-0.5 bg-indigo-500/10 text-indigo-400 rounded text-[9px]">🌐 HTTP</span>{/if}
-            {#if selected.manifest.permissions.filesystem}<span class="px-1.5 py-0.5 bg-amber-500/10 text-amber-400 rounded text-[9px]">📁 FS</span>{/if}
-            {#if selected.manifest.permissions.process}<span class="px-1.5 py-0.5 bg-red-500/10 text-red-400 rounded text-[9px]">⚙️ Proc</span>{/if}
-            {#if !selected.manifest.permissions.http?.length && !selected.manifest.permissions.filesystem && !selected.manifest.permissions.process}<span class="text-zinc-600 text-[9px]">Нет</span>{/if}
+          <div class="flex flex-wrap gap-1.5">
+            {#if selected.manifest.permissions.http?.length}
+              <div class="group relative">
+                <span class="px-1.5 py-0.5 bg-indigo-500/10 text-indigo-400 rounded text-[9px] cursor-help">🌐 HTTP</span>
+                <div class="absolute bottom-full left-0 mb-1.5 px-2 py-1.5 bg-zinc-800 border border-white/10 rounded shadow-lg text-[9px] text-zinc-300 whitespace-nowrap opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
+                  <div class="font-medium text-indigo-400 mb-0.5">Доступ к сети</div>
+                  <div class="text-zinc-400">Загрузка данных из интернета</div>
+                  {#if selected.manifest.permissions.http && selected.manifest.permissions.http.length > 0}
+                    <div class="mt-1 pt-1 border-t border-white/5 text-[8px] text-zinc-500">
+                      Домены: {selected.manifest.permissions.http.slice(0, 3).join(', ')}{selected.manifest.permissions.http.length > 3 ? '...' : ''}
+                    </div>
+                  {/if}
+                  <div class="absolute top-full left-3 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-zinc-800"></div>
+                </div>
+              </div>
+            {/if}
+            {#if selected.manifest.permissions.filesystem}
+              <div class="group relative">
+                <span class="px-1.5 py-0.5 bg-amber-500/10 text-amber-400 rounded text-[9px] cursor-help">📁 FS</span>
+                <div class="absolute bottom-full left-0 mb-1.5 px-2 py-1.5 bg-zinc-800 border border-white/10 rounded shadow-lg text-[9px] text-zinc-300 whitespace-nowrap opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
+                  <div class="font-medium text-amber-400 mb-0.5">Файловая система</div>
+                  <div class="text-zinc-400">Чтение и запись файлов</div>
+                  <div class="absolute top-full left-3 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-zinc-800"></div>
+                </div>
+              </div>
+            {/if}
+            {#if selected.manifest.permissions.process}
+              <div class="group relative">
+                <span class="px-1.5 py-0.5 bg-red-500/10 text-red-400 rounded text-[9px] cursor-help">⚙️ Proc</span>
+                <div class="absolute bottom-full left-0 mb-1.5 px-2 py-1.5 bg-zinc-800 border border-white/10 rounded shadow-lg text-[9px] text-zinc-300 whitespace-nowrap opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
+                  <div class="font-medium text-red-400 mb-0.5">Запуск процессов</div>
+                  <div class="text-zinc-400">Выполнение внешних программ</div>
+                  <div class="absolute top-full left-3 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-zinc-800"></div>
+                </div>
+              </div>
+            {/if}
+            {#if !selected.manifest.permissions.http?.length && !selected.manifest.permissions.filesystem && !selected.manifest.permissions.process}<span class="text-zinc-600 text-[9px]">Нет особых разрешений</span>{/if}
           </div>
         </div>
         <div><div class="text-[9px] text-zinc-400 mb-0.5">Путь</div><code class="block text-[8px] text-zinc-600 bg-white/5 px-1.5 py-1 rounded break-all">{selected.path}</code></div>
@@ -162,3 +227,78 @@
     {/if}
   </div>
 </div>
+
+<!-- Delete Confirmation Modal -->
+<BaseModal open={deleteModalOpen} onclose={closeDeleteModal} class="w-[340px] max-w-[90vw]">
+  <div class="p-4">
+    <div class="flex items-center gap-3 mb-3">
+      <div class="w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center">
+        <svg class="w-5 h-5 text-red-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+          <line x1="10" y1="11" x2="10" y2="17"/>
+          <line x1="14" y1="11" x2="14" y2="17"/>
+        </svg>
+      </div>
+      <div>
+        <h3 class="text-sm font-medium text-zinc-100">Удалить плагин?</h3>
+        {#if pluginToDelete}
+          <p class="text-[11px] text-zinc-400">{pluginToDelete.manifest.name}</p>
+        {/if}
+      </div>
+    </div>
+
+    {#if pluginToDelete}
+      {#if pluginToDelete.manifest.service || pluginToDelete.manifest.strategy || pluginToDelete.manifest.hostlist}
+        <div class="mb-3 p-2.5 bg-white/5 rounded-lg border border-white/5">
+          <div class="text-[10px] text-zinc-400 mb-2">Будет удалено:</div>
+          <div class="space-y-1.5">
+            {#if pluginToDelete.manifest.service}
+              <div class="flex items-center gap-2 text-[11px]">
+                <span class="text-sm">{pluginToDelete.manifest.service.icon}</span>
+                <span class="text-zinc-300">Сервис: {pluginToDelete.manifest.service.name}</span>
+              </div>
+            {/if}
+            {#if pluginToDelete.manifest.strategy}
+              <div class="flex items-center gap-2 text-[11px]">
+                <span class="text-sm">⚡</span>
+                <span class="text-zinc-300">Стратегия: {pluginToDelete.manifest.strategy.name}</span>
+              </div>
+            {/if}
+            {#if pluginToDelete.manifest.hostlist}
+              <div class="flex items-center gap-2 text-[11px]">
+                <span class="text-sm">📋</span>
+                <span class="text-zinc-300">Hostlist: {pluginToDelete.manifest.hostlist.name}</span>
+              </div>
+            {/if}
+          </div>
+        </div>
+      {/if}
+    {/if}
+
+    <div class="p-2 bg-amber-500/5 border border-amber-500/10 rounded-lg mb-4">
+      <div class="flex gap-2">
+        <svg class="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+          <line x1="12" y1="9" x2="12" y2="13"/>
+          <line x1="12" y1="17" x2="12.01" y2="17"/>
+        </svg>
+        <p class="text-[10px] text-amber-400/80">Это действие необратимо. Файлы плагина будут удалены с диска.</p>
+      </div>
+    </div>
+
+    <div class="flex gap-2 justify-end">
+      <button
+        onclick={closeDeleteModal}
+        class="px-3 py-1.5 text-[11px] font-medium rounded-lg bg-white/5 text-zinc-300 hover:bg-white/10 transition-colors"
+      >
+        Отмена
+      </button>
+      <button
+        onclick={confirmDelete}
+        class="px-3 py-1.5 text-[11px] font-medium rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
+      >
+        Удалить
+      </button>
+    </div>
+  </div>
+</BaseModal>

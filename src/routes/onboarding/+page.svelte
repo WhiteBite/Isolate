@@ -295,31 +295,38 @@
   async function completeOnboarding() {
     if (!browser) return;
     
-    try {
-      const { invoke } = await import('@tauri-apps/api/core');
-      
-      await invoke('save_settings', {
-        settings: {
-          auto_start: false,
-          auto_apply: connectionMode === 'auto',
-          minimize_to_tray: true,
-          block_quic: true,
-          default_mode: 'turbo',
-          system_proxy: false,
-          tun_mode: false,
-          per_domain_routing: false,
-          per_app_routing: false,
-          test_timeout: 5,
-          test_services: Array.from(selectedServices),
-          language: 'ru',
-          telemetry_enabled: false
-        }
-      }).catch(() => {});
-      
-      await invoke('set_setting', { key: 'onboarding_complete', value: true }).catch(() => {});
-      
-    } catch (e) {
-      console.error('Failed to save settings:', e);
+    const isTauri = '__TAURI__' in window || '__TAURI_INTERNALS__' in window;
+    
+    // Сохраняем в localStorage для браузера
+    localStorage.setItem('onboarding_completed', 'true');
+    
+    if (isTauri) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        
+        await invoke('save_settings', {
+          settings: {
+            auto_start: false,
+            auto_apply: connectionMode === 'auto',
+            minimize_to_tray: true,
+            block_quic: true,
+            default_mode: 'turbo',
+            system_proxy: false,
+            tun_mode: false,
+            per_domain_routing: false,
+            per_app_routing: false,
+            test_timeout: 5,
+            test_services: Array.from(selectedServices),
+            language: 'ru',
+            telemetry_enabled: false
+          }
+        }).catch(() => {});
+        
+        await invoke('set_setting', { key: 'onboarding_complete', value: true }).catch(() => {});
+        
+      } catch (e) {
+        console.error('Failed to save settings:', e);
+      }
     }
     
     goto('/');

@@ -32,6 +32,7 @@ pub mod hostlists;
 pub mod hostlist_updater;
 pub mod hosts_manager;
 pub mod integrity;
+pub mod ipset_manager;
 pub mod ipset_updater;
 pub mod models;
 pub mod monitor;

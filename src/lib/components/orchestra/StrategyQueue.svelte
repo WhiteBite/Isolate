@@ -10,7 +10,7 @@
   let { queue }: Props = $props();
 </script>
 
-<BentoWidget colspan={2} rowspan={2} title="Strategy Queue" icon="📋">
+<BentoWidget colspan={2} rowspan={2} title="Очередь стратегий" icon="📋">
   <div class="h-full flex flex-col">
     <div class="flex-1 overflow-auto space-y-2 pr-1 -mr-1">
       {#each queue as item, i (item.id)}
@@ -38,7 +38,7 @@
                 <span class="text-xs text-zinc-500">Score: <span class="text-cyan-400">{item.score.toFixed(1)}</span></span>
               {/if}
               {#if item.latency !== undefined}
-                <span class="text-xs text-zinc-500">Latency: <span class="text-zinc-400">{item.latency.toFixed(0)}ms</span></span>
+                <span class="text-xs text-zinc-500">Задержка: <span class="text-zinc-400">{item.latency.toFixed(0)}ms</span></span>
               {/if}
             </div>
           </div>
@@ -54,7 +54,7 @@
       {#if queue.length === 0}
         <div class="flex flex-col items-center justify-center h-32 text-zinc-500">
           <span class="text-3xl mb-2">📭</span>
-          <span class="text-sm">No strategies in queue</span>
+          <span class="text-sm">Нет стратегий в очереди</span>
         </div>
       {/if}
     </div>

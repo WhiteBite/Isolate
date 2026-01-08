@@ -12,7 +12,7 @@
   let { services, selectedServices, isLearning, onToggle }: Props = $props();
 </script>
 
-<BentoWidget title="Test Services" icon="🎯">
+<BentoWidget title="Сервисы для теста" icon="🎯">
   <div class="space-y-2 max-h-[180px] overflow-y-auto pr-1">
     {#each services as service}
       <button
@@ -35,6 +35,6 @@
     {/each}
   </div>
   <div class="mt-2 pt-2 border-t border-white/5 text-xs text-zinc-500 text-center">
-    {selectedServices.size} selected
+    Выбрано: {selectedServices.size}
   </div>
 </BentoWidget>

@@ -354,13 +354,28 @@
 <div class="h-full p-8 overflow-auto bg-gradient-to-br from-zinc-950 to-black">
   <!-- Page Header -->
   <div class="mb-8">
-    <div class="flex items-center gap-3">
-      <h1 class="text-3xl font-bold text-white tracking-tight">Orchestra</h1>
-      {#if isDemoMode}
-        <span class="px-2 py-1 text-xs uppercase tracking-wider bg-amber-500/20 text-amber-400 rounded-md font-medium border border-amber-500/30">Demo</span>
-      {/if}
+    <div class="flex items-center justify-between">
+      <div>
+        <div class="flex items-center gap-3">
+          <h1 class="text-3xl font-bold text-white tracking-tight">Оптимизация стратегий</h1>
+          {#if isDemoMode}
+            <span class="px-2 py-1 text-xs uppercase tracking-wider bg-amber-500/20 text-amber-400 rounded-md font-medium border border-amber-500/30">Демо</span>
+          {/if}
+        </div>
+        <p class="text-sm text-zinc-400 mt-2">Автоматический подбор лучшей стратегии для ваших сервисов</p>
+      </div>
+      
+      <!-- Link to Troubleshoot -->
+      <a 
+        href="/troubleshoot"
+        class="flex items-center gap-2 px-4 py-2 text-sm text-zinc-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+      >
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        Не работает сервис?
+      </a>
     </div>
-    <p class="text-sm text-zinc-400 mt-2">Automatic strategy optimization and learning center</p>
   </div>
 
   <BentoGrid columns={4} gap={4}>

@@ -1,4 +1,5 @@
 // Settings components exports
+export { default as GameModeSettings } from './GameModeSettings.svelte';
 export { default as HotkeySettings } from './HotkeySettings.svelte';
 export { default as IpsetSettings } from './IpsetSettings.svelte';
 export { default as PrivacySettings } from './PrivacySettings.svelte';

@@ -7,7 +7,7 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 use tauri::{
     image::Image,
-    menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem},
+    menu::{CheckMenuItemBuilder, MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder},
     tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent},
     AppHandle, Emitter, Manager, Runtime,
 };
@@ -29,6 +29,39 @@ pub struct TrayStateData {
     pub state: TrayState,
     pub is_system_proxy: bool,
     pub is_tun: bool,
+    /// Active services (by service ID)
+    pub active_services: Vec<String>,
+    /// Current profile
+    pub current_profile: TrayProfile,
+}
+
+/// Available tray profiles
+#[derive(Debug, Clone, Copy, PartialEq, Default, serde::Serialize, serde::Deserialize)]
+pub enum TrayProfile {
+    #[default]
+    Default,
+    GameMode,
+    WorkMode,
+}
+
+impl TrayProfile {
+    /// Get display name for profile
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            TrayProfile::Default => "Default",
+            TrayProfile::GameMode => "Game Mode",
+            TrayProfile::WorkMode => "Work Mode",
+        }
+    }
+    
+    /// Get emoji for profile
+    pub fn emoji(&self) -> &'static str {
+        match self {
+            TrayProfile::Default => "📋",
+            TrayProfile::GameMode => "🎮",
+            TrayProfile::WorkMode => "💼",
+        }
+    }
 }
 
 /// Tray icon states
@@ -150,6 +183,18 @@ fn build_tray_menu<R: Runtime>(app: &impl Manager<R>) -> Result<tauri::menu::Men
     
     let separator2 = PredefinedMenuItem::separator(app)?;
     
+    // ========================================================================
+    // Services Submenu with checkboxes
+    // ========================================================================
+    let services_submenu = build_services_submenu(app, &state)?;
+    
+    // ========================================================================
+    // Profiles Submenu
+    // ========================================================================
+    let profiles_submenu = build_profiles_submenu(app, &state)?;
+    
+    let separator_services = PredefinedMenuItem::separator(app)?;
+    
     // Optimization options
     let optimize_turbo = MenuItemBuilder::with_id("optimize_turbo", "⚡ Turbo оптимизация")
         .build(app)?;
@@ -158,6 +203,10 @@ fn build_tray_menu<R: Runtime>(app: &impl Manager<R>) -> Result<tauri::menu::Men
     
     // Quick Test - run connectivity test
     let quick_test = MenuItemBuilder::with_id("quick_test", "🧪 Quick Test")
+        .build(app)?;
+    
+    // Rescan Network
+    let rescan_network = MenuItemBuilder::with_id("rescan_network", "🔄 Rescan Network")
         .build(app)?;
     
     let separator3 = PredefinedMenuItem::separator(app)?;
@@ -213,9 +262,13 @@ fn build_tray_menu<R: Runtime>(app: &impl Manager<R>) -> Result<tauri::menu::Men
             &separator1,
             &open_item,
             &separator2,
+            &services_submenu,
+            &profiles_submenu,
+            &separator_services,
             &optimize_turbo,
             &optimize_deep,
             &quick_test,
+            &rescan_network,
             &separator3,
             &toggle_item,
             &separator4,
@@ -230,6 +283,73 @@ fn build_tray_menu<R: Runtime>(app: &impl Manager<R>) -> Result<tauri::menu::Men
         .build()?;
 
     Ok(menu)
+}
+
+/// Build Services submenu with checkbox items for top-5 services
+fn build_services_submenu<R: Runtime>(
+    app: &impl Manager<R>,
+    state: &TrayStateData,
+) -> Result<tauri::menu::Submenu<R>, Box<dyn std::error::Error>> {
+    // Top-5 services with their IDs and display names
+    let services = [
+        ("youtube", "🎬 YouTube"),
+        ("discord", "💬 Discord"),
+        ("telegram", "✈️ Telegram"),
+        ("twitch", "🎮 Twitch"),
+        ("steam", "🎯 Steam"),
+    ];
+    
+    let mut submenu_builder = SubmenuBuilder::new(app, "🌐 Services");
+    
+    for (service_id, display_name) in services {
+        let is_checked = state.active_services.contains(&service_id.to_string());
+        let check_item = CheckMenuItemBuilder::new(display_name)
+            .id(format!("service_{}", service_id))
+            .checked(is_checked)
+            .build(app)?;
+        submenu_builder = submenu_builder.item(&check_item);
+    }
+    
+    // Add separator and "All Services" option
+    submenu_builder = submenu_builder.separator();
+    
+    let all_services_item = MenuItemBuilder::with_id("services_all", "📋 Все сервисы...")
+        .build(app)?;
+    submenu_builder = submenu_builder.item(&all_services_item);
+    
+    Ok(submenu_builder.build()?)
+}
+
+/// Build Profiles submenu with radio-like selection
+fn build_profiles_submenu<R: Runtime>(
+    app: &impl Manager<R>,
+    state: &TrayStateData,
+) -> Result<tauri::menu::Submenu<R>, Box<dyn std::error::Error>> {
+    let profiles = [
+        (TrayProfile::Default, "profile_default", "📋 Default"),
+        (TrayProfile::GameMode, "profile_game", "🎮 Game Mode"),
+        (TrayProfile::WorkMode, "profile_work", "💼 Work Mode"),
+    ];
+    
+    let mut submenu_builder = SubmenuBuilder::new(app, "👤 Profiles");
+    
+    for (profile, id, display_name) in profiles {
+        let is_checked = state.current_profile == profile;
+        let check_item = CheckMenuItemBuilder::new(display_name)
+            .id(id)
+            .checked(is_checked)
+            .build(app)?;
+        submenu_builder = submenu_builder.item(&check_item);
+    }
+    
+    // Add separator and profile settings
+    submenu_builder = submenu_builder.separator();
+    
+    let profile_settings_item = MenuItemBuilder::with_id("profiles_settings", "⚙️ Настройки профилей...")
+        .build(app)?;
+    submenu_builder = submenu_builder.item(&profile_settings_item);
+    
+    Ok(submenu_builder.build()?)
 }
 
 /// Wrapper for tray handle to allow updates
@@ -258,6 +378,10 @@ fn handle_menu_event<R: Runtime>(app: &AppHandle<R>, id: &str) {
         "quick_test" => {
             info!("Tray: Quick Test requested");
             emit_event(app, "tray:quick_test", ());
+        }
+        "rescan_network" => {
+            info!("Tray: Rescan Network requested");
+            emit_event(app, "tray:rescan_network", ());
         }
         "toggle_bypass" => {
             info!("Tray: Toggle bypass requested");
@@ -299,6 +423,59 @@ fn handle_menu_event<R: Runtime>(app: &AppHandle<R>, id: &str) {
                 std::thread::sleep(std::time::Duration::from_millis(500));
                 app_handle.exit(0);
             });
+        }
+        // ====================================================================
+        // Services submenu handlers
+        // ====================================================================
+        id if id.starts_with("service_") => {
+            let service_id = id.strip_prefix("service_").unwrap_or("");
+            info!("Tray: Service toggle requested: {}", service_id);
+            
+            // Toggle service in state
+            {
+                let mut state = TRAY_STATE.write();
+                let service_str = service_id.to_string();
+                if state.active_services.contains(&service_str) {
+                    state.active_services.retain(|s| s != &service_str);
+                } else {
+                    state.active_services.push(service_str);
+                }
+            }
+            
+            // Emit event with service ID and new state
+            let is_active = TRAY_STATE.read().active_services.contains(&service_id.to_string());
+            emit_event(app, "tray:service_toggle", serde_json::json!({
+                "service": service_id,
+                "active": is_active
+            }));
+            
+            // Rebuild menu to update checkbox state
+            rebuild_tray_menu(app);
+        }
+        "services_all" => {
+            info!("Tray: All services requested");
+            show_main_window(app);
+            emit_event(app, "tray:navigate", "/library");
+        }
+        // ====================================================================
+        // Profiles submenu handlers
+        // ====================================================================
+        "profile_default" => {
+            info!("Tray: Profile Default selected");
+            set_tray_profile(app, TrayProfile::Default);
+        }
+        "profile_game" => {
+            info!("Tray: Profile Game Mode selected");
+            set_tray_profile(app, TrayProfile::GameMode);
+        }
+        "profile_work" => {
+            info!("Tray: Profile Work Mode selected");
+            set_tray_profile(app, TrayProfile::WorkMode);
+        }
+        "profiles_settings" => {
+            info!("Tray: Profile settings requested");
+            show_main_window(app);
+            emit_event(app, "tray:navigate", "/settings/profiles");
         }
         _ => {
             warn!("Unknown tray menu item: {}", id);
@@ -544,4 +721,81 @@ pub fn is_tun_active() -> bool {
 /// Check if System Proxy is active
 pub fn is_system_proxy_active() -> bool {
     TRAY_STATE.read().is_system_proxy
+}
+
+// ============================================================================
+// Services Management
+// ============================================================================
+
+/// Update active services in tray state
+pub fn update_tray_services<R: Runtime>(app: &AppHandle<R>, services: Vec<String>) {
+    {
+        let mut state = TRAY_STATE.write();
+        state.active_services = services.clone();
+    }
+    
+    rebuild_tray_menu(app);
+    info!(services = ?services, "Tray services updated");
+}
+
+/// Toggle a specific service
+pub fn toggle_tray_service<R: Runtime>(app: &AppHandle<R>, service_id: &str) {
+    {
+        let mut state = TRAY_STATE.write();
+        let service_str = service_id.to_string();
+        if state.active_services.contains(&service_str) {
+            state.active_services.retain(|s| s != &service_str);
+        } else {
+            state.active_services.push(service_str);
+        }
+    }
+    
+    rebuild_tray_menu(app);
+    info!(service = service_id, "Tray service toggled");
+}
+
+/// Get active services
+pub fn get_active_services() -> Vec<String> {
+    TRAY_STATE.read().active_services.clone()
+}
+
+/// Check if a specific service is active
+pub fn is_service_active(service_id: &str) -> bool {
+    TRAY_STATE.read().active_services.contains(&service_id.to_string())
+}
+
+// ============================================================================
+// Profile Management
+// ============================================================================
+
+/// Set current profile
+pub fn set_tray_profile<R: Runtime>(app: &AppHandle<R>, profile: TrayProfile) {
+    {
+        let mut state = TRAY_STATE.write();
+        state.current_profile = profile;
+    }
+    
+    // Emit event for profile change
+    emit_event(app, "tray:profile_changed", serde_json::json!({
+        "profile": format!("{:?}", profile),
+        "name": profile.display_name()
+    }));
+    
+    rebuild_tray_menu(app);
+    info!(profile = ?profile, "Tray profile changed");
+}
+
+/// Get current profile
+pub fn get_current_profile() -> TrayProfile {
+    TRAY_STATE.read().current_profile
+}
+
+/// Update profile from string (for IPC)
+pub fn set_tray_profile_by_name<R: Runtime>(app: &AppHandle<R>, name: &str) {
+    let profile = match name.to_lowercase().as_str() {
+        "game" | "gamemode" | "game_mode" => TrayProfile::GameMode,
+        "work" | "workmode" | "work_mode" => TrayProfile::WorkMode,
+        _ => TrayProfile::Default,
+    };
+    set_tray_profile(app, profile);
 }

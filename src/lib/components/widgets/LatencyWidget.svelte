@@ -30,11 +30,11 @@
 
   // Статус на основе latency
   let statusText = $derived(
-    currentLatency === undefined ? 'No data' :
-    currentLatency < 50 ? 'Excellent' :
-    currentLatency < 100 ? 'Good' :
-    currentLatency < 200 ? 'Fair' :
-    'Poor'
+    currentLatency === undefined ? 'Нет данных' :
+    currentLatency < 50 ? 'Отлично' :
+    currentLatency < 100 ? 'Хорошо' :
+    currentLatency < 200 ? 'Средне' :
+    'Плохо'
   );
 
   let statusColor = $derived(
@@ -84,8 +84,9 @@
     {#if history.length > 0}
       <PingChart data={history} {maxPoints} height={56} color={chartColor} />
     {:else}
-      <div class="h-full flex items-center justify-center">
-        <span class="text-xs text-zinc-600">Waiting for data...</span>
+      <div class="h-full flex flex-col items-center justify-center gap-1">
+        <span class="text-xs text-zinc-500">Нет данных</span>
+        <span class="text-[10px] text-zinc-600">Запустите сканирование сервисов</span>
       </div>
     {/if}
   </div>

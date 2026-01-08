@@ -16,6 +16,11 @@
     ConnectionStatsWidget
   } from '$lib/components';
   import FailoverStatusWidget from '$lib/components/widgets/FailoverStatusWidget.svelte';
+  // New dashboard components
+  import ShieldIndicator from '$lib/components/dashboard/ShieldIndicator.svelte';
+  import ModeSelector from '$lib/components/dashboard/ModeSelector.svelte';
+  import LiveActivityPanel from '$lib/components/dashboard/LiveActivityPanel.svelte';
+  import BackendNotReady from '$lib/components/dashboard/BackendNotReady.svelte';
   import { 
     appStatus, 
     optimizationProgress, 
@@ -27,6 +32,8 @@
   import { getServiceIconEmoji } from '$lib/utils/icons';
   import { waitForBackend } from '$lib/utils/backend';
   import { mockDashboardServices } from '$lib/mocks';
+  import { dashboardStore, type ProtectionStatus, type OperationMode, type ActiveConnection } from '$lib/stores/dashboard.svelte';
+  import { trafficMonitor } from '$lib/stores/trafficMonitor.svelte';
 
   // Backend ServiceStatus type
   interface ServiceStatus {
@@ -39,7 +46,7 @@
   }
 
   // Widget definitions for drag-n-drop
-  const DEFAULT_WIDGET_ORDER = ['status', 'health', 'method', 'actions', 'failover', 'network', 'latency', 'connections'];
+  const DEFAULT_WIDGET_ORDER = ['shield', 'activity', 'health', 'method', 'actions', 'failover', 'network', 'latency', 'connections'];
   
   interface WidgetConfig {
     id: string;
@@ -50,7 +57,8 @@
   }
   
   const widgetConfigs: Record<string, WidgetConfig> = {
-    status: { id: 'status', colspan: 2, rowspan: 2 },
+    shield: { id: 'shield', colspan: 2, rowspan: 2 },
+    activity: { id: 'activity', colspan: 2, rowspan: 2, title: 'Live Activity', icon: '📡' },
     health: { id: 'health', colspan: 2, rowspan: 1, title: 'Health Monitor', icon: '💚' },
     method: { id: 'method', colspan: 1, rowspan: 1, title: 'Active Method', icon: '⚡' },
     actions: { id: 'actions', colspan: 1, rowspan: 1, title: 'Quick Actions', icon: '🚀' },
@@ -79,6 +87,7 @@
   
   // Loading state for skeleton
   let isLoading = $state(true);
+  let backendFailed = $state(false);
   
   // Helper to clear all intervals safely
   function clearAllIntervals() {
@@ -127,6 +136,19 @@
 
   // Network stats interval is declared above with healthCheckInterval
 
+  // Mock active connections for demo
+  let activeConnections = $state<ActiveConnection[]>([]);
+
+  // Protection status derived from app state
+  let protectionStatus = $derived<ProtectionStatus>(
+    isOptimizingValue ? 'bypassing' :
+    appStatusValue.isActive ? 'protected' : 
+    'disabled'
+  );
+
+  // Current operation mode
+  let currentMode = $state<OperationMode>('auto');
+
   // Quick actions with loading states
   let quickActions = $derived([
     { id: 'scan', label: 'Scan All', loading: isScanning, disabled: isOptimizingValue },
@@ -148,6 +170,22 @@
       ? (appStatusValue.currentStrategyName?.toLowerCase().includes('vless') ? 'vless' : 'zapret')
       : 'direct'
   );
+
+  // Handle mode change
+  function handleModeChange(mode: OperationMode) {
+    currentMode = mode;
+    dashboardStore.setMode(mode);
+    logs.info('system', `Mode changed to: ${mode}`);
+  }
+
+  // Retry backend connection
+  async function handleRetryBackend() {
+    isLoading = true;
+    backendFailed = false;
+    initialized = false;
+    isInitializing = false;
+    await initializeDashboard();
+  }
 
   // Check all services health
   async function checkServicesHealth() {
@@ -244,6 +282,16 @@
       // Mock latency history for browser preview
       latencyHistory = [45, 52, 48, 55, 42, 38, 65, 58, 45, 52, 48, 55, 42, 38, 65, 58, 45, 52, 48, 55];
       
+      // Start traffic monitor for demo
+      trafficMonitor.start();
+      
+      // Mock active connections
+      activeConnections = [
+        { domain: 'youtube.com', method: 'strategy', strategyName: 'Zapret v1', bytesTransferred: 15728640, duration: 125 },
+        { domain: 'discord.com', method: 'strategy', strategyName: 'Zapret v1', bytesTransferred: 2097152, duration: 45 },
+        { domain: 'twitch.tv', method: 'vless', bytesTransferred: 52428800, duration: 320 }
+      ];
+      
       // Add demo logs
       logs.info('system', 'Dashboard loaded');
       logs.success('youtube', 'Connection established');
@@ -261,9 +309,14 @@
     const backendReady = await waitForBackend(30, 300);
     if (!backendReady) {
       logs.error('system', 'Backend failed to initialize after retries');
+      backendFailed = true;
       isLoading = false;
+      isInitializing = false;
       return;
     }
+    
+    // Backend is ready, reset failed state
+    backendFailed = false;
     
     // Async initialization for Tauri
     let unlistenProgress: (() => void) | undefined;
@@ -471,6 +524,9 @@
       // Clear all intervals
       clearAllIntervals();
       
+      // Stop traffic monitor
+      trafficMonitor.stop();
+      
       // Reset flags for potential remount
       initialized = false;
       isInitializing = false;
@@ -593,27 +649,48 @@
     <p class="text-sm text-zinc-400 mt-2">Monitor and control your network protection</p>
   </div>
 
-  <!-- Skeleton while loading -->
-  {#if isLoading}
+  <!-- Skeleton while loading or Backend Error -->
+  {#if backendFailed}
+    <BackendNotReady onRetry={handleRetryBackend} />
+  {:else if isLoading}
     <DashboardSkeleton />
   {:else}
     <!-- Bento Grid with Drag-n-Drop -->
     <BentoGrid columns={4} gap={4} draggable={true} order={widgetOrder} onReorder={handleReorder}>
       {#each widgetOrder as widgetId, index (widgetId)}
-        {#if widgetId === 'status'}
-          <!-- Global Status Widget (2x2) - Main Control -->
-          <BentoWidget colspan={2} rowspan={2} widgetId="status" {index}>
-            <div class="relative h-full">
+        {#if widgetId === 'shield'}
+          <!-- Shield Indicator Widget (2x2) - Main Control -->
+          <BentoWidget colspan={2} rowspan={2} widgetId="shield" {index}>
+            <div class="relative h-full flex flex-col items-center justify-center gap-6">
               <!-- Glow background when active -->
               {#if appStatusValue.isActive && !isOptimizingValue}
                 <div class="absolute inset-0 bg-neon-green/5 rounded-xl blur-2xl animate-pulse-glow pointer-events-none"></div>
               {/if}
-              <StatusWidget 
-                active={appStatusValue.isActive}
-                loading={isOptimizingValue}
-                onToggle={handleToggle}
+              
+              <!-- Shield Indicator -->
+              <ShieldIndicator 
+                status={protectionStatus}
+                onclick={handleToggle}
               />
+              
+              <!-- Mode Selector -->
+              <div class="w-full max-w-xs mt-4">
+                <ModeSelector 
+                  currentMode={currentMode}
+                  onModeChange={handleModeChange}
+                  disabled={isOptimizingValue}
+                />
+              </div>
             </div>
+          </BentoWidget>
+        {:else if widgetId === 'activity'}
+          <!-- Live Activity Panel (2x2) -->
+          <BentoWidget colspan={2} rowspan={2} title="Live Activity" icon="📡" widgetId="activity" {index}>
+            <LiveActivityPanel 
+              trafficHistory={trafficMonitor.history}
+              connections={activeConnections}
+              maxConnections={5}
+            />
           </BentoWidget>
         {:else if widgetId === 'health'}
           <!-- Health Monitor Widget (2x1) -->
@@ -632,7 +709,12 @@
         {:else if widgetId === 'actions'}
           <!-- Quick Actions Widget (1x1) -->
           <BentoWidget title="Quick Actions" icon="🚀" widgetId="actions" {index}>
-            <QuickActionsWidget actions={quickActions} onAction={handleQuickAction} />
+            <QuickActionsWidget 
+              actions={quickActions} 
+              onAction={handleQuickAction}
+              backendReady={!isLoading}
+              hasActiveStrategy={!!appStatusValue.currentStrategy}
+            />
           </BentoWidget>
         {:else if widgetId === 'failover'}
           <!-- Auto Recovery Widget (1x1) -->

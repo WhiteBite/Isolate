@@ -2,6 +2,8 @@
 
 // Existing modules
 pub mod ab_testing;
+pub mod ai_pilot;
+pub mod dashboard;
 pub mod composition;
 pub mod diagnostics;
 pub mod dns;
@@ -10,11 +12,13 @@ pub mod health_history;
 pub mod hostlists;
 pub mod hosts;
 pub mod ipset;
+pub mod library;
 pub mod logs;
 pub mod monitor;
 pub mod plugin_hostlists;
 pub mod prewarming;
 pub mod proxies;
+pub mod proxy_chain;
 pub mod quic;
 pub mod rate_limiter;
 pub mod resources;
@@ -40,6 +44,7 @@ pub mod providers;
 pub mod services;
 pub mod strategies;
 pub mod testing;
+pub mod troubleshoot;
 
 // Re-exports from existing modules
 pub use composition::*;
@@ -50,11 +55,13 @@ pub use health_history::*;
 pub use hostlists::*;
 pub use hosts::*;
 pub use ipset::*;
+pub use library::*;
 pub use logs::*;
 pub use monitor::*;
 pub use plugin_hostlists::*;
 pub use prewarming::*;
 pub use proxies::*;
+pub use proxy_chain::*;
 pub use quic::*;
 pub use resources::*;
 pub use routing::*;
@@ -75,6 +82,8 @@ pub use vless::*;
 
 // Re-exports from new modules
 pub use ab_testing::*;
+pub use ai_pilot::*;
+pub use dashboard::*;
 pub use automation::*;
 pub use metrics::*;
 pub use network::*;
@@ -83,6 +92,7 @@ pub use providers::*;
 pub use services::*;
 pub use strategies::*;
 pub use testing::*;
+pub use troubleshoot::*;
 
 use std::sync::Arc;
 use tauri::{AppHandle, Manager};

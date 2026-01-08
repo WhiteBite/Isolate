@@ -1,4 +1,6 @@
 export { default as Button } from './Button.svelte';
+export { default as BottomDrawer } from './BottomDrawer.svelte';
+export { default as LogsContent } from './LogsContent.svelte';
 export { default as Card } from './Card.svelte';
 export { default as Toggle } from './Toggle.svelte';
 export { default as Modal } from './Modal.svelte';
@@ -23,6 +25,9 @@ export { default as ContextMenuItem } from './ContextMenuItem.svelte';
 export { default as ContextMenuSeparator } from './ContextMenuSeparator.svelte';
 export { default as Sidebar } from './Sidebar.svelte';
 export { default as CommandPalette } from './CommandPalette.svelte';
+
+// Navigation Components
+export * from './navigation';
 
 // Plugin System
 export { default as PluginSlot } from './PluginSlot.svelte';
@@ -65,3 +70,10 @@ export { default as ErrorBoundary } from './ErrorBoundary.svelte';
 
 // Update Notification
 export { default as UpdateNotification } from './UpdateNotification.svelte';
+
+// Smart Toast & Game Mode
+export { default as SmartToast } from './SmartToast.svelte';
+export { default as GameModeIndicator } from './GameModeIndicator.svelte';
+
+// UI Components
+export { default as StatusIndicator } from './ui/StatusIndicator.svelte';

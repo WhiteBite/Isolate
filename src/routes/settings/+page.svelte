@@ -117,13 +117,13 @@
   let recordingHotkey = $state<keyof HotkeysState | null>(null);
   let hotkeyConflict = $state<string | null>(null);
 
-  // Tabs configuration
-  const tabs: { id: TabId; label: string; icon: string }[] = [
-    { id: 'general', label: 'General', icon: 'settings' },
-    { id: 'routing', label: 'Routing', icon: 'route' },
-    { id: 'hotkeys', label: 'Hotkeys', icon: 'keyboard' },
-    { id: 'hostlists', label: 'Hostlists', icon: 'list' },
-    { id: 'advanced', label: 'Advanced', icon: 'code' }
+  // Tabs configuration - labels are computed via t() in template
+  const tabs: { id: TabId; labelKey: string; icon: string }[] = [
+    { id: 'general', labelKey: 'settings.tabs.general', icon: 'settings' },
+    { id: 'routing', labelKey: 'settings.tabs.routing', icon: 'route' },
+    { id: 'hotkeys', labelKey: 'settings.tabs.hotkeys', icon: 'keyboard' },
+    { id: 'hostlists', labelKey: 'settings.tabs.hostlists', icon: 'list' },
+    { id: 'advanced', labelKey: 'settings.tabs.advanced', icon: 'code' }
   ];
 
   // Initialize on component mount and navigation
@@ -232,14 +232,14 @@
         await invoke('save_settings', { settings: localSettings });
       }
       
-      saveMessage = { text: 'Settings saved successfully', type: 'success' };
+      saveMessage = { text: t('settings.messages.saved'), type: 'success' };
       setTimeout(() => { saveMessage = null; }, 3000);
     } catch (e) {
       console.error('Failed to save settings:', e);
       // Show specific error message to user
       const errorMessage = e instanceof Error ? e.message : String(e);
       saveMessage = { 
-        text: `Failed to save: ${errorMessage}`, 
+        text: `${t('settings.messages.saveFailed')}: ${errorMessage}`, 
         type: 'error' 
       };
       // Keep error visible longer
@@ -364,13 +364,13 @@
       if (filePath) {
         // Write file
         await writeTextFile(filePath, configJson);
-        saveMessage = { text: 'Configuration exported successfully', type: 'success' };
+        saveMessage = { text: t('settings.messages.exported'), type: 'success' };
         setTimeout(() => { saveMessage = null; }, 3000);
       }
     } catch (e) {
       console.error('Failed to export config:', e);
       const errorMessage = e instanceof Error ? e.message : String(e);
-      saveMessage = { text: `Export failed: ${errorMessage}`, type: 'error' };
+      saveMessage = { text: `${t('settings.messages.exportFailed')}: ${errorMessage}`, type: 'error' };
       setTimeout(() => { saveMessage = null; }, 5000);
     } finally {
       exporting = false;
@@ -417,14 +417,14 @@
           // Reload settings to reflect changes
           await loadSettings();
         } else {
-          saveMessage = { text: 'No new data to import (all items already exist)', type: 'success' };
+          saveMessage = { text: t('settings.messages.noNewData'), type: 'success' };
         }
         setTimeout(() => { saveMessage = null; }, 5000);
       }
     } catch (e) {
       console.error('Failed to import config:', e);
       const errorMessage = e instanceof Error ? e.message : String(e);
-      saveMessage = { text: `Import failed: ${errorMessage}`, type: 'error' };
+      saveMessage = { text: `${t('settings.messages.importFailed')}: ${errorMessage}`, type: 'error' };
       setTimeout(() => { saveMessage = null; }, 5000);
     } finally {
       importing = false;
@@ -467,14 +467,14 @@
       
       const updatesAvailable = hostlistUpdateResults.filter(r => r.has_update).length;
       if (updatesAvailable > 0) {
-        saveMessage = { text: `${updatesAvailable} update(s) available`, type: 'success' };
+        saveMessage = { text: `${updatesAvailable} ${t('settings.hostlists.updatesAvailable')}`, type: 'success' };
       } else {
-        saveMessage = { text: 'All hostlists are up to date', type: 'success' };
+        saveMessage = { text: t('settings.hostlists.allUpToDate'), type: 'success' };
       }
       setTimeout(() => { saveMessage = null; }, 3000);
     } catch (e) {
       console.error('Failed to check hostlist updates:', e);
-      saveMessage = { text: `Check failed: ${e}`, type: 'error' };
+      saveMessage = { text: `${t('settings.messages.checkFailed')}: ${e}`, type: 'error' };
       setTimeout(() => { saveMessage = null; }, 5000);
     } finally {
       checkingUpdates = false;
@@ -492,13 +492,13 @@
       
       if (result.updated_count > 0) {
         saveMessage = { 
-          text: `Updated ${result.updated_count} hostlist(s)${result.failed_count > 0 ? `, ${result.failed_count} failed` : ''}`, 
+          text: `${t('settings.hostlists.updated')} ${result.updated_count}${result.failed_count > 0 ? `, ${result.failed_count} ${t('settings.hostlists.failed')}` : ''}`, 
           type: result.failed_count > 0 ? 'error' : 'success' 
         };
       } else if (result.failed_count > 0) {
-        saveMessage = { text: `Failed to update ${result.failed_count} hostlist(s)`, type: 'error' };
+        saveMessage = { text: `${t('settings.messages.updateFailed')}: ${result.failed_count}`, type: 'error' };
       } else {
-        saveMessage = { text: 'No updates available', type: 'success' };
+        saveMessage = { text: t('settings.hostlists.noUpdates'), type: 'success' };
       }
       setTimeout(() => { saveMessage = null; }, 5000);
       
@@ -507,7 +507,7 @@
       hostlistUpdateResults = [];
     } catch (e) {
       console.error('Failed to update hostlists:', e);
-      saveMessage = { text: `Update failed: ${e}`, type: 'error' };
+      saveMessage = { text: `${t('settings.messages.updateFailed')}: ${e}`, type: 'error' };
       setTimeout(() => { saveMessage = null; }, 5000);
     } finally {
       updatingHostlists = false;
@@ -520,12 +520,12 @@
     try {
       const { invoke } = await import('@tauri-apps/api/core');
       await invoke('update_single_hostlist', { id });
-      saveMessage = { text: `Updated ${id}`, type: 'success' };
+      saveMessage = { text: `${t('settings.hostlists.updated')} ${id}`, type: 'success' };
       setTimeout(() => { saveMessage = null; }, 3000);
       await loadHostlists();
     } catch (e) {
       console.error('Failed to update hostlist:', e);
-      saveMessage = { text: `Failed to update ${id}: ${e}`, type: 'error' };
+      saveMessage = { text: `${t('settings.messages.updateFailed')} ${id}: ${e}`, type: 'error' };
       setTimeout(() => { saveMessage = null; }, 5000);
     }
   }
@@ -557,9 +557,21 @@
     </div>
     <div class="flex items-center gap-3">
       {#if saveMessage}
-        <span class="text-sm animate-pulse {saveMessage.type === 'error' ? 'text-red-400' : 'text-indigo-400'}">
-          {saveMessage.text}
-        </span>
+        <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg animate-in fade-in slide-in-from-right-2 duration-200
+                    {saveMessage.type === 'error' 
+                      ? 'bg-red-500/10 border border-red-500/20 text-red-400' 
+                      : 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'}">
+          {#if saveMessage.type === 'error'}
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+          {:else}
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+            </svg>
+          {/if}
+          <span class="text-sm font-medium">{saveMessage.text}</span>
+        </div>
       {/if}
       <button
         onclick={saveSettings}
@@ -576,7 +588,7 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
           </svg>
         {/if}
-        Save
+        {t('common.save')}
       </button>
     </div>
   </div>
@@ -613,7 +625,7 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
               </svg>
             {/if}
-            <span class="font-medium">{tab.label}</span>
+            <span class="font-medium">{t(tab.labelKey)}</span>
           </button>
         {/each}
       </nav>
@@ -624,14 +636,14 @@
       <!-- General Tab -->
       {#if activeTab === 'general'}
         <div>
-          <h2 class="text-xl font-semibold text-text-primary mb-6">General Settings</h2>
+          <h2 class="text-xl font-semibold text-text-primary mb-6">{t('settings.general.title')}</h2>
           
           <div class="space-y-4">
             <!-- Autostart Toggle -->
             <div class="flex items-center justify-between p-4 bg-void-100 rounded-xl border border-glass-border">
               <div>
-                <p class="text-text-primary font-medium">Autostart</p>
-                <p class="text-text-secondary text-sm">Launch application on Windows startup</p>
+                <p class="text-text-primary font-medium">{t('settings.general.autostart')}</p>
+                <p class="text-text-secondary text-sm">{t('settings.general.autostartDesc')}</p>
               </div>
               <button
                 aria-label="Toggle auto-start"
@@ -676,15 +688,15 @@
               >
                 <option value="dark">{t('themes.dark')}</option>
                 <option value="light">{t('themes.light')}</option>
-                <option value="system">System</option>
+                <option value="system">{t('themes.system')}</option>
               </select>
             </div>
 
             <!-- Minimize to Tray Toggle -->
             <div class="flex items-center justify-between p-4 bg-void-100 rounded-xl border border-glass-border">
               <div>
-                <p class="text-text-primary font-medium">Minimize to Tray</p>
-                <p class="text-text-secondary text-sm">Minimize to system tray when closing</p>
+                <p class="text-text-primary font-medium">{t('settings.general.minimizeToTray')}</p>
+                <p class="text-text-secondary text-sm">{t('settings.general.minimizeToTrayDesc')}</p>
               </div>
               <button
                 aria-label="Toggle minimize to tray"
@@ -700,8 +712,8 @@
             <!-- Notifications Toggle -->
             <div class="flex items-center justify-between p-4 bg-void-100 rounded-xl border border-glass-border">
               <div>
-                <p class="text-text-primary font-medium">Notifications</p>
-                <p class="text-text-secondary text-sm">Show system notifications</p>
+                <p class="text-text-primary font-medium">{t('settings.general.notifications')}</p>
+                <p class="text-text-secondary text-sm">{t('settings.general.notificationsDesc')}</p>
               </div>
               <button
                 aria-label="Toggle notifications"
@@ -725,14 +737,14 @@
       <!-- Routing Tab -->
       {#if activeTab === 'routing'}
         <div>
-          <h2 class="text-xl font-semibold text-text-primary mb-6">Routing Settings</h2>
+          <h2 class="text-xl font-semibold text-text-primary mb-6">{t('settings.routing.title')}</h2>
           
           <div class="space-y-6">
             <!-- Domain Exceptions -->
             <div class="p-4 bg-void-100 rounded-xl border border-glass-border">
               <div class="mb-4">
-                <p class="text-text-primary font-medium">Domain Exceptions</p>
-                <p class="text-text-secondary text-sm">Domains that bypass DPI filtering</p>
+                <p class="text-text-primary font-medium">{t('settings.routing.domainExceptions')}</p>
+                <p class="text-text-secondary text-sm">{t('settings.routing.domainExceptionsDesc')}</p>
               </div>
               
               <!-- Add new exception -->
@@ -748,14 +760,14 @@
                   onclick={addException}
                   class="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg font-medium transition-colors shadow-lg shadow-indigo-500/20"
                 >
-                  Add
+                  {t('common.add')}
                 </button>
               </div>
 
               <!-- Exception list -->
               <div class="space-y-2 max-h-48 overflow-y-auto">
                 {#if localSettings.domainExceptions.length === 0}
-                  <p class="text-text-muted text-sm italic">No exceptions configured</p>
+                  <p class="text-text-muted text-sm italic">{t('settings.routing.noExceptions')}</p>
                 {:else}
                   {#each localSettings.domainExceptions as domain}
                     <div class="flex items-center justify-between p-2 bg-void-200 rounded-lg border border-glass-border">
@@ -779,10 +791,10 @@
             <div class="p-4 bg-void-100/50 rounded-xl border border-dashed border-glass-border">
               <div class="flex items-center justify-between">
                 <div>
-                  <p class="text-text-muted font-medium">Per-App Routing</p>
-                  <p class="text-text-muted/70 text-sm">Route traffic from specific applications through DPI bypass</p>
+                  <p class="text-text-muted font-medium">{t('settings.routing.perAppRouting')}</p>
+                  <p class="text-text-muted/70 text-sm">{t('settings.routing.perAppRoutingDesc')}</p>
                 </div>
-                <span class="px-3 py-1 bg-void-200 text-text-muted text-xs rounded-full">Coming Soon</span>
+                <span class="px-3 py-1 bg-void-200 text-text-muted text-xs rounded-full">{t('common.comingSoon')}</span>
               </div>
             </div>
           </div>
@@ -792,7 +804,7 @@
       <!-- Hotkeys Tab -->
       {#if activeTab === 'hotkeys'}
         <div>
-          <h2 class="text-xl font-semibold text-text-primary mb-6">Keyboard Shortcuts</h2>
+          <h2 class="text-xl font-semibold text-text-primary mb-6">{t('settings.hotkeys.title')}</h2>
           
           <div class="space-y-4">
             <!-- Hotkey list -->
@@ -810,7 +822,7 @@
                       <input
                         type="text"
                         readonly
-                        placeholder="Press keys..."
+                        placeholder={t('settings.hotkeys.pressKeys')}
                         onkeydown={handleHotkeyKeydown}
                         onblur={stopRecordingHotkey}
                         class="w-40 bg-indigo-500/10 text-indigo-400 rounded-lg px-4 py-2 border-2 border-indigo-500 focus:outline-none text-center font-mono animate-pulse"
@@ -852,7 +864,7 @@
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
                   </svg>
-                  Conflict with "{hotkeyConflict}"
+                  {t('settings.hotkeys.conflictWith')} "{hotkeyConflict}"
                 </div>
               {/if}
             {/each}
@@ -866,7 +878,7 @@
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                 </svg>
-                Reset All to Defaults
+                {t('settings.hotkeys.resetAll')}
               </button>
             </div>
 
@@ -876,7 +888,7 @@
                 <svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                 </svg>
-                <span>Click on a shortcut to change it. Press the new key combination, then release. Use Ctrl, Alt, or Shift with any key.</span>
+                <span>{t('settings.hotkeys.helpText')}</span>
               </p>
             </div>
           </div>
@@ -888,8 +900,8 @@
         <div>
           <div class="flex items-center justify-between mb-6">
             <div>
-              <h2 class="text-xl font-semibold text-text-primary">Hostlists</h2>
-              <p class="text-text-secondary text-sm mt-1">Manage domain lists for DPI bypass</p>
+              <h2 class="text-xl font-semibold text-text-primary">{t('settings.hostlists.title')}</h2>
+              <p class="text-text-secondary text-sm mt-1">{t('settings.hostlists.subtitle')}</p>
             </div>
             <div class="flex items-center gap-2">
               <button
@@ -907,7 +919,7 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                   </svg>
                 {/if}
-                Check Updates
+                {t('settings.hostlists.checkUpdates')}
               </button>
               <button
                 onclick={updateAllHostlists}
@@ -924,7 +936,7 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
                   </svg>
                 {/if}
-                Update All
+                {t('settings.hostlists.updateAll')}
               </button>
             </div>
           </div>
@@ -942,7 +954,7 @@
                 <svg class="w-12 h-12 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                 </svg>
-                <p>No hostlists found</p>
+                <p>{t('settings.hostlists.noHostlists')}</p>
               </div>
             {:else}
               {#each hostlists as hostlist}
@@ -953,12 +965,12 @@
                         <h3 class="text-text-primary font-medium">{hostlist.name}</h3>
                         {#if hostlist.update_available}
                           <span class="px-2 py-0.5 bg-indigo-500/20 text-indigo-400 text-xs rounded-full">
-                            Update available
+                            {t('common.updateAvailable')}
                           </span>
                         {/if}
                         {#if hostlist.source_url}
                           <span class="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 text-xs rounded-full">
-                            Auto-update
+                            {t('common.autoUpdate')}
                           </span>
                         {/if}
                       </div>
@@ -967,7 +979,7 @@
                           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                           </svg>
-                          {hostlist.domain_count ?? 0} domains
+                          {hostlist.domain_count ?? 0} {t('common.domains')}
                         </span>
                         <span class="flex items-center gap-1">
                           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1008,7 +1020,7 @@
                 <svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                 </svg>
-                <span>Hostlists contain domains that are processed by DPI bypass strategies. Updates are fetched from GitHub repositories with the latest domain lists.</span>
+                <span>{t('settings.hostlists.helpText')}</span>
               </p>
             </div>
           </div>
@@ -1018,17 +1030,21 @@
       <!-- Advanced Tab -->
       {#if activeTab === 'advanced'}
         <div>
-          <h2 class="text-xl font-semibold text-text-primary mb-6">Advanced Settings</h2>
+          <h2 class="text-xl font-semibold text-text-primary mb-6">{t('settings.advanced.title')}</h2>
           
           <div class="space-y-6">
+            <!-- ============================================ -->
+            <!-- SECTION: General Advanced Settings -->
+            <!-- ============================================ -->
+            
             <!-- Auto Recovery Settings Component -->
             <AutoRecoverySettings />
 
             <!-- Block QUIC -->
             <div class="flex items-center justify-between p-4 bg-void-100 rounded-xl border border-glass-border">
               <div>
-                <p class="text-text-primary font-medium">Block QUIC</p>
-                <p class="text-text-secondary text-sm">Block UDP/443 to force TCP connections</p>
+                <p class="text-text-primary font-medium">{t('settings.advanced.blockQuic')}</p>
+                <p class="text-text-secondary text-sm">{t('settings.advanced.blockQuicDesc')}</p>
               </div>
               <button
                 aria-label="Toggle block QUIC"
@@ -1041,55 +1057,6 @@
               </button>
             </div>
 
-            <!-- TCP Timestamps -->
-            <div class="flex items-center justify-between p-4 bg-void-100 rounded-xl border border-glass-border">
-              <div>
-                <p class="text-text-primary font-medium">TCP Timestamps</p>
-                <p class="text-text-secondary text-sm">Enable RFC 1323 timestamps (may help bypass some DPI)</p>
-              </div>
-              <button
-                aria-label="Toggle TCP timestamps"
-                role="switch"
-                aria-checked={localSettings.tcpTimestamps}
-                onclick={async () => {
-                  const newValue = !localSettings.tcpTimestamps;
-                  if (isTauri) {
-                    try {
-                      const { invoke } = await import('@tauri-apps/api/core');
-                      await invoke('set_tcp_timestamps_enabled', { enabled: newValue });
-                      localSettings.tcpTimestamps = newValue;
-                    } catch (e) {
-                      console.error('Failed to set TCP timestamps:', e);
-                      saveMessage = { text: `Failed: ${e}`, type: 'error' };
-                      setTimeout(() => { saveMessage = null; }, 5000);
-                    }
-                  } else {
-                    localSettings.tcpTimestamps = newValue;
-                  }
-                }}
-                class="relative w-12 h-6 rounded-full transition-colors duration-200 {localSettings.tcpTimestamps ? 'bg-indigo-500' : 'bg-void-200'}"
-              >
-                <span class="absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform duration-200 {localSettings.tcpTimestamps ? 'translate-x-6' : 'translate-x-0'}"></span>
-              </button>
-            </div>
-
-            <!-- Debug Mode -->
-            <div class="flex items-center justify-between p-4 bg-void-100 rounded-xl border border-glass-border">
-              <div>
-                <p class="text-text-primary font-medium">Debug Mode</p>
-                <p class="text-text-secondary text-sm">Enable verbose logging for troubleshooting</p>
-              </div>
-              <button
-                aria-label="Toggle debug mode"
-                role="switch"
-                aria-checked={localSettings.debugMode}
-                onclick={() => { localSettings.debugMode = !localSettings.debugMode; setSetting('debugMode', localSettings.debugMode); }}
-                class="relative w-12 h-6 rounded-full transition-colors duration-200 {localSettings.debugMode ? 'bg-indigo-500' : 'bg-void-200'}"
-              >
-                <span class="absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform duration-200 {localSettings.debugMode ? 'translate-x-6' : 'translate-x-0'}"></span>
-              </button>
-            </div>
-
             <!-- Backup & Restore -->
             <div class="p-4 bg-void-100 rounded-xl border border-glass-border">
               <div class="mb-4">
@@ -1097,9 +1064,9 @@
                   <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/>
                   </svg>
-                  Backup & Restore
+                  {t('settings.advanced.backup')}
                 </p>
-                <p class="text-text-secondary text-sm mt-1">Export or import your configuration (settings, proxies, routing rules)</p>
+                <p class="text-text-secondary text-sm mt-1">{t('settings.advanced.backupDesc')}</p>
               </div>
               
               <div class="flex gap-3">
@@ -1118,7 +1085,7 @@
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
                     </svg>
                   {/if}
-                  Export Config
+                  {t('settings.advanced.exportConfig')}
                 </button>
                 
                 <button
@@ -1136,43 +1103,106 @@
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
                     </svg>
                   {/if}
-                  Import Config
+                  {t('settings.advanced.importConfig')}
                 </button>
               </div>
               
               <p class="text-text-muted text-xs mt-3">
-                Note: Passwords are not exported for security reasons. You'll need to re-enter them after import.
+                {t('settings.advanced.backupNote')}
               </p>
             </div>
 
-            <!-- Danger Zone -->
-            <details class="border border-red-500/20 rounded-xl overflow-hidden">
-              <summary class="p-4 bg-red-500/5 text-red-400 cursor-pointer hover:bg-red-500/10 transition-colors flex items-center gap-2">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+            <!-- ============================================ -->
+            <!-- SECTION: Expert Settings (Collapsible) -->
+            <!-- ============================================ -->
+            <details class="border border-amber-500/30 rounded-xl overflow-hidden group">
+              <summary class="p-4 bg-amber-500/5 cursor-pointer hover:bg-amber-500/10 transition-colors flex items-center gap-3">
+                <svg class="w-5 h-5 text-amber-500 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
                 </svg>
-                <span class="font-medium">Danger Zone — Advanced Settings</span>
+                <div class="flex-1">
+                  <span class="font-medium text-amber-400">{t('settings.advanced.expert')}</span>
+                  <p class="text-text-secondary text-sm mt-0.5">{t('settings.advanced.expertDesc')}</p>
+                </div>
+                <span class="px-2 py-1 bg-amber-500/20 text-amber-400 text-xs rounded-full font-medium">
+                  {t('settings.advanced.forExperts')}
+                </span>
               </summary>
               
-              <div class="p-4 space-y-4 bg-void-100">
-                <p class="text-text-secondary text-sm mb-4">
-                  ⚠️ These settings can affect system stability. Change only if you know what you're doing.
-                </p>
+              <div class="p-4 space-y-4 bg-void-100 border-t border-amber-500/20">
+                <!-- Warning Banner -->
+                <div class="p-3 bg-amber-500/10 rounded-lg border border-amber-500/20 flex items-start gap-3">
+                  <svg class="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                  </svg>
+                  <p class="text-amber-400/90 text-sm">
+                    {t('settings.advanced.expertWarning')}
+                  </p>
+                </div>
+
+                <!-- TCP Timestamps -->
+                <div class="flex items-center justify-between p-4 bg-void-200 rounded-xl border border-glass-border">
+                  <div>
+                    <p class="text-text-primary font-medium">{t('settings.advanced.tcpTimestamps')}</p>
+                    <p class="text-text-secondary text-sm">{t('settings.advanced.tcpTimestampsDesc')}</p>
+                  </div>
+                  <button
+                    aria-label="Toggle TCP timestamps"
+                    role="switch"
+                    aria-checked={localSettings.tcpTimestamps}
+                    onclick={async () => {
+                      const newValue = !localSettings.tcpTimestamps;
+                      if (isTauri) {
+                        try {
+                          const { invoke } = await import('@tauri-apps/api/core');
+                          await invoke('set_tcp_timestamps_enabled', { enabled: newValue });
+                          localSettings.tcpTimestamps = newValue;
+                        } catch (e) {
+                          console.error('Failed to set TCP timestamps:', e);
+                          saveMessage = { text: `Failed: ${e}`, type: 'error' };
+                          setTimeout(() => { saveMessage = null; }, 5000);
+                        }
+                      } else {
+                        localSettings.tcpTimestamps = newValue;
+                      }
+                    }}
+                    class="relative w-12 h-6 rounded-full transition-colors duration-200 {localSettings.tcpTimestamps ? 'bg-indigo-500' : 'bg-void-300'}"
+                  >
+                    <span class="absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform duration-200 {localSettings.tcpTimestamps ? 'translate-x-6' : 'translate-x-0'}"></span>
+                  </button>
+                </div>
+
+                <!-- Debug Mode -->
+                <div class="flex items-center justify-between p-4 bg-void-200 rounded-xl border border-glass-border">
+                  <div>
+                    <p class="text-text-primary font-medium">{t('settings.advanced.debugMode')}</p>
+                    <p class="text-text-secondary text-sm">{t('settings.advanced.debugModeDesc')}</p>
+                  </div>
+                  <button
+                    aria-label="Toggle debug mode"
+                    role="switch"
+                    aria-checked={localSettings.debugMode}
+                    onclick={() => { localSettings.debugMode = !localSettings.debugMode; setSetting('debugMode', localSettings.debugMode); }}
+                    class="relative w-12 h-6 rounded-full transition-colors duration-200 {localSettings.debugMode ? 'bg-indigo-500' : 'bg-void-300'}"
+                  >
+                    <span class="absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform duration-200 {localSettings.debugMode ? 'translate-x-6' : 'translate-x-0'}"></span>
+                  </button>
+                </div>
 
                 <!-- WinDivert Mode -->
                 <div class="flex items-center justify-between p-4 bg-void-200 rounded-xl border border-glass-border">
                   <div>
-                    <p class="text-text-primary font-medium">WinDivert Mode</p>
-                    <p class="text-text-secondary text-sm">Driver operation mode</p>
+                    <p class="text-text-primary font-medium">{t('settings.advanced.windivertMode')}</p>
+                    <p class="text-text-secondary text-sm">{t('settings.advanced.windivertModeDesc')}</p>
                   </div>
                   <select 
                     bind:value={localSettings.windivertMode}
                     onchange={() => setSetting('windivertMode', localSettings.windivertMode)}
-                    class="bg-void-200 text-text-primary rounded-lg px-4 py-2 border border-glass-border focus:border-red-500 focus:ring-1 focus:ring-red-500/20 focus:outline-none cursor-pointer"
+                    class="bg-void-300 text-text-primary rounded-lg px-4 py-2 border border-glass-border focus:border-amber-500 focus:ring-1 focus:ring-amber-500/20 focus:outline-none cursor-pointer"
                   >
-                    <option value="normal">Normal</option>
-                    <option value="autottl">Auto TTL</option>
-                    <option value="autohostlist">Auto Hostlist</option>
+                    <option value="normal">{t('settings.advanced.windivertModes.normal')}</option>
+                    <option value="autottl">{t('settings.advanced.windivertModes.autottl')}</option>
+                    <option value="autohostlist">{t('settings.advanced.windivertModes.autohostlist')}</option>
                   </select>
                 </div>
 
@@ -1180,9 +1210,9 @@
                 <div class="flex items-center justify-between p-4 bg-void-200 rounded-xl border border-glass-border">
                   <div>
                     <p class="text-text-primary font-medium flex items-center gap-2">
-                      🎮 Game Filter Mode
+                      🎮 {t('settings.advanced.gameFilterMode')}
                     </p>
-                    <p class="text-text-secondary text-sm">Port filtering for games (requires restart)</p>
+                    <p class="text-text-secondary text-sm">{t('settings.advanced.gameFilterModeDesc')}</p>
                   </div>
                   <div class="flex items-center gap-3">
                     <button
@@ -1210,38 +1240,40 @@
                 <!-- DNS Override -->
                 <div class="flex items-center justify-between p-4 bg-void-200 rounded-xl border border-glass-border">
                   <div>
-                    <p class="text-text-primary font-medium">DNS Override</p>
-                    <p class="text-text-secondary text-sm">Custom DNS server (leave empty for system default)</p>
+                    <p class="text-text-primary font-medium">{t('settings.advanced.dnsOverride')}</p>
+                    <p class="text-text-secondary text-sm">{t('settings.advanced.dnsOverrideDesc')}</p>
                   </div>
                   <input
                     type="text"
                     bind:value={localSettings.dnsOverride}
                     placeholder="8.8.8.8"
                     onchange={() => setSetting('dnsOverride', localSettings.dnsOverride)}
-                    class="w-40 bg-void-200 text-text-primary rounded-lg px-4 py-2 border border-glass-border focus:border-red-500 focus:ring-1 focus:ring-red-500/20 focus:outline-none placeholder-text-muted"
+                    class="w-40 bg-void-300 text-text-primary rounded-lg px-4 py-2 border border-glass-border focus:border-amber-500 focus:ring-1 focus:ring-amber-500/20 focus:outline-none placeholder-text-muted"
                   />
                 </div>
 
-                <!-- Reset to Defaults -->
-                <div class="pt-4 border-t border-red-500/20 flex flex-wrap gap-3">
+                <!-- Reset Expert Settings -->
+                <div class="pt-4 border-t border-glass-border flex flex-wrap gap-3">
                   <button
                     onclick={() => {
                       localSettings.windivertMode = 'normal';
                       localSettings.gameFilterMode = 'normal';
                       localSettings.dnsOverride = '';
-                      localSettings.blockQuic = true;
                       localSettings.tcpTimestamps = false;
                       localSettings.debugMode = false;
                     }}
-                    class="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg text-sm font-medium transition-colors"
+                    class="px-4 py-2 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
                   >
-                    Reset Advanced Settings
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                    </svg>
+                    {t('settings.advanced.resetExpert')}
                   </button>
                   <button
                     onclick={resetOnboarding}
-                    class="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-text-secondary hover:text-text-primary rounded-lg text-sm font-medium transition-colors"
+                    class="px-4 py-2 bg-void-200 hover:bg-void-300 text-text-secondary hover:text-text-primary rounded-lg text-sm font-medium transition-colors"
                   >
-                    Reset Onboarding
+                    {t('settings.advanced.resetOnboarding')}
                   </button>
                 </div>
               </div>

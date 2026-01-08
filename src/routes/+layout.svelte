@@ -14,8 +14,11 @@
     Sidebar,
     PageTransition,
     UpdateNotification,
-    KeyboardOverlay
+    KeyboardOverlay,
+    BottomDrawer,
+    LogsContent
   } from '$lib/components';
+  import { bottomDrawerStore } from '$lib/stores/bottomDrawer.svelte';
   import { lazyComponents, preloadAllLazyComponents } from '$lib/utils/lazyComponent';
   import { waitForBackend, isTauriEnv } from '$lib/hooks/useBackendReady.svelte';
   import type { Component } from 'svelte';
@@ -74,27 +77,35 @@
     if (!browser || initialized || isCheckingOnboarding) return;
     isCheckingOnboarding = true;
     
+    const currentPath = window.location.pathname;
+    const isTauri = '__TAURI__' in window || '__TAURI_INTERNALS__' in window;
+    
     try {
-      const { invoke } = await import('@tauri-apps/api/core');
+      let onboardingComplete = false;
       
-      // Wait for backend with exponential backoff
-      const backendReady = await waitForBackend({
-        maxRetries: 15,
-        initialDelay: 100,
-        maxDelay: 1000,
-      });
-      
-      if (!backendReady) {
-        console.warn('[Layout] Backend not ready after retries');
-        initialized = true;
-        isCheckingOnboarding = false;
-        return;
+      if (isTauri) {
+        const { invoke } = await import('@tauri-apps/api/core');
+        
+        // Wait for backend with exponential backoff
+        const backendReady = await waitForBackend({
+          maxRetries: 15,
+          initialDelay: 100,
+          maxDelay: 1000,
+        });
+        
+        if (!backendReady) {
+          console.warn('[Layout] Backend not ready after retries');
+          initialized = true;
+          isCheckingOnboarding = false;
+          return;
+        }
+        
+        const result = await invoke<boolean | null>('get_setting', { key: 'onboarding_complete' }).catch(() => null);
+        onboardingComplete = result === true;
+      } else {
+        // Browser preview: check localStorage
+        onboardingComplete = localStorage.getItem('onboarding_completed') === 'true';
       }
-      
-      const result = await invoke<boolean | null>('get_setting', { key: 'onboarding_complete' }).catch(() => null);
-      const onboardingComplete = result === true;
-      
-      const currentPath = window.location.pathname;
       
       if (!onboardingComplete && currentPath !== '/onboarding') {
         isOnboarding = true;
@@ -695,4 +706,9 @@
 
 <!-- Keyboard Overlay (shows on Ctrl hold) -->
 <KeyboardOverlay />
+
+<!-- Bottom Drawer for Logs -->
+<BottomDrawer title="Logs">
+  <LogsContent />
+</BottomDrawer>
 

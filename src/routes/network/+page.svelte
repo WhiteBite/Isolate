@@ -44,6 +44,11 @@
   // Switching state
   let switching = $state(false);
   
+  // Capture mode confirmation modal
+  let showCaptureModeConfirm = $state(false);
+  let pendingCaptureMode = $state<'system' | 'tun' | null>(null);
+  let captureModeError = $state<string | null>(null);
+  
   // Drawers/Modals
   let showAdvanced = $state(false);
   let showAddGateway = $state(false);
@@ -154,13 +159,26 @@
   async function handleCaptureModeChange(mode: 'system' | 'tun') {
     if (mode === captureMode || switching) return;
     
+    // Show confirmation modal instead of switching immediately
+    pendingCaptureMode = mode;
+    captureModeError = null;
+    showCaptureModeConfirm = true;
+  }
+  
+  async function confirmCaptureModeChange() {
+    if (!pendingCaptureMode || switching) return;
+    
+    const mode = pendingCaptureMode;
     switching = true;
+    captureModeError = null;
     
     const isTauri = '__TAURI__' in window || '__TAURI_INTERNALS__' in window;
     if (!isTauri) {
       await new Promise(r => setTimeout(r, 500));
       captureMode = mode;
       switching = false;
+      showCaptureModeConfirm = false;
+      pendingCaptureMode = null;
       return;
     }
     
@@ -184,7 +202,7 @@
           await invoke('set_system_proxy', { host: '127.0.0.1', port: 1080, scheme: 'socks5' });
           systemProxySet = true;
         } else {
-          toasts.warning('Select a gateway first');
+          captureModeError = 'Сначала выберите активный шлюз';
           switching = false;
           return;
         }
@@ -194,13 +212,51 @@
       }
       
       captureMode = mode;
-      toasts.success(`Switched to ${mode === 'system' ? 'System Proxy' : 'TUN Driver'}`);
+      toasts.success(`Переключено на ${mode === 'system' ? 'System Proxy' : 'TUN Driver'}`);
+      showCaptureModeConfirm = false;
+      pendingCaptureMode = null;
     } catch (e) {
       console.error('Failed to switch capture mode:', e);
-      toasts.error(`Failed to switch: ${e}`);
+      const errorMsg = e instanceof Error ? e.message : String(e);
+      captureModeError = getCaptureModeErrorMessage(errorMsg, mode);
     } finally {
       switching = false;
     }
+  }
+  
+  function getCaptureModeErrorMessage(error: string, mode: 'system' | 'tun'): string {
+    const lowerError = error.toLowerCase();
+    
+    if (mode === 'tun') {
+      if (lowerError.includes('admin') || lowerError.includes('privilege') || lowerError.includes('access denied')) {
+        return 'TUN драйвер требует прав администратора. Перезапустите приложение от имени администратора.';
+      }
+      if (lowerError.includes('driver') || lowerError.includes('wintun')) {
+        return 'Не удалось загрузить TUN драйвер. Возможно, он заблокирован антивирусом или VPN.';
+      }
+      if (lowerError.includes('conflict') || lowerError.includes('in use')) {
+        return 'TUN интерфейс уже используется другим приложением (VPN, антивирус).';
+      }
+    }
+    
+    if (mode === 'system') {
+      if (lowerError.includes('registry') || lowerError.includes('access denied')) {
+        return 'Не удалось изменить системные настройки прокси. Проверьте права доступа.';
+      }
+    }
+    
+    return `Не удалось переключить режим: ${error}`;
+  }
+  
+  function cancelCaptureModeChange() {
+    showCaptureModeConfirm = false;
+    pendingCaptureMode = null;
+    captureModeError = null;
+  }
+  
+  async function retryCaptureModeChange() {
+    captureModeError = null;
+    await confirmCaptureModeChange();
   }
   
   // Gateway handlers
@@ -870,6 +926,121 @@
       oncomplete={handleProxyTestComplete}
       onsort={handleProxySorted}
     />
+  </div>
+</BaseModal>
+
+<!-- Capture Mode Confirmation Modal -->
+<BaseModal open={showCaptureModeConfirm} onclose={cancelCaptureModeChange} class="w-full max-w-md">
+  <div class="p-6">
+    <!-- Header -->
+    <div class="flex items-center gap-3 mb-4">
+      <div class="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center">
+        <svg class="w-6 h-6 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+      </div>
+      <div>
+        <h3 class="text-lg font-semibold text-white">Изменить режим захвата?</h3>
+        <p class="text-sm text-zinc-400">
+          {captureMode === 'system' ? 'System Proxy' : 'TUN Driver'} → {pendingCaptureMode === 'system' ? 'System Proxy' : 'TUN Driver'}
+        </p>
+      </div>
+    </div>
+    
+    <!-- Content -->
+    {#if captureModeError}
+      <!-- Error state -->
+      <div class="mb-5 p-4 bg-red-500/10 border border-red-500/20 rounded-xl">
+        <div class="flex items-start gap-3">
+          <svg class="w-5 h-5 text-red-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div>
+            <p class="text-sm text-red-300 font-medium mb-1">Ошибка переключения</p>
+            <p class="text-sm text-red-400/80">{captureModeError}</p>
+          </div>
+        </div>
+      </div>
+    {:else}
+      <!-- Warning info -->
+      <div class="mb-5 p-4 bg-zinc-800/50 border border-white/5 rounded-xl space-y-3">
+        <p class="text-sm text-zinc-300">
+          Переключение режима захвата трафика может временно прервать активные соединения.
+        </p>
+        
+        {#if pendingCaptureMode === 'tun'}
+          <div class="flex items-start gap-2 text-xs text-amber-400/80">
+            <svg class="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>TUN режим требует прав администратора и может конфликтовать с VPN или антивирусами.</span>
+          </div>
+        {/if}
+        
+        {#if pendingCaptureMode === 'system' && !gateways.some(g => g.active)}
+          <div class="flex items-start gap-2 text-xs text-amber-400/80">
+            <svg class="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <span>Для System Proxy необходимо сначала выбрать активный шлюз.</span>
+          </div>
+        {/if}
+      </div>
+    {/if}
+    
+    <!-- Actions -->
+    <div class="flex gap-3">
+      <button
+        onclick={cancelCaptureModeChange}
+        disabled={switching}
+        class="flex-1 px-4 py-2.5 bg-zinc-800/60 border border-white/10 rounded-xl
+               text-zinc-300 font-medium text-sm hover:bg-zinc-700/60 transition-colors
+               disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        Отмена
+      </button>
+      
+      {#if captureModeError}
+        <button
+          onclick={retryCaptureModeChange}
+          disabled={switching}
+          class="flex-1 px-4 py-2.5 bg-amber-500/20 border border-amber-500/30 rounded-xl
+                 text-amber-400 font-medium text-sm hover:bg-amber-500/30 transition-colors
+                 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+        >
+          {#if switching}
+            <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span>Повтор...</span>
+          {:else}
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            <span>Повторить</span>
+          {/if}
+        </button>
+      {:else}
+        <button
+          onclick={confirmCaptureModeChange}
+          disabled={switching}
+          class="flex-1 px-4 py-2.5 bg-blue-500/20 border border-blue-500/30 rounded-xl
+                 text-blue-400 font-medium text-sm hover:bg-blue-500/30 transition-colors
+                 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+        >
+          {#if switching}
+            <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span>Переключение...</span>
+          {:else}
+            <span>Переключить</span>
+          {/if}
+        </button>
+      {/if}
+    </div>
   </div>
 </BaseModal>
 

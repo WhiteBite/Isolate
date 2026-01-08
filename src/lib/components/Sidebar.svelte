@@ -1,6 +1,5 @@
 <script lang="ts">
   import { page } from '$app/stores';
-  import { installedPlugins, type PluginInfo } from '$lib/stores/plugins';
   import { browser } from '$app/environment';
 
   interface Props {
@@ -9,15 +8,6 @@
   }
 
   let { collapsed = $bindable(false), onToggle }: Props = $props();
-
-  let plugins: PluginInfo[] = $state([]);
-  
-  $effect(() => {
-    const unsub = installedPlugins.subscribe((value) => {
-      plugins = value;
-    });
-    return unsub;
-  });
 
   let currentPath = $derived($page.url.pathname);
 
@@ -179,42 +169,6 @@
         </a>
       {/each}
     </div>
-
-    <!-- Plugins (App Dock style) -->
-    {#if plugins.length > 0}
-      <div class="mt-4 px-2" role="group" aria-label="Plugins">
-        {#if !collapsed}
-          <div class="px-3 py-1.5 text-[10px] font-semibold text-zinc-400 uppercase tracking-widest" id="plugins-heading">
-            Plugins
-          </div>
-        {:else}
-          <div class="h-px bg-white/5 mx-2 my-2" aria-hidden="true"></div>
-        {/if}
-        <div class="mt-1 space-y-0.5" aria-labelledby={!collapsed ? 'plugins-heading' : undefined}>
-          {#each plugins as plugin}
-            <a
-              href={plugin.route || `/plugins/${plugin.id}`}
-              class="relative flex items-center gap-3 px-3 py-1.5 rounded-lg transition-all duration-150
-                {isActive(plugin.route || `/plugins/${plugin.id}`) 
-                  ? 'bg-white/5 text-white' 
-                  : 'text-zinc-400 hover:bg-white/5 hover:text-zinc-200'}"
-              aria-current={isActive(plugin.route || `/plugins/${plugin.id}`) ? 'page' : undefined}
-              aria-label={collapsed ? plugin.name : undefined}
-            >
-              {#if isActive(plugin.route || `/plugins/${plugin.id}`)}
-                <div class="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-3 bg-indigo-500 rounded-r-full shadow-[0_0_8px_rgba(99,102,241,0.5)]"></div>
-              {/if}
-              <span class="w-4 h-4 flex-shrink-0 flex items-center justify-center text-sm">
-                {plugin.icon}
-              </span>
-              {#if !collapsed}
-                <span class="text-xs font-medium whitespace-nowrap overflow-hidden">{plugin.name}</span>
-              {/if}
-            </a>
-          {/each}
-        </div>
-      </div>
-    {/if}
 
     <div class="flex-1"></div>
 

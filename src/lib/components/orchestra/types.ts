@@ -81,12 +81,12 @@ export function getOrchestraStatusIcon(status: OrchestraState['status']): string
 
 export function getOrchestraStatusText(status: OrchestraState['status']): string {
   switch (status) {
-    case 'running': return 'Running';
-    case 'learning': return 'Learning';
-    case 'paused': return 'Paused';
-    case 'completed': return 'Completed';
-    case 'error': return 'Error';
-    default: return 'Idle';
+    case 'running': return 'Работает';
+    case 'learning': return 'Тестирование';
+    case 'paused': return 'Пауза';
+    case 'completed': return 'Завершено';
+    case 'error': return 'Ошибка';
+    default: return 'Готов';
   }
 }
 

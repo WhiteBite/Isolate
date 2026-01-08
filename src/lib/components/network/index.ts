@@ -1,4 +1,5 @@
 export { default as CaptureMode } from './CaptureMode.svelte';
+export { default as CaptureModeInfo } from './CaptureModeInfo.svelte';
 export { default as ConnectionStatus } from './ConnectionStatus.svelte';
 export { default as GatewayCard } from './GatewayCard.svelte';
 export { default as GatewayList } from './GatewayList.svelte';

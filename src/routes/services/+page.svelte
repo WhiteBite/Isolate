@@ -36,6 +36,9 @@
   let retrying = $state(false);
   
   // Ping history for each service (serviceId -> array of ping values)
+  // Limited to MAX_PING_HISTORY entries per service to prevent memory leak
+  const MAX_PING_HISTORY = 30;
+  const MAX_SERVICES_IN_HISTORY = 100; // Limit total services tracked
   let pingHistory: Map<string, number[]> = $state(new Map());
   
   // Modals
@@ -376,9 +379,29 @@
   function addPingToHistory(serviceId: string, ping: number | undefined) {
     if (ping === undefined) return;
     
+    // MEMORY SAFETY: Limit total services tracked to prevent unbounded growth
+    if (!pingHistory.has(serviceId) && pingHistory.size >= MAX_SERVICES_IN_HISTORY) {
+      // Remove oldest entry (first key in Map)
+      const firstKey = pingHistory.keys().next().value;
+      if (firstKey) {
+        pingHistory.delete(firstKey);
+      }
+    }
+    
     const history = pingHistory.get(serviceId) || [];
-    const newHistory = [...history, ping].slice(-30);
+    const newHistory = [...history, ping].slice(-MAX_PING_HISTORY);
     pingHistory.set(serviceId, newHistory);
+    pingHistory = new Map(pingHistory);
+  }
+  
+  // Cleanup ping history when services are removed
+  function cleanupPingHistory() {
+    const serviceIds = new Set(services.map(s => s.id));
+    for (const key of pingHistory.keys()) {
+      if (!serviceIds.has(key)) {
+        pingHistory.delete(key);
+      }
+    }
     pingHistory = new Map(pingHistory);
   }
 </script>

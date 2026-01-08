@@ -33,14 +33,38 @@ async fn get_executor() -> &'static Arc<ScriptExecutor> {
 ///
 /// # Returns
 /// * `CheckResult` with success status, latency, and optional details
+///
+/// # Security
+/// Both plugin_id and script_name are validated to prevent path traversal attacks.
 #[tauri::command]
 pub async fn execute_plugin_script(
     plugin_id: String,
     script_name: String,
 ) -> Result<CheckResult, String> {
+    // SECURITY: Validate plugin_id to prevent path traversal
+    if plugin_id.contains("..") || plugin_id.contains('/') || plugin_id.contains('\\') 
+        || plugin_id.contains('\0') || plugin_id.is_empty() {
+        return Err("Invalid plugin ID: path traversal or invalid characters detected".to_string());
+    }
+    
+    // SECURITY: Validate plugin_id contains only safe characters
+    if !plugin_id.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
+        return Err("Invalid plugin ID: only alphanumeric characters, hyphens and underscores allowed".to_string());
+    }
+    
     // Validate script_name to prevent path traversal
-    if script_name.contains("..") || script_name.contains('/') || script_name.contains('\\') {
+    if script_name.contains("..") || script_name.contains('/') || script_name.contains('\\') 
+        || script_name.contains('\0') || script_name.is_empty() {
         return Err("Invalid script name: path traversal detected".to_string());
+    }
+    
+    // SECURITY: Validate script_name has .lua extension and safe characters
+    if !script_name.ends_with(".lua") {
+        return Err("Invalid script name: only .lua files are allowed".to_string());
+    }
+    
+    if !script_name.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == '.') {
+        return Err("Invalid script name: only alphanumeric characters, hyphens, underscores and dots allowed".to_string());
     }
     
     info!(plugin = %plugin_id, script = %script_name, "Executing plugin script");

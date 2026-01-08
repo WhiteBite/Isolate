@@ -443,6 +443,8 @@
       isInitializing = false;
     } catch (e) {
       logs.error('system', `Failed to initialize: ${e}`);
+      // CRITICAL: Clear intervals on error to prevent memory leak
+      clearAllIntervals();
       isLoading = false;
       initialized = true; // Mark as initialized even on error to prevent infinite retries
       isInitializing = false;

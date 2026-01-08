@@ -1136,7 +1136,13 @@ impl StrategyEngine {
                 Entry::Occupied(_) => {
                     // Стратегия уже запущена - убиваем только что созданный процесс
                     // чтобы избежать утечки ресурсов
-                    drop(processes); // Освобождаем lock перед async операцией
+                    // CRITICAL FIX: Kill the child process before returning error
+                    // to prevent resource leak
+                    if let Some(mut child) = process.child {
+                        let _ = child.start_kill();
+                        // Don't await - just initiate kill and let OS clean up
+                    }
+                    // WinDivert guard will be dropped automatically (RAII)
                     return Err(IsolateError::Process(format!(
                         "Strategy '{}' is already running",
                         strategy.id

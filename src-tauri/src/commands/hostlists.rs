@@ -86,8 +86,51 @@ pub async fn delete_hostlist(id: String) -> Result<(), IsolateError> {
 }
 
 /// Update hostlist from remote URL
+/// 
+/// # Security
+/// Only allows HTTPS URLs to prevent SSRF attacks.
+/// Validates URL format before making requests.
 #[tauri::command]
 pub async fn update_hostlist_from_url(id: String, url: String) -> Result<Hostlist, IsolateError> {
+    validate_not_empty(&id, "Hostlist ID")?;
+    validate_not_empty(&url, "URL")?;
+    
+    // SECURITY: Validate URL to prevent SSRF
+    let parsed_url = url::Url::parse(&url)
+        .map_err(|e| IsolateError::Config(format!("Invalid URL format: {}", e)))?;
+    
+    // Only allow HTTPS to prevent plaintext interception
+    if parsed_url.scheme() != "https" {
+        return Err(IsolateError::Config(
+            "Only HTTPS URLs are allowed for security reasons".to_string()
+        ));
+    }
+    
+    // Block localhost/private IPs to prevent SSRF
+    if let Some(host) = parsed_url.host_str() {
+        let host_lower = host.to_lowercase();
+        if host_lower == "localhost" 
+            || host_lower == "127.0.0.1"
+            || host_lower.starts_with("192.168.")
+            || host_lower.starts_with("10.")
+            || host_lower.starts_with("172.16.")
+            || host_lower.starts_with("172.17.")
+            || host_lower.starts_with("172.18.")
+            || host_lower.starts_with("172.19.")
+            || host_lower.starts_with("172.2")
+            || host_lower.starts_with("172.30.")
+            || host_lower.starts_with("172.31.")
+            || host_lower == "0.0.0.0"
+            || host_lower == "::1"
+            || host_lower.ends_with(".local")
+            || host_lower.ends_with(".internal")
+        {
+            return Err(IsolateError::Config(
+                "URLs pointing to localhost or private networks are not allowed".to_string()
+            ));
+        }
+    }
+    
     info!(id = %id, url = %url, "Updating hostlist from URL");
 
     hostlists::update_hostlist(&id, &url)

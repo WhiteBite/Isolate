@@ -132,12 +132,16 @@
     if (!browser || !initialized) return;
     
     let unlisten: (() => void) | undefined;
+    let isCleanedUp = false;
     
     (async () => {
       if (!isTauriEnv()) return;
       
       try {
         const { listen } = await import('@tauri-apps/api/event');
+        
+        // Guard: don't setup listeners if already cleaned up
+        if (isCleanedUp) return;
         
         // Listen for failover triggered event
         const unlistenTriggered = await listen<{
@@ -173,6 +177,13 @@
           }
         });
         
+        // Guard: if cleaned up during async setup, immediately cleanup listeners
+        if (isCleanedUp) {
+          unlistenTriggered();
+          unlistenApply();
+          return;
+        }
+        
         unlisten = () => {
           unlistenTriggered();
           unlistenApply();
@@ -183,6 +194,7 @@
     })();
     
     return () => {
+      isCleanedUp = true;
       if (unlisten) unlisten();
     };
   });
@@ -259,6 +271,13 @@
       logs.error('system', `Toggle protection failed: ${e}`);
       toasts.error(`Failed to toggle protection: ${e}`);
       isOptimizing.set(false);
+      optimizationProgress.set({
+        step: 'failed',
+        progress: 0,
+        message: '',
+        isComplete: false,
+        error: String(e)
+      });
     }
   }
   

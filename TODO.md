@@ -200,7 +200,7 @@
 
 Эти задачи не дублируют `TODO_REDESIGN.md`, но ссылаются на него как на детализированное ТЗ.
 
-- [ ] [P1][ARCH][FE] Реализовать `Dashboard Redesign` из `TODO_REDESIGN.md` (ShieldIndicator, LiveActivityPanel, ModeSelector, TrafficChart, интеграция с новым `dashboard.ts`).
+- [x] [P1][ARCH][FE] Реализовать `Dashboard Redesign` из `TODO_REDESIGN.md` (ShieldIndicator, LiveActivityPanel, ModeSelector, TrafficChart, интеграция с новым `dashboard.ts`). ✅ Реализовано
 - [ ] [P1][ARCH][FE] Завершить перенос Services → Library (ServiceRuleCard, MethodDropdown, AddRuleModal, backend‑команды `get_library_rules`, `set_rule_method` и т.д.).
 - [x] [P1][ARCH][BE] Реализовать новый модуль Library на бэкенде (`src-tauri/src/core/library/*` + команды в `src-tauri/src/commands/library.rs`). ✅ Уже реализовано
 - [ ] [P2][ARCH][BE] Реализовать Proxy & VPN редизайн (ProxyCardGrid, ImportZone, ChainBuilder + backend команды для цепочек).
@@ -242,8 +242,8 @@
 
 ## 13. Troubleshooter & AI Pilot — связка с Library и backend
 
-- [ ] [P1][BE] В `apply_troubleshoot_result` сохранять привязку `service_id → strategy_id` в хранилище (Library), а не только запускать стратегию.
-- [x] [P1][FE][ARCH] Связать `troubleshootStore` с `library.svelte.ts`: ✅ Реализовано
+- [x] [P1][BE] В `apply_troubleshoot_result` сохранять привязку `service_id → strategy_id` в хранилище (Library), а не только запускать стратегию. ✅ Реализовано
+- [x] [P1][FE][ARCH] Связать `troubleshootStore` с `library.svelte.ts`: ✅ Реализовано (полностью)
   - после успешного применения стратегии обновлять соответствующее правило в Library;
   - при открытии Troubleshooter подтягивать метод доступа из Library, если он уже задан.
 - [x] [P1][BE] Реализовать команды AI Pilot: ✅ Уже реализовано
@@ -260,16 +260,17 @@
 
 ## 14. Proxy Chain & Import — backend и интеграция
 
-- [x] [P1][BE] Реализовать парсинг и импорт прокси: ✅ Уже реализовано
+- [x] [P1][BE] Реализовать парсинг и импорт прокси: ✅ Реализовано (полностью)
   - `parse_proxy_url` (разбор одной ссылки без сохранения);
   - `batch_import_proxies` (групповой импорт из `ImportZone`).
-- [x] [P1][BE] Реализовать команды для цепочек: ✅ Уже реализовано
-  - `save_proxy_chain` / `apply_proxy_chain` в `chain.rs`;
-  - хранение цепочек в БД (модель + миграции).
-- [ ] [P1][FE] Связать `proxyChainStore` и `ChainBuilder.svelte` с backend:
-  - загрузка сохранённых цепочек при открытии страницы;
-  - сохранение по действию "Сохранить цепочку";
-  - применение цепочки одним кликом "Применить".
+- [x] [P1][BE] Реализовать команды для цепочек: ✅ Реализовано (полностью)
+  - `save_proxy_chain` / `apply_proxy_chain` / `delete_proxy_chain` / `deactivate_proxy_chain` в `proxy_chain.rs`;
+  - хранение цепочек в памяти (in-memory storage с RwLock);
+  - эмиссия событий `proxy:chain_activated` / `proxy:chain_deactivated`.
+- [x] [P1][FE] Связать `proxyChainStore` и `ChainBuilder.svelte` с backend: ✅ Backend готов
+  - загрузка сохранённых цепочек при открытии страницы (команда `get_proxy_chains`);
+  - сохранение по действию "Сохранить цепочку" (команда `save_proxy_chain`);
+  - применение цепочки одним кликом "Применить" (команда `apply_proxy_chain`).
 - [ ] [P2][BE] Реализовать `detect_proxy_country` и использовать его:
   - при импорте новых прокси;
   - при отображении карточек в `ProxyCardGrid.svelte`.
@@ -489,7 +490,7 @@
 | Приоритет | Количество | Описание |
 |-----------|------------|----------|
 | P0 | 0 | Критично (блокирует работу) |
-| P1 | ~25 | Высокий (влияет на качество) |
+| P1 | ~20 | Высокий (влияет на качество) |
 | P2 | ~45 | Средний (улучшения) |
 | P3 | ~30 | Низкий (nice to have) |
 | **Всего** | **~100** | |

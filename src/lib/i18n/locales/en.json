@@ -12,7 +12,19 @@
     "unknown": "Unknown",
     "domains": "domains",
     "updateAvailable": "Update available",
-    "autoUpdate": "Auto-update"
+    "autoUpdate": "Auto-update",
+    "demo": "Demo",
+    "all": "All",
+    "clear": "Clear",
+    "export": "Export",
+    "search": "Search...",
+    "collapse": "Collapse",
+    "expand": "Expand",
+    "latest": "Latest",
+    "yes": "Yes",
+    "no": "No",
+    "of": "of",
+    "entries": "entries"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -29,6 +41,26 @@
       "active": "Active",
       "inactive": "Inactive",
       "connecting": "Connecting..."
+    },
+    "widgets": {
+      "liveActivity": "Live Activity",
+      "healthMonitor": "Health Monitor",
+      "activeMethod": "Active Method",
+      "quickActions": "Quick Actions",
+      "autoRecovery": "Auto Recovery",
+      "networkStats": "Network Stats",
+      "latencyMonitor": "Latency Monitor",
+      "connectionStats": "Connection Stats"
+    },
+    "quickActions": {
+      "scanAll": "Scan All",
+      "testCurrent": "Test Current",
+      "addProxy": "Add Proxy",
+      "settings": "Settings"
+    },
+    "optimization": {
+      "optimizing": "Optimizing...",
+      "failed": "Optimization Failed"
     }
   },
   "strategies": {
@@ -136,11 +168,207 @@
   },
   "diagnostics": {
     "title": "System Diagnostics",
-    "subtitle": "Check system components and network health"
+    "subtitle": "Check system components and network health",
+    "runDiagnostics": "Run Diagnostics",
+    "lastCheck": "Last check",
+    "systemHealth": "System Health",
+    "healthStatus": {
+      "allGood": "All systems are working normally",
+      "warnings": "Some components need attention",
+      "errors": "Critical issues detected",
+      "runCheck": "Run diagnostics to check"
+    },
+    "stats": {
+      "healthy": "Healthy",
+      "warnings": "Warnings",
+      "errors": "Errors"
+    },
+    "recommendations": "Recommendations",
+    "history": {
+      "title": "Check History",
+      "cleared": "History cleared"
+    },
+    "conflicts": {
+      "title": "Software Conflicts Detected",
+      "found": "Found {count} program(s) that may interfere with Isolate",
+      "recheck": "Recheck Conflicts"
+    },
+    "systemInfo": {
+      "title": "System Information",
+      "os": "Operating System",
+      "arch": "Architecture",
+      "memory": "Memory",
+      "adminRights": "Admin Rights"
+    },
+    "quickActions": {
+      "title": "Quick Actions",
+      "rerunChecks": "Rerun Checks",
+      "exportReport": "Export Report",
+      "autoFix": "Auto Fix",
+      "autoFixDesc": "Stop strategies, clear proxy",
+      "fixing": "Fixing..."
+    },
+    "categories": {
+      "network": {
+        "title": "Network & DNS",
+        "description": "Check internet connection and DNS resolution"
+      },
+      "dpi": {
+        "title": "DPI Bypass",
+        "description": "Components for bypassing blocks"
+      },
+      "system": {
+        "title": "System Components",
+        "description": "Drivers and system settings"
+      }
+    },
+    "status": {
+      "checking": "Checking...",
+      "noData": "No data"
+    },
+    "messages": {
+      "backendNotReady": "Backend not ready",
+      "completed": "Diagnostics completed",
+      "error": "Diagnostics error: {error}",
+      "reportExported": "Report exported",
+      "autoFixNotAvailable": "Auto-fix is not available in demo mode",
+      "autoFixRunning": "Running auto-fix...",
+      "autoFixCompleted": "Auto-fix completed. Running diagnostics...",
+      "autoFixFailed": "Auto-fix failed: {error}"
+    },
+    "timeAgo": {
+      "justNow": "Just now",
+      "minutesAgo": "{count} min. ago",
+      "hoursAgo": "{count} hr. ago",
+      "daysAgo": "{count} days ago"
+    },
+    "recommendations": {
+      "runDiagnostics": {
+        "title": "Run diagnostics",
+        "description": "Click \"Run Diagnostics\" to check system status"
+      },
+      "noInternet": {
+        "title": "No internet connection",
+        "description": "Check your network connection. DPI bypass requires internet access.",
+        "action": "Check Wi-Fi or Ethernet cable"
+      },
+      "dnsError": {
+        "title": "DNS issues",
+        "description": "DNS server is not responding or blocking requests.",
+        "action": "Try changing DNS to 8.8.8.8 or 1.1.1.1"
+      },
+      "dnsSlow": {
+        "title": "DNS is slow",
+        "description": "High DNS latency may slow down page loading.",
+        "action": "We recommend using DoH (DNS over HTTPS)"
+      },
+      "windivertError": {
+        "title": "WinDivert not working",
+        "description": "WinDivert driver is required for Zapret strategies.",
+        "action": "Run the application as administrator"
+      },
+      "singboxWarning": {
+        "title": "Sing-box not configured",
+        "description": "VLESS strategies require proxy configuration.",
+        "action": "Go to Marketplace and add VLESS configuration"
+      },
+      "singboxError": {
+        "title": "Sing-box error",
+        "description": "Sing-box not found or corrupted.",
+        "action": "Reinstall the application or check antivirus"
+      },
+      "tcpTimestamps": {
+        "title": "TCP Timestamps disabled",
+        "description": "Enabling TCP Timestamps improves bypass of some DPI systems.",
+        "action": "Enable in Settings → Advanced"
+      },
+      "firewall": {
+        "title": "Firewall may be blocking",
+        "description": "Windows Firewall may interfere with Isolate.",
+        "action": "Add exception for Isolate in Firewall settings"
+      },
+      "allGood": {
+        "title": "Everything works great! 🎉",
+        "description": "System is ready to bypass blocks. Choose a strategy on the main page."
+      },
+      "conflicts": {
+        "title": "Detected {count} conflicting programs",
+        "description": "VPN or other software may interfere with Isolate.",
+        "action": "Disable conflicting programs or configure exceptions"
+      }
+    }
   },
   "orchestra": {
     "title": "Orchestra",
-    "subtitle": "Automatic strategy optimization and learning center"
+    "subtitle": "Automatic strategy selection for your services",
+    "serviceNotWorking": "Service not working?",
+    "widgets": {
+      "status": "Status",
+      "progress": "Progress",
+      "controls": "Controls",
+      "services": "Services to Test",
+      "stats": "Statistics",
+      "queue": "Strategy Queue",
+      "activityLog": "Activity Log"
+    },
+    "status": {
+      "idle": "Idle",
+      "running": "Running",
+      "learning": "Learning",
+      "paused": "Paused",
+      "completed": "Completed",
+      "error": "Error",
+      "testing": "Testing",
+      "best": "Best",
+      "readyToOptimize": "Ready to optimize"
+    },
+    "queue": {
+      "empty": "No strategies in queue",
+      "score": "Score",
+      "latency": "Latency"
+    },
+    "queueStatus": {
+      "pending": "pending",
+      "testing": "testing",
+      "success": "success",
+      "failed": "failed",
+      "skipped": "skipped"
+    },
+    "services": {
+      "selected": "Selected"
+    },
+    "stats": {
+      "success": "Success",
+      "failed": "Failed",
+      "testing": "Testing",
+      "pending": "Pending"
+    },
+    "controls": {
+      "mode": {
+        "turbo": "Turbo",
+        "deep": "Deep",
+        "turboDesc": "Uses cache, fast results",
+        "deepDesc": "Retests ALL strategies from scratch",
+        "turboTitle": "Fast mode with cache",
+        "deepTitle": "Full retest of all strategies"
+      },
+      "autoApply": "Apply best",
+      "start": "Start",
+      "pause": "Pause",
+      "stop": "Stop"
+    },
+    "progress": {
+      "strategies": "strategies",
+      "elapsed": "Elapsed",
+      "remaining": "Remaining",
+      "seconds": "sec",
+      "minutes": "min"
+    },
+    "log": {
+      "entries": "entries",
+      "clear": "Clear",
+      "waiting": "Waiting for activity..."
+    }
   },
   "services": {
     "title": "Services",
@@ -158,5 +386,28 @@
   "languages": {
     "ru": "Русский",
     "en": "English"
+  },
+  "logs": {
+    "title": "Logs",
+    "subtitle": "Application event journal",
+    "level": "Level",
+    "module": "Module",
+    "autoScroll": "Auto-scroll",
+    "noLogs": "No logs",
+    "noLogsDesc": "Logs will appear here as the application runs",
+    "virtualized": "virtualized",
+    "filter": "Filter",
+    "levels": {
+      "all": "All",
+      "errors": "Errors",
+      "warnings": "Warnings",
+      "info": "Info",
+      "debug": "Debug",
+      "success": "Success"
+    },
+    "buttons": {
+      "clear": "Clear",
+      "export": "Export"
+    }
   }
 }

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { BentoWidget } from '$lib/components';
   import type { OrchestraState, QueueItem } from './types';
+  import { t } from '$lib/i18n';
 
   interface Props {
     state: OrchestraState;
@@ -23,10 +24,10 @@
   });
 
   function formatTime(seconds: number): string {
-    if (seconds < 60) return `${seconds} сек`;
+    if (seconds < 60) return `${seconds} ${t('orchestra.progress.seconds')}`;
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    return secs > 0 ? `${mins} мин ${secs} сек` : `${mins} мин`;
+    return secs > 0 ? `${mins} ${t('orchestra.progress.minutes')} ${secs} ${t('orchestra.progress.seconds')}` : `${mins} ${t('orchestra.progress.minutes')}`;
   }
 
   function formatElapsed(ms: number): string {
@@ -35,13 +36,13 @@
   }
 </script>
 
-<BentoWidget colspan={2} title="Прогресс" icon="📊">
+<BentoWidget colspan={2} title={t('orchestra.widgets.progress')} icon="📊">
   <div class="space-y-4">
     <!-- Progress bar -->
     <div>
       <div class="flex justify-between items-center mb-2">
         <span class="text-sm text-zinc-400">
-          {state.testedItems} / {state.totalItems || queueLength} стратегий
+          {state.testedItems} / {state.totalItems || queueLength} {t('orchestra.progress.strategies')}
         </span>
         <span class="text-sm font-mono text-cyan-400">{state.progress.toFixed(0)}%</span>
       </div>
@@ -61,14 +62,14 @@
           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <span>Прошло: {formatElapsed(state.elapsedTime)}</span>
+          <span>{t('orchestra.progress.elapsed')}: {formatElapsed(state.elapsedTime)}</span>
         </div>
         {#if eta !== null && state.status === 'learning'}
           <div class="flex items-center gap-1.5 text-cyan-400">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
             </svg>
-            <span>Осталось: ~{formatTime(eta)}</span>
+            <span>{t('orchestra.progress.remaining')}: ~{formatTime(eta)}</span>
           </div>
         {/if}
       </div>

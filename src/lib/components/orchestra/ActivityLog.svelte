@@ -1,5 +1,6 @@
 <script lang="ts">
   import { BentoWidget } from '$lib/components';
+  import { t } from '$lib/i18n';
 
   interface Props {
     logLines: string[];
@@ -17,16 +18,16 @@
   }
 </script>
 
-<BentoWidget colspan={2} rowspan={2} title="Журнал активности" icon="📜">
+<BentoWidget colspan={2} rowspan={2} title={t('orchestra.widgets.activityLog')} icon="📜">
   <div class="h-full flex flex-col">
     <!-- Log header -->
     <div class="flex items-center justify-between mb-3">
-      <span class="text-xs text-zinc-500">{logLines.length} записей</span>
+      <span class="text-xs text-zinc-500">{logLines.length} {t('orchestra.log.entries')}</span>
       <button
         onclick={onClear}
         class="px-2 py-1 text-xs text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50 rounded transition-colors"
       >
-        Очистить
+        {t('orchestra.log.clear')}
       </button>
     </div>
 
@@ -39,7 +40,7 @@
       {/each}
 
       {#if logLines.length === 0}
-        <div class="text-zinc-600 italic">Ожидание активности...</div>
+        <div class="text-zinc-600 italic">{t('orchestra.log.waiting')}</div>
       {/if}
     </div>
   </div>

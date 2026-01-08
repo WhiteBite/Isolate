@@ -34,6 +34,7 @@
   import { mockDashboardServices } from '$lib/mocks';
   import { dashboardStore, type ProtectionStatus, type OperationMode, type ActiveConnection } from '$lib/stores/dashboard.svelte';
   import { trafficMonitor } from '$lib/stores/trafficMonitor.svelte';
+  import { t } from '$lib/i18n';
 
   // Backend ServiceStatus type
   interface ServiceStatus {
@@ -151,10 +152,10 @@
 
   // Quick actions with loading states
   let quickActions = $derived([
-    { id: 'scan', label: 'Scan All', loading: isScanning, disabled: isOptimizingValue },
-    { id: 'test', label: 'Test Current', loading: isTesting },
-    { id: 'proxy', label: 'Add Proxy' },
-    { id: 'settings', label: 'Settings' }
+    { id: 'scan', label: t('dashboard.quickActions.scanAll'), loading: isScanning, disabled: isOptimizingValue },
+    { id: 'test', label: t('dashboard.quickActions.testCurrent'), loading: isTesting },
+    { id: 'proxy', label: t('dashboard.quickActions.addProxy') },
+    { id: 'settings', label: t('dashboard.quickActions.settings') }
   ]);
 
   // Derived health data for widget
@@ -645,8 +646,8 @@
 <div class="h-full p-8 overflow-auto bg-gradient-to-br from-zinc-950 to-black">
   <!-- Page Header -->
   <div class="mb-8">
-    <h1 class="text-3xl font-bold text-white tracking-tight">Dashboard</h1>
-    <p class="text-sm text-zinc-400 mt-2">Monitor and control your network protection</p>
+    <h1 class="text-3xl font-bold text-white tracking-tight">{t('dashboard.title')}</h1>
+    <p class="text-sm text-zinc-400 mt-2">{t('dashboard.subtitle')}</p>
   </div>
 
   <!-- Skeleton while loading or Backend Error -->
@@ -685,7 +686,7 @@
           </BentoWidget>
         {:else if widgetId === 'activity'}
           <!-- Live Activity Panel (2x2) -->
-          <BentoWidget colspan={2} rowspan={2} title="Live Activity" icon="📡" widgetId="activity" {index}>
+          <BentoWidget colspan={2} rowspan={2} title={t('dashboard.widgets.liveActivity')} icon="📡" widgetId="activity" {index}>
             <LiveActivityPanel 
               trafficHistory={trafficMonitor.history}
               connections={activeConnections}
@@ -694,12 +695,12 @@
           </BentoWidget>
         {:else if widgetId === 'health'}
           <!-- Health Monitor Widget (2x1) -->
-          <BentoWidget colspan={2} title="Health Monitor" icon="💚" widgetId="health" {index}>
+          <BentoWidget colspan={2} title={t('dashboard.widgets.healthMonitor')} icon="💚" widgetId="health" {index}>
             <HealthWidget services={healthServices.length > 0 ? healthServices : undefined} />
           </BentoWidget>
         {:else if widgetId === 'method'}
           <!-- Active Method Widget (1x1) -->
-          <BentoWidget title="Active Method" icon="⚡" widgetId="method" {index}>
+          <BentoWidget title={t('dashboard.widgets.activeMethod')} icon="⚡" widgetId="method" {index}>
             <MethodWidget 
               method={currentMethod}
               methodName={appStatusValue.currentStrategyName || undefined}
@@ -708,7 +709,7 @@
           </BentoWidget>
         {:else if widgetId === 'actions'}
           <!-- Quick Actions Widget (1x1) -->
-          <BentoWidget title="Quick Actions" icon="🚀" widgetId="actions" {index}>
+          <BentoWidget title={t('dashboard.widgets.quickActions')} icon="🚀" widgetId="actions" {index}>
             <QuickActionsWidget 
               actions={quickActions} 
               onAction={handleQuickAction}
@@ -718,17 +719,17 @@
           </BentoWidget>
         {:else if widgetId === 'failover'}
           <!-- Auto Recovery Widget (1x1) -->
-          <BentoWidget title="Auto Recovery" icon="🔄" widgetId="failover" {index}>
+          <BentoWidget title={t('dashboard.widgets.autoRecovery')} icon="🔄" widgetId="failover" {index}>
             <FailoverStatusWidget compact={false} />
           </BentoWidget>
         {:else if widgetId === 'network'}
           <!-- Network Stats Widget (2x1) -->
-          <BentoWidget colspan={2} title="Network Stats" icon="📊" widgetId="network" {index}>
+          <BentoWidget colspan={2} title={t('dashboard.widgets.networkStats')} icon="📊" widgetId="network" {index}>
             <NetworkStatsWidget stats={networkStats} />
           </BentoWidget>
         {:else if widgetId === 'latency'}
           <!-- Latency Monitor Widget (2x1) -->
-          <BentoWidget colspan={2} title="Latency Monitor" icon="📈" widgetId="latency" {index}>
+          <BentoWidget colspan={2} title={t('dashboard.widgets.latencyMonitor')} icon="📈" widgetId="latency" {index}>
             <LatencyWidget 
               history={latencyHistory} 
               currentLatency={currentLatency}
@@ -737,7 +738,7 @@
           </BentoWidget>
         {:else if widgetId === 'connections'}
           <!-- Connection Stats Widget (2x1) -->
-          <BentoWidget colspan={2} title="Connection Stats" icon="🔗" widgetId="connections" {index}>
+          <BentoWidget colspan={2} title={t('dashboard.widgets.connectionStats')} icon="🔗" widgetId="connections" {index}>
             <ConnectionStatsWidget />
           </BentoWidget>
         {/if}
@@ -769,7 +770,7 @@
         <div class="flex items-center gap-3">
           <span class="text-neon-red text-xl">⚠️</span>
           <div>
-            <p class="text-sm font-medium text-neon-red">Optimization Failed</p>
+            <p class="text-sm font-medium text-neon-red">{t('dashboard.optimization.failed')}</p>
             <p class="text-xs text-text-muted mt-1">{optimizationProgressValue.error}</p>
           </div>
         </div>

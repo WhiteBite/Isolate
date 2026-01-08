@@ -109,7 +109,7 @@
   let contributionItems = $derived(getContributionItems());
 </script>
 
-<BaseModal bind:open onclose={handleClose} class="w-full max-w-2xl overflow-hidden animate-scale-in">
+<BaseModal bind:open onclose={handleClose} preventClose={installing} class="w-full max-w-2xl overflow-hidden">
     <!-- Header -->
     <div class="relative p-6 border-b border-white/5 bg-gradient-to-b from-zinc-800/50 to-transparent">
       <!-- Close Button -->
@@ -435,20 +435,3 @@
       </div>
     </div>
 </BaseModal>
-
-<style>
-  @keyframes scale-in {
-    from { 
-      opacity: 0;
-      transform: scale(0.95);
-    }
-    to { 
-      opacity: 1;
-      transform: scale(1);
-    }
-  }
-  
-  .animate-scale-in {
-    animation: scale-in 0.2s ease-out;
-  }
-</style>

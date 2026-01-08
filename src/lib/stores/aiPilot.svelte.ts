@@ -8,6 +8,7 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { isTauriEnv, waitForBackend } from '$lib/utils/backend';
 
 // ============================================================================
 // Types
@@ -94,26 +95,15 @@ interface AiPilotActionEvent {
 }
 
 // ============================================================================
-// Tauri Detection
+// Tauri Detection (используем стандартные утилиты из backend.ts)
 // ============================================================================
 
 /**
- * Проверяет, запущено ли приложение в Tauri окружении
- */
-function isTauri(): boolean {
-  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
-}
-
-/**
  * Проверяет готовность backend перед вызовом команд
+ * Использует retry логику для ожидания инициализации AppState
  */
-async function isBackendReady(): Promise<boolean> {
-  if (!isTauri()) return false;
-  try {
-    return await invoke<boolean>('is_backend_ready');
-  } catch {
-    return false;
-  }
+async function isBackendReady(retries = 10): Promise<boolean> {
+  return waitForBackend(retries, 200);
 }
 
 // ============================================================================
@@ -166,7 +156,7 @@ class AIPilotStore {
 
   constructor() {
     // Определяем режим при создании store
-    this._isTauriMode = isTauri();
+    this._isTauriMode = isTauriEnv();
   }
 
   // ============================================================================
@@ -376,7 +366,7 @@ class AIPilotStore {
    * Настройка подписок на Tauri events
    */
   private async setupEventListeners() {
-    if (!isTauri()) return;
+    if (!isTauriEnv()) return;
     
     try {
       // AI Pilot started event
@@ -582,7 +572,7 @@ class AIPilotStore {
    * Инициализация store - вызвать при загрузке приложения
    */
   async init(): Promise<void> {
-    this._isTauriMode = isTauri();
+    this._isTauriMode = isTauriEnv();
     
     if (this._isTauriMode) {
       // Подписываемся на события

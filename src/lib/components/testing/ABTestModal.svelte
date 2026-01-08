@@ -160,7 +160,7 @@
   }
 </script>
 
-<BaseModal {open} onclose={handleClose} class="w-[600px] max-h-[80vh] overflow-y-auto">
+<BaseModal {open} onclose={handleClose} preventClose={isRunning} class="w-[600px] max-h-[80vh] overflow-y-auto">
   <div class="p-6 space-y-6">
     <!-- Header -->
     <div class="flex items-center justify-between">

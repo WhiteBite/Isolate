@@ -3,6 +3,7 @@
   import { page } from '$app/stores';
   import Spinner from '$lib/components/Spinner.svelte';
   import { logs, filteredLogs, logFilters, logSources, type LogEntry, type LogLevel } from '$lib/stores/logs';
+  import { t } from '$lib/i18n';
 
   // State
   let levelFilter = $state<LogLevel | 'all'>('all');
@@ -51,12 +52,12 @@
   let useVirtualization = $derived(filteredLogsValue.length > VIRTUALIZATION_THRESHOLD);
 
   const levelOptions: { value: LogLevel | 'all'; label: string; color: string }[] = [
-    { value: 'all', label: 'All', color: 'text-zinc-400' },
-    { value: 'error', label: 'Errors', color: 'text-red-400' },
-    { value: 'warn', label: 'Warnings', color: 'text-amber-400' },
-    { value: 'info', label: 'Info', color: 'text-cyan-400' },
-    { value: 'debug', label: 'Debug', color: 'text-zinc-500' },
-    { value: 'success', label: 'Success', color: 'text-emerald-400' }
+    { value: 'all', label: t('logs.levels.all'), color: 'text-zinc-400' },
+    { value: 'error', label: t('logs.levels.errors'), color: 'text-red-400' },
+    { value: 'warn', label: t('logs.levels.warnings'), color: 'text-amber-400' },
+    { value: 'info', label: t('logs.levels.info'), color: 'text-cyan-400' },
+    { value: 'debug', label: t('logs.levels.debug'), color: 'text-zinc-500' },
+    { value: 'success', label: t('logs.levels.success'), color: 'text-emerald-400' }
   ];
 
   // Read source filter from URL query params on load
@@ -212,8 +213,8 @@
   <!-- Header -->
   <div class="flex items-center justify-between">
     <div>
-      <h1 class="text-3xl font-bold text-white">Logs</h1>
-      <p class="text-zinc-500 mt-1">Application event journal</p>
+      <h1 class="text-3xl font-bold text-white">{t('logs.title')}</h1>
+      <p class="text-zinc-500 mt-1">{t('logs.subtitle')}</p>
     </div>
     
     <div class="flex items-center gap-3">
@@ -231,7 +232,7 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
           </svg>
         {/if}
-        <span>Clear</span>
+        <span>{t('logs.buttons.clear')}</span>
       </button>
       
       <button
@@ -248,7 +249,7 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
         {/if}
-        <span>Export</span>
+        <span>{t('logs.buttons.export')}</span>
       </button>
     </div>
   </div>
@@ -258,7 +259,7 @@
     <div class="flex flex-wrap items-center gap-4">
       <!-- Level Filter -->
       <div class="flex items-center gap-2">
-        <label for="log-level" class="text-zinc-500 text-sm">Level:</label>
+        <label for="log-level" class="text-zinc-500 text-sm">{t('logs.level')}:</label>
         <select
           id="log-level"
           bind:value={levelFilter}
@@ -273,14 +274,14 @@
 
       <!-- Source Filter -->
       <div class="flex items-center gap-2">
-        <label for="log-module" class="text-zinc-500 text-sm">Module:</label>
+        <label for="log-module" class="text-zinc-500 text-sm">{t('logs.module')}:</label>
         <select
           id="log-module"
           bind:value={sourceFilter}
           class="bg-black/20 border border-white/10 text-white rounded-lg px-3 py-2 text-sm 
                  focus:border-indigo-500 focus:outline-none transition-colors"
         >
-          <option value="all">All</option>
+          <option value="all">{t('logs.levels.all')}</option>
           {#each sourcesValue as source}
             <option value={source}>{source}</option>
           {/each}
@@ -296,7 +297,7 @@
           <input
             type="text"
             bind:value={searchQuery}
-            placeholder="Search..."
+            placeholder={t('common.search')}
             class="w-full bg-black/20 border border-white/10 text-white rounded-lg pl-10 pr-4 py-2 text-sm 
                    focus:border-indigo-500 focus:outline-none placeholder-zinc-500 transition-colors"
           />
@@ -310,7 +311,7 @@
           bind:checked={autoScroll}
           class="w-4 h-4 rounded bg-zinc-700 border-zinc-600 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-zinc-900"
         />
-        <span class="text-zinc-400 text-sm">Auto-scroll</span>
+        <span class="text-zinc-400 text-sm">{t('logs.autoScroll')}</span>
       </label>
     </div>
   </div>
@@ -329,8 +330,8 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
         </div>
-        <p class="text-lg font-medium text-zinc-400">No logs</p>
-        <p class="text-sm mt-1">Logs will appear here as the application runs</p>
+        <p class="text-lg font-medium text-zinc-400">{t('logs.noLogs')}</p>
+        <p class="text-sm mt-1">{t('logs.noLogsDesc')}</p>
       </div>
     {:else if useVirtualization}
       <!-- Virtual scrolling for large lists -->
@@ -406,20 +407,20 @@
   <!-- Status Bar -->
   <div class="flex items-center justify-between text-sm text-zinc-500">
     <span>
-      {filteredLogsValue.length} of {logsValue.length} entries
+      {filteredLogsValue.length} {t('common.of')} {logsValue.length} {t('common.entries')}
       {#if useVirtualization}
-        <span class="text-zinc-600 ml-2">(virtualized)</span>
+        <span class="text-zinc-600 ml-2">({t('logs.virtualized')})</span>
       {/if}
     </span>
     <div class="flex items-center gap-4">
       {#if levelFilter !== 'all'}
         <span class="px-2 py-1 rounded bg-zinc-800/50 text-xs">
-          Filter: {levelFilter.toUpperCase()}
+          {t('logs.filter')}: {levelFilter.toUpperCase()}
         </span>
       {/if}
       {#if sourceFilter !== 'all'}
         <span class="px-2 py-1 rounded bg-zinc-800/50 text-xs">
-          Module: {sourceFilter}
+          {t('logs.module')}: {sourceFilter}
         </span>
       {/if}
     </div>

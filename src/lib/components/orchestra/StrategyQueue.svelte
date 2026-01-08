@@ -2,6 +2,7 @@
   import { BentoWidget, Spinner } from '$lib/components';
   import type { QueueItem } from './types';
   import { getStatusBadgeClass, getStatusIcon } from './types';
+  import { t } from '$lib/i18n';
 
   interface Props {
     queue: QueueItem[];
@@ -10,7 +11,7 @@
   let { queue }: Props = $props();
 </script>
 
-<BentoWidget colspan={2} rowspan={2} title="Очередь стратегий" icon="📋">
+<BentoWidget colspan={2} rowspan={2} title={t('orchestra.widgets.queue')} icon="📋">
   <div class="h-full flex flex-col">
     <div class="flex-1 overflow-auto space-y-2 pr-1 -mr-1">
       {#each queue as item, i (item.id)}
@@ -35,10 +36,10 @@
             </div>
             <div class="flex items-center gap-2 mt-0.5">
               {#if item.score !== undefined}
-                <span class="text-xs text-zinc-500">Score: <span class="text-cyan-400">{item.score.toFixed(1)}</span></span>
+                <span class="text-xs text-zinc-500">{t('orchestra.queue.score')}: <span class="text-cyan-400">{item.score.toFixed(1)}</span></span>
               {/if}
               {#if item.latency !== undefined}
-                <span class="text-xs text-zinc-500">Задержка: <span class="text-zinc-400">{item.latency.toFixed(0)}ms</span></span>
+                <span class="text-xs text-zinc-500">{t('orchestra.queue.latency')}: <span class="text-zinc-400">{item.latency.toFixed(0)}ms</span></span>
               {/if}
             </div>
           </div>
@@ -46,7 +47,7 @@
           <!-- Status badge -->
           <div class="px-2 py-1 rounded-md text-xs font-medium border {getStatusBadgeClass(item.status)}">
             <span class="mr-1">{getStatusIcon(item.status)}</span>
-            {item.status}
+            {t(`orchestra.queueStatus.${item.status}`)}
           </div>
         </div>
       {/each}
@@ -54,7 +55,7 @@
       {#if queue.length === 0}
         <div class="flex flex-col items-center justify-center h-32 text-zinc-500">
           <span class="text-3xl mb-2">📭</span>
-          <span class="text-sm">Нет стратегий в очереди</span>
+          <span class="text-sm">{t('orchestra.queue.empty')}</span>
         </div>
       {/if}
     </div>

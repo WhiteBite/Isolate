@@ -1,6 +1,7 @@
 <script lang="ts">
   import { BentoWidget } from '$lib/components';
   import type { OrchestraState, OptimizationMode } from './types';
+  import { t } from '$lib/i18n';
 
   interface Props {
     state: OrchestraState;
@@ -34,7 +35,7 @@
   let canStop = $derived(state.status !== 'idle');
 </script>
 
-<BentoWidget title="Управление" icon="🎮">
+<BentoWidget title={t('orchestra.widgets.controls')} icon="🎮">
   <div class="space-y-3">
     <!-- Mode selector -->
     <div class="flex gap-2">
@@ -44,9 +45,9 @@
           {mode === 'turbo' 
             ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' 
             : 'bg-zinc-800/50 text-zinc-400 border border-white/5 hover:bg-zinc-800'}"
-        title="Быстрый режим с кэшем"
+        title={t('orchestra.controls.mode.turboTitle')}
       >
-        ⚡ Быстрый
+        ⚡ {t('orchestra.controls.mode.turbo')}
       </button>
       <button
         onclick={() => onModeChange('deep')}
@@ -54,20 +55,20 @@
           {mode === 'deep' 
             ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' 
             : 'bg-zinc-800/50 text-zinc-400 border border-white/5 hover:bg-zinc-800'}"
-        title="Полный перетест всех стратегий"
+        title={t('orchestra.controls.mode.deepTitle')}
       >
-        🔬 Глубокий
+        🔬 {t('orchestra.controls.mode.deep')}
       </button>
     </div>
     
     <!-- Mode description -->
     <p class="text-xs text-zinc-500 px-1">
-      {mode === 'turbo' ? 'Использует кэш, быстрые результаты' : 'Перетестирует ВСЕ стратегии с нуля'}
+      {mode === 'turbo' ? t('orchestra.controls.mode.turboDesc') : t('orchestra.controls.mode.deepDesc')}
     </p>
 
     <!-- Auto-apply toggle -->
     <label class="flex items-center justify-between p-3 bg-zinc-800/30 rounded-lg cursor-pointer hover:bg-zinc-800/50 transition-colors">
-      <span class="text-sm text-zinc-300">Применить лучшую</span>
+      <span class="text-sm text-zinc-300">{t('orchestra.controls.autoApply')}</span>
       <input 
         type="checkbox" 
         checked={autoApply}
@@ -88,7 +89,7 @@
               : 'bg-zinc-800/50 text-zinc-600 cursor-not-allowed'}
             transition-all"
         >
-          ▶ Запустить
+          ▶ {t('orchestra.controls.start')}
         </button>
       {:else}
         <button
@@ -99,7 +100,7 @@
               ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 hover:bg-amber-500/30' 
               : 'bg-zinc-800/50 text-zinc-600 cursor-not-allowed'}"
         >
-          ⏸ Пауза
+          ⏸ {t('orchestra.controls.pause')}
         </button>
         <button
           onclick={onStop}
@@ -109,7 +110,7 @@
               ? 'bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30' 
               : 'bg-zinc-800/50 text-zinc-600 cursor-not-allowed'}"
         >
-          ⏹ Стоп
+          ⏹ {t('orchestra.controls.stop')}
         </button>
       {/if}
     </div>

@@ -10,6 +10,7 @@
     mockConflicts
   } from '$lib/mocks';
   import type { ConflictInfo, ConflictSeverity, ConflictCategory } from '$lib/api/types';
+  import { t } from '$lib/i18n';
 
   // Types
   type ComponentStatus = 'healthy' | 'warning' | 'error' | 'unknown' | 'checking';
@@ -43,23 +44,23 @@
   }
 
   // Category definitions for grouping
-  const categoryConfig: Record<ComponentCategory, { title: string; icon: string; description: string }> = {
+  let categoryConfig = $derived<Record<ComponentCategory, { title: string; icon: string; description: string }>>({
     network: { 
-      title: 'Сеть и DNS', 
+      title: t('diagnostics.categories.network.title'), 
       icon: '🌐', 
-      description: 'Проверка интернет-соединения и DNS-резолвинга' 
+      description: t('diagnostics.categories.network.description')
     },
     dpi: { 
-      title: 'DPI-обход', 
+      title: t('diagnostics.categories.dpi.title'), 
       icon: '⚡', 
-      description: 'Компоненты для обхода блокировок' 
+      description: t('diagnostics.categories.dpi.description')
     },
     system: { 
-      title: 'Системные компоненты', 
+      title: t('diagnostics.categories.system.title'), 
       icon: '🔧', 
-      description: 'Драйверы и системные настройки' 
+      description: t('diagnostics.categories.system.description')
     }
-  };
+  });
 
   // Map component IDs to categories
   const componentCategories: Record<string, ComponentCategory> = {
@@ -188,10 +189,10 @@
     const diffHours = Math.floor(diffMs / 3600000);
     const diffDays = Math.floor(diffMs / 86400000);
     
-    if (diffMins < 1) return 'Только что';
-    if (diffMins < 60) return `${diffMins} мин. назад`;
-    if (diffHours < 24) return `${diffHours} ч. назад`;
-    if (diffDays < 7) return `${diffDays} дн. назад`;
+    if (diffMins < 1) return t('diagnostics.timeAgo.justNow');
+    if (diffMins < 60) return t('diagnostics.timeAgo.minutesAgo').replace('{count}', String(diffMins));
+    if (diffHours < 24) return t('diagnostics.timeAgo.hoursAgo').replace('{count}', String(diffHours));
+    if (diffDays < 7) return t('diagnostics.timeAgo.daysAgo').replace('{count}', String(diffDays));
     
     return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
   }
@@ -201,7 +202,7 @@
     history = [];
     try {
       localStorage.removeItem(HISTORY_KEY);
-      toasts.success('История очищена');
+      toasts.success(t('diagnostics.history.cleared'));
     } catch (e) {
       console.error('Failed to clear history:', e);
     }
@@ -265,7 +266,7 @@
     isRunning = true;
     
     // Reset all to checking
-    components = components.map(c => ({ ...c, status: 'checking' as ComponentStatus, details: 'Проверка...' }));
+    components = components.map(c => ({ ...c, status: 'checking' as ComponentStatus, details: t('diagnostics.status.checking') }));
     
     try {
       if (isTauri) {
@@ -275,7 +276,7 @@
         const ready = await waitForBackend(20, 300);
         if (!ready) {
           console.warn('[Diagnostics] Backend not ready for diagnostics');
-          toasts.error('Бэкенд не готов');
+          toasts.error(t('diagnostics.messages.backendNotReady'));
           return;
         }
         
@@ -286,7 +287,7 @@
           components = components.map(c => ({
             ...c,
             status: (results[c.id]?.status || 'unknown') as ComponentStatus,
-            details: results[c.id]?.details || 'Нет данных'
+            details: results[c.id]?.details || t('diagnostics.status.noData')
           }));
         }
       } else {
@@ -296,10 +297,10 @@
       
       lastCheck = new Date().toLocaleTimeString('ru-RU');
       saveToHistory();
-      toasts.success('Диагностика завершена');
+      toasts.success(t('diagnostics.messages.completed'));
     } catch (e) {
       console.error('Diagnostics failed:', e);
-      toasts.error(`Ошибка диагностики: ${e}`);
+      toasts.error(t('diagnostics.messages.error').replace('{error}', String(e)));
     } finally {
       isRunning = false;
     }
@@ -372,8 +373,8 @@
     
     if (checked.length === 0) {
       return [{
-        title: 'Запустите диагностику',
-        description: 'Нажмите "Запустить диагностику" чтобы проверить состояние системы',
+        title: t('diagnostics.recommendations.runDiagnostics.title'),
+        description: t('diagnostics.recommendations.runDiagnostics.description'),
         severity: 'info'
       }];
     }
@@ -382,9 +383,9 @@
     const network = components.find(c => c.id === 'network');
     if (network?.status === 'error') {
       recs.push({
-        title: 'Нет подключения к интернету',
-        description: 'Проверьте сетевое подключение. Без интернета обход блокировок невозможен.',
-        action: 'Проверьте Wi-Fi или Ethernet кабель',
+        title: t('diagnostics.recommendations.noInternet.title'),
+        description: t('diagnostics.recommendations.noInternet.description'),
+        action: t('diagnostics.recommendations.noInternet.action'),
         severity: 'error'
       });
     }
@@ -393,16 +394,16 @@
     const dns = components.find(c => c.id === 'dns');
     if (dns?.status === 'error') {
       recs.push({
-        title: 'Проблемы с DNS',
-        description: 'DNS-сервер не отвечает или блокирует запросы.',
-        action: 'Попробуйте сменить DNS на 8.8.8.8 или 1.1.1.1',
+        title: t('diagnostics.recommendations.dnsError.title'),
+        description: t('diagnostics.recommendations.dnsError.description'),
+        action: t('diagnostics.recommendations.dnsError.action'),
         severity: 'error'
       });
     } else if (dns?.status === 'warning') {
       recs.push({
-        title: 'DNS работает медленно',
-        description: 'Высокая задержка DNS может замедлять загрузку страниц.',
-        action: 'Рекомендуем использовать DoH (DNS over HTTPS)',
+        title: t('diagnostics.recommendations.dnsSlow.title'),
+        description: t('diagnostics.recommendations.dnsSlow.description'),
+        action: t('diagnostics.recommendations.dnsSlow.action'),
         severity: 'warning'
       });
     }
@@ -411,9 +412,9 @@
     const windivert = components.find(c => c.id === 'windivert');
     if (windivert?.status === 'error') {
       recs.push({
-        title: 'WinDivert не работает',
-        description: 'Драйвер WinDivert необходим для Zapret-стратегий.',
-        action: 'Запустите приложение от имени администратора',
+        title: t('diagnostics.recommendations.windivertError.title'),
+        description: t('diagnostics.recommendations.windivertError.description'),
+        action: t('diagnostics.recommendations.windivertError.action'),
         severity: 'error'
       });
     }
@@ -422,16 +423,16 @@
     const singbox = components.find(c => c.id === 'singbox');
     if (singbox?.status === 'warning') {
       recs.push({
-        title: 'Sing-box не настроен',
-        description: 'Для VLESS-стратегий требуется настройка прокси.',
-        action: 'Перейдите в Маркетплейс и добавьте VLESS-конфигурацию',
+        title: t('diagnostics.recommendations.singboxWarning.title'),
+        description: t('diagnostics.recommendations.singboxWarning.description'),
+        action: t('diagnostics.recommendations.singboxWarning.action'),
         severity: 'warning'
       });
     } else if (singbox?.status === 'error') {
       recs.push({
-        title: 'Ошибка Sing-box',
-        description: 'Sing-box не найден или повреждён.',
-        action: 'Переустановите приложение или проверьте антивирус',
+        title: t('diagnostics.recommendations.singboxError.title'),
+        description: t('diagnostics.recommendations.singboxError.description'),
+        action: t('diagnostics.recommendations.singboxError.action'),
         severity: 'error'
       });
     }
@@ -440,9 +441,9 @@
     const tcpTimestamps = components.find(c => c.id === 'tcp_timestamps');
     if (tcpTimestamps?.status === 'warning') {
       recs.push({
-        title: 'TCP Timestamps отключены',
-        description: 'Включение TCP Timestamps улучшает обход некоторых DPI-систем.',
-        action: 'Включите в Настройки → Дополнительно',
+        title: t('diagnostics.recommendations.tcpTimestamps.title'),
+        description: t('diagnostics.recommendations.tcpTimestamps.description'),
+        action: t('diagnostics.recommendations.tcpTimestamps.action'),
         severity: 'warning'
       });
     }
@@ -451,9 +452,9 @@
     const firewall = components.find(c => c.id === 'firewall');
     if (firewall?.status === 'warning') {
       recs.push({
-        title: 'Firewall может блокировать',
-        description: 'Windows Firewall может мешать работе Isolate.',
-        action: 'Добавьте исключение для Isolate в настройках Firewall',
+        title: t('diagnostics.recommendations.firewall.title'),
+        description: t('diagnostics.recommendations.firewall.description'),
+        action: t('diagnostics.recommendations.firewall.action'),
         severity: 'warning'
       });
     }
@@ -461,8 +462,8 @@
     // All good!
     if (recs.length === 0 && overallHealth.status === 'healthy') {
       recs.push({
-        title: 'Всё работает отлично! 🎉',
-        description: 'Система готова к обходу блокировок. Выберите стратегию на главной странице.',
+        title: t('diagnostics.recommendations.allGood.title'),
+        description: t('diagnostics.recommendations.allGood.description'),
         severity: 'info'
       });
     }
@@ -470,9 +471,9 @@
     // Conflicts warning
     if (conflicts.length > 0) {
       recs.push({
-        title: `Обнаружено ${conflicts.length} конфликтующих программ`,
-        description: 'VPN или другое ПО может мешать работе Isolate.',
-        action: 'Отключите конфликтующие программы или настройте исключения',
+        title: t('diagnostics.recommendations.conflicts.title').replace('{count}', String(conflicts.length)),
+        description: t('diagnostics.recommendations.conflicts.description'),
+        action: t('diagnostics.recommendations.conflicts.action'),
         severity: 'warning'
       });
     }
@@ -570,19 +571,19 @@
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     
-    toasts.success('Report exported');
+    toasts.success(t('diagnostics.messages.reportExported'));
   }
 
   let isFixing = $state(false);
 
   async function autoFix() {
     if (!isTauri || isDemoMode) {
-      toasts.info('Auto-fix is not available in demo mode');
+      toasts.info(t('diagnostics.messages.autoFixNotAvailable'));
       return;
     }
 
     isFixing = true;
-    toasts.info('Running auto-fix...');
+    toasts.info(t('diagnostics.messages.autoFixRunning'));
 
     try {
       const { invoke } = await import('@tauri-apps/api/core');
@@ -608,12 +609,12 @@
         // Ignore - may fail if not admin
       }
 
-      toasts.success('Auto-fix completed. Running diagnostics...');
+      toasts.success(t('diagnostics.messages.autoFixCompleted'));
 
       // Re-run diagnostics to check results
       await runDiagnostics();
     } catch (e) {
-      toasts.error(`Auto-fix failed: ${e}`);
+      toasts.error(t('diagnostics.messages.autoFixFailed').replace('{error}', String(e)));
     } finally {
       isFixing = false;
     }
@@ -625,16 +626,16 @@
   <div class="flex items-center justify-between">
     <div>
       <div class="flex items-center gap-3">
-        <h1 class="text-3xl font-bold text-white">Диагностика системы</h1>
+        <h1 class="text-3xl font-bold text-white">{t('diagnostics.title')}</h1>
         {#if isDemoMode}
-          <span class="px-2 py-1 text-xs uppercase tracking-wider bg-amber-500/20 text-amber-400 rounded-md font-medium border border-amber-500/30">Демо</span>
+          <span class="px-2 py-1 text-xs uppercase tracking-wider bg-amber-500/20 text-amber-400 rounded-md font-medium border border-amber-500/30">{t('common.demo')}</span>
         {/if}
       </div>
-      <p class="text-text-muted mt-1">Проверка компонентов системы и сетевого подключения</p>
+      <p class="text-text-muted mt-1">{t('diagnostics.subtitle')}</p>
     </div>
     <div class="flex items-center gap-4">
       {#if lastCheck}
-        <span class="text-text-muted text-sm">Последняя проверка: {lastCheck}</span>
+        <span class="text-text-muted text-sm">{t('diagnostics.lastCheck')}: {lastCheck}</span>
       {/if}
       <Button 
         variant="primary" 
@@ -648,7 +649,7 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
             </svg>
           {/if}
-          Запустить диагностику
+          {t('diagnostics.runDiagnostics')}
         {/snippet}
       </Button>
     </div>
@@ -684,16 +685,16 @@
         </div>
         
         <div>
-          <h2 class="text-xl font-semibold text-white">Состояние системы</h2>
+          <h2 class="text-xl font-semibold text-white">{t('diagnostics.systemHealth')}</h2>
           <p class="text-text-muted">
             {#if overallHealth.status === 'healthy'}
-              Все системы работают нормально
+              {t('diagnostics.healthStatus.allGood')}
             {:else if overallHealth.status === 'warning'}
-              Некоторые компоненты требуют внимания
+              {t('diagnostics.healthStatus.warnings')}
             {:else if overallHealth.status === 'error'}
-              Обнаружены критические проблемы
+              {t('diagnostics.healthStatus.errors')}
             {:else}
-              Запустите диагностику для проверки
+              {t('diagnostics.healthStatus.runCheck')}
             {/if}
           </p>
         </div>
@@ -703,15 +704,15 @@
       <div class="flex gap-6">
         <div class="text-center">
           <p class="text-2xl font-bold text-neon-green">{components.filter(c => c.status === 'healthy').length}</p>
-          <p class="text-text-muted text-sm">Норма</p>
+          <p class="text-text-muted text-sm">{t('diagnostics.stats.healthy')}</p>
         </div>
         <div class="text-center">
           <p class="text-2xl font-bold text-neon-yellow">{components.filter(c => c.status === 'warning').length}</p>
-          <p class="text-text-muted text-sm">Внимание</p>
+          <p class="text-text-muted text-sm">{t('diagnostics.stats.warnings')}</p>
         </div>
         <div class="text-center">
           <p class="text-2xl font-bold text-neon-red">{components.filter(c => c.status === 'error').length}</p>
-          <p class="text-text-muted text-sm">Ошибки</p>
+          <p class="text-text-muted text-sm">{t('diagnostics.stats.errors')}</p>
         </div>
       </div>
     </div>
@@ -722,7 +723,7 @@
     <div class="bg-void-50 rounded-xl border border-glass-border p-5">
       <h3 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
         <span>💡</span>
-        Рекомендации
+        {t('diagnostics.recommendations')}
       </h3>
       <div class="space-y-3">
         {#each recommendations as rec}
@@ -754,14 +755,14 @@
       <div class="flex items-center justify-between mb-4">
         <h3 class="text-lg font-semibold text-white flex items-center gap-2">
           <span>📊</span>
-          История проверок
+          {t('diagnostics.history.title')}
         </h3>
         <div class="flex items-center gap-2">
           <button
             onclick={() => showHistory = !showHistory}
             class="text-text-muted hover:text-white text-sm transition-colors"
           >
-            {showHistory ? 'Свернуть' : 'Развернуть'}
+            {showHistory ? t('common.collapse') : t('common.expand')}
           </button>
           <button
             onclick={clearHistory}
@@ -789,7 +790,7 @@
                 </div>
               </div>
               {#if i === 0}
-                <span class="px-2 py-0.5 bg-electric/20 text-electric text-xs rounded-full">Последняя</span>
+                <span class="px-2 py-0.5 bg-electric/20 text-electric text-xs rounded-full">{t('common.latest')}</span>
               {/if}
             </div>
           {/each}
@@ -812,7 +813,7 @@
     <div class="bg-void-50 rounded-xl border border-glass-border p-5">
       <div class="flex items-center gap-3">
         <ScanningIndicator active={true} text="" variant="pulse" />
-        <span class="text-text-muted">Проверка конфликтующего ПО...</span>
+        <span class="text-text-muted">{t('common.loading')}</span>
       </div>
     </div>
   {:else if conflicts.length > 0}
@@ -824,9 +825,9 @@
           </svg>
         </div>
         <div>
-          <h3 class="text-white font-semibold">Обнаружены конфликты ПО</h3>
+          <h3 class="text-white font-semibold">{t('diagnostics.conflicts.title')}</h3>
           <p class="text-text-muted text-sm">
-            Найдено {conflicts.length} {conflicts.length === 1 ? 'программа' : 'программ'}, которые могут мешать работе Isolate
+            {t('diagnostics.conflicts.found').replace('{count}', String(conflicts.length))}
           </p>
         </div>
       </div>
@@ -875,7 +876,7 @@
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
         </svg>
-        Перепроверить конфликты
+        {t('diagnostics.conflicts.recheck')}
       </button>
     </div>
   {/if}
@@ -936,7 +937,7 @@
 
     <!-- System Info Sidebar -->
     <div class="space-y-4">
-      <h3 class="text-lg font-semibold text-white">Информация о системе</h3>
+      <h3 class="text-lg font-semibold text-white">{t('diagnostics.systemInfo.title')}</h3>
       
       <div class="bg-void-50 rounded-xl border border-glass-border overflow-hidden">
         <!-- OS Info -->
@@ -948,7 +949,7 @@
               </svg>
             </div>
             <div>
-              <p class="text-text-muted text-sm">Операционная система</p>
+              <p class="text-text-muted text-sm">{t('diagnostics.systemInfo.os')}</p>
               <p class="text-white font-medium">{systemInfo.os} {systemInfo.osVersion}</p>
             </div>
           </div>
@@ -963,7 +964,7 @@
               </svg>
             </div>
             <div>
-              <p class="text-text-muted text-sm">Архитектура</p>
+              <p class="text-text-muted text-sm">{t('diagnostics.systemInfo.arch')}</p>
               <p class="text-white font-medium">{systemInfo.arch}</p>
             </div>
           </div>
@@ -978,7 +979,7 @@
               </svg>
             </div>
             <div>
-              <p class="text-text-muted text-sm">Память</p>
+              <p class="text-text-muted text-sm">{t('diagnostics.systemInfo.memory')}</p>
               <p class="text-white font-medium">{systemInfo.memory}</p>
             </div>
           </div>
@@ -993,9 +994,9 @@
               </svg>
             </div>
             <div>
-              <p class="text-text-muted text-sm">Права администратора</p>
+              <p class="text-text-muted text-sm">{t('diagnostics.systemInfo.adminRights')}</p>
               <p class="font-medium {systemInfo.adminRights ? 'text-neon-green' : 'text-neon-red'}">
-                {systemInfo.adminRights ? 'Есть' : 'Нет'}
+                {systemInfo.adminRights ? t('common.yes') : t('common.no')}
               </p>
             </div>
           </div>
@@ -1004,7 +1005,7 @@
 
       <!-- Quick Actions -->
       <div class="bg-void-50 rounded-xl border border-glass-border p-4">
-        <h4 class="text-white font-medium mb-3">Быстрые действия</h4>
+        <h4 class="text-white font-medium mb-3">{t('diagnostics.quickActions.title')}</h4>
         <div class="space-y-2">
           <button
             onclick={runDiagnostics}
@@ -1014,7 +1015,7 @@
             <svg class="w-5 h-5 text-electric" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
-            <span class="text-white text-sm">Перезапустить проверки</span>
+            <span class="text-white text-sm">{t('diagnostics.quickActions.rerunChecks')}</span>
           </button>
           
           <button
@@ -1024,14 +1025,14 @@
             <svg class="w-5 h-5 text-neon-cyan" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
-            <span class="text-white text-sm">Экспорт отчёта</span>
+            <span class="text-white text-sm">{t('diagnostics.quickActions.exportReport')}</span>
           </button>
           
           <button
             onclick={autoFix}
             disabled={isFixing || isRunning || isDemoMode}
             class="w-full flex items-center gap-3 px-4 py-3 bg-void-100/50 hover:bg-void-100 rounded-lg text-left transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            title={isDemoMode ? 'Недоступно в демо-режиме' : 'Остановить стратегии, очистить прокси, сбросить состояние'}
+            title={isDemoMode ? t('common.demo') : t('diagnostics.quickActions.autoFixDesc')}
           >
             {#if isFixing}
               <svg class="w-5 h-5 text-neon-yellow animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1043,8 +1044,8 @@
               </svg>
             {/if}
             <div class="flex flex-col">
-              <span class="text-white text-sm">{isFixing ? 'Исправление...' : 'Автоисправление'}</span>
-              <span class="text-text-muted/60 text-xs">Остановить стратегии, очистить прокси</span>
+              <span class="text-white text-sm">{isFixing ? t('diagnostics.quickActions.fixing') : t('diagnostics.quickActions.autoFix')}</span>
+              <span class="text-text-muted/60 text-xs">{t('diagnostics.quickActions.autoFixDesc')}</span>
             </div>
           </button>
         </div>

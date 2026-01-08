@@ -1,6 +1,7 @@
 <script lang="ts">
   import { BentoWidget } from '$lib/components';
   import type { ServiceInfo, OrchestraState } from './types';
+  import { t } from '$lib/i18n';
 
   interface Props {
     services: ServiceInfo[];
@@ -12,7 +13,7 @@
   let { services, selectedServices, isLearning, onToggle }: Props = $props();
 </script>
 
-<BentoWidget title="Сервисы для теста" icon="🎯">
+<BentoWidget title={t('orchestra.widgets.services')} icon="🎯">
   <div class="space-y-2 max-h-[180px] overflow-y-auto pr-1">
     {#each services as service}
       <button
@@ -35,6 +36,6 @@
     {/each}
   </div>
   <div class="mt-2 pt-2 border-t border-white/5 text-xs text-zinc-500 text-center">
-    Выбрано: {selectedServices.size}
+    {t('orchestra.services.selected')}: {selectedServices.size}
   </div>
 </BentoWidget>

@@ -1,5 +1,7 @@
 <script lang="ts">
   import { tick } from 'svelte';
+  import { fade, scale } from 'svelte/transition';
+  import { cubicOut } from 'svelte/easing';
 
   interface Props {
     open: boolean;
@@ -8,10 +10,21 @@
     style?: string;
     ariaLabel?: string;
     ariaDescribedBy?: string;
+    /** Prevent closing with Esc or backdrop click (for critical actions) */
+    preventClose?: boolean;
     children: import('svelte').Snippet;
   }
 
-  let { open = $bindable(), onclose, class: className = '', style = '', ariaLabel, ariaDescribedBy, children }: Props = $props();
+  let { 
+    open = $bindable(), 
+    onclose, 
+    class: className = '', 
+    style = '', 
+    ariaLabel, 
+    ariaDescribedBy, 
+    preventClose = false,
+    children 
+  }: Props = $props();
 
   let modalRef: HTMLDivElement | undefined = $state();
   let previousActiveElement: HTMLElement | null = null;
@@ -27,13 +40,13 @@
   }
 
   function handleBackdropClick(e: MouseEvent) {
-    if (e.target === e.currentTarget) {
+    if (e.target === e.currentTarget && !preventClose) {
       onclose();
     }
   }
 
   function handleKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape') {
+    if (e.key === 'Escape' && !preventClose) {
       e.preventDefault();
       onclose();
       return;
@@ -117,11 +130,13 @@
     class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
     onclick={handleBackdropClick}
     onkeydown={handleKeydown}
+    transition:fade={{ duration: 200 }}
   >
     <div
       bind:this={modalRef}
       class="bg-void-100 border border-white/5 rounded-2xl shadow-2xl {className}"
       style={style}
+      transition:scale={{ duration: 200, start: 0.95, opacity: 0, easing: cubicOut }}
     >
       {@render children()}
     </div>

@@ -7,6 +7,7 @@
     getOrchestraStatusText,
     formatElapsedTime 
   } from './types';
+  import { t } from '$lib/i18n';
 
   interface Props {
     state: OrchestraState;
@@ -16,11 +17,11 @@
 
   let statusColor = $derived(getOrchestraStatusColor(state.status));
   let statusIcon = $derived(getOrchestraStatusIcon(state.status));
-  let statusText = $derived(getOrchestraStatusText(state.status));
+  let statusText = $derived(getOrchestraStatusText(state.status, t));
   let formattedTime = $derived(formatElapsedTime(state.elapsedTime));
 </script>
 
-<BentoWidget colspan={2} title="Статус" icon="🎭">
+<BentoWidget colspan={2} title={t('orchestra.widgets.status')} icon="🎭">
   <div class="flex items-center justify-between">
     <div class="flex items-center gap-4">
       <!-- Status indicator -->
@@ -42,11 +43,11 @@
         </div>
         <p class="text-sm text-zinc-500 mt-1">
           {#if state.currentItem}
-            Тестируется: {state.currentItem}
+            {t('orchestra.status.testing')}: {state.currentItem}
           {:else if state.bestStrategy}
-            Лучшая: {state.bestStrategy}
+            {t('orchestra.status.best')}: {state.bestStrategy}
           {:else}
-            Готов к оптимизации
+            {t('orchestra.status.readyToOptimize')}
           {/if}
         </p>
       </div>
@@ -55,7 +56,7 @@
     <!-- Timer -->
     <div class="text-right">
       <div class="text-2xl font-mono text-zinc-300">{formattedTime}</div>
-      <p class="text-xs text-zinc-500 mt-1">Время</p>
+      <p class="text-xs text-zinc-500 mt-1">{t('orchestra.progress.elapsed')}</p>
     </div>
   </div>
 </BentoWidget>

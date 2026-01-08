@@ -36,7 +36,7 @@
   }
 </script>
 
-<BaseModal {open} onclose={handleClose} class="w-full max-w-md">
+<BaseModal {open} onclose={handleClose} preventClose={adding} class="w-full max-w-md">
   <div class="p-6">
     <h3 class="text-lg font-semibold text-zinc-100 mb-4">Add Custom Service</h3>
     

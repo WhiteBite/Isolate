@@ -6,39 +6,25 @@ import { invoke } from '@tauri-apps/api/core';
 
 /**
  * Status of the hosts file modification.
+ * Matches Rust HostsStatus struct from hosts_manager.rs (camelCase)
  */
 export interface HostsStatus {
-    /** Whether Discord hosts are enabled */
-    discord_enabled: boolean;
+    /** Whether Discord hosts entries are enabled */
+    discordEnabled: boolean;
     /** Number of Discord host entries */
-    discord_entries_count: number;
+    discordEntriesCount: number;
     /** Whether a backup exists */
-    backup_exists: boolean;
+    backupExists: boolean;
+    /** Whether hosts file is writable */
+    isWritable: boolean;
+    /** Path to the hosts file */
+    hostsPath: string;
+    /** Path to the backup file */
+    backupPath: string;
+    /** Last modified timestamp (ISO 8601) */
+    lastModified: string | null;
     /** Backup timestamp (ISO 8601) */
-    backup_timestamp: string | null;
-    /** Whether hosts file is writable (admin check) */
-    is_writable: boolean;
-    /** Last modification timestamp */
-    last_modified: string | null;
-}
-
-/**
- * A single host entry.
- */
-export interface HostEntry {
-    ip: string;
-    hostname: string;
-    comment?: string;
-}
-
-/**
- * Result of a hosts operation.
- */
-export interface HostsOperationResult {
-    success: boolean;
-    entries_affected: number;
-    error?: string;
-    requires_admin?: boolean;
+    backupTimestamp: string | null;
 }
 
 // ============================================================================
@@ -47,7 +33,7 @@ export interface HostsOperationResult {
 
 /**
  * Get the current hosts file status.
- * @returns Current hosts status
+ * @returns Current hosts status including enabled state and entry count
  */
 export async function getHostsStatus(): Promise<HostsStatus> {
     return invoke('get_hosts_status');
@@ -55,11 +41,12 @@ export async function getHostsStatus(): Promise<HostsStatus> {
 
 /**
  * Enable Discord hosts entries.
- * Adds IP mappings for Discord domains to bypass DPI.
+ * Adds IP mappings for Discord voice servers to bypass DPI blocking.
+ * Creates a backup before modification.
  * Requires administrator privileges.
- * @returns Operation result
+ * @throws Error if admin rights are required or hosts file is not writable
  */
-export async function enableDiscordHosts(): Promise<HostsOperationResult> {
+export async function enableDiscordHosts(): Promise<void> {
     return invoke('enable_discord_hosts');
 }
 
@@ -67,69 +54,70 @@ export async function enableDiscordHosts(): Promise<HostsOperationResult> {
  * Disable Discord hosts entries.
  * Removes Discord IP mappings from hosts file.
  * Requires administrator privileges.
- * @returns Operation result
+ * @throws Error if admin rights are required or hosts file is not writable
  */
-export async function disableDiscordHosts(): Promise<HostsOperationResult> {
+export async function disableDiscordHosts(): Promise<void> {
     return invoke('disable_discord_hosts');
 }
 
 /**
- * Create a backup of the current hosts file.
- * @returns Operation result
+ * Toggle Discord hosts entries.
+ * Enables if disabled, disables if enabled.
+ * @param enable - Whether to enable or disable Discord hosts
+ * @throws Error if admin rights are required
  */
-export async function backupHostsFile(): Promise<HostsOperationResult> {
-    return invoke('backup_hosts_file');
+export async function toggleDiscordHosts(enable: boolean): Promise<void> {
+    if (enable) {
+        return enableDiscordHosts();
+    } else {
+        return disableDiscordHosts();
+    }
+}
+
+/**
+ * Create a backup of the current hosts file.
+ * Backup is stored in the app data directory.
+ * @throws Error if backup creation fails
+ */
+export async function backupHosts(): Promise<void> {
+    return invoke('backup_hosts');
 }
 
 /**
  * Restore hosts file from backup.
  * Requires administrator privileges.
- * @returns Operation result
+ * @throws Error if backup doesn't exist or admin rights are required
  */
-export async function restoreHostsFile(): Promise<HostsOperationResult> {
-    return invoke('restore_hosts_file');
-}
-
-/**
- * Get all custom host entries added by Isolate.
- * @returns Array of host entries
- */
-export async function getIsolateHostEntries(): Promise<HostEntry[]> {
-    return invoke('get_isolate_host_entries');
-}
-
-/**
- * Add a custom host entry.
- * Requires administrator privileges.
- * @param entry - Host entry to add
- * @returns Operation result
- */
-export async function addHostEntry(entry: HostEntry): Promise<HostsOperationResult> {
-    return invoke('add_host_entry', { entry });
-}
-
-/**
- * Remove a custom host entry.
- * Requires administrator privileges.
- * @param hostname - Hostname to remove
- * @returns Operation result
- */
-export async function removeHostEntry(hostname: string): Promise<HostsOperationResult> {
-    return invoke('remove_host_entry', { hostname });
-}
-
-/**
- * Check if the application has write access to hosts file.
- * @returns true if hosts file is writable
- */
-export async function canModifyHosts(): Promise<boolean> {
-    return invoke('can_modify_hosts');
+export async function restoreHosts(): Promise<void> {
+    return invoke('restore_hosts');
 }
 
 /**
  * Flush DNS cache after hosts modification.
- * Requires administrator privileges.
+ * Runs `ipconfig /flushdns` to clear the Windows DNS resolver cache.
+ * This ensures hosts file changes take effect immediately.
+ * @throws Error if flush operation fails
  */
-export async function flushDnsCache(): Promise<void> {
-    return invoke('flush_dns_cache');
+export async function flushDns(): Promise<void> {
+    return invoke('flush_dns');
+}
+
+/**
+ * Enable Discord hosts and flush DNS cache.
+ * Convenience function that performs both operations.
+ * @throws Error if any operation fails
+ */
+export async function enableDiscordHostsAndFlush(): Promise<void> {
+    await enableDiscordHosts();
+    await flushDns();
+}
+
+/**
+ * Disable Discord hosts and flush DNS cache.
+ * Convenience function that performs both operations.
+ * @throws Error if any operation fails
+ */
+export async function disableDiscordHostsAndFlush(): Promise<void> {
+    await disableDiscordHosts();
+    await flushDns();
 }

@@ -41,15 +41,21 @@ const DISCORD_HOSTS_FILENAME: &str = "discord_hosts.txt";
 #[serde(rename_all = "camelCase")]
 pub struct HostsStatus {
     /// Включены ли Discord hosts записи
-    pub enabled: bool,
-    /// Количество записей
-    pub entries_count: usize,
+    pub discord_enabled: bool,
+    /// Количество Discord записей
+    pub discord_entries_count: usize,
     /// Есть ли бэкап
     pub backup_exists: bool,
+    /// Можно ли записывать в hosts файл
+    pub is_writable: bool,
     /// Путь к hosts файлу
     pub hosts_path: String,
     /// Путь к бэкапу
     pub backup_path: String,
+    /// Время последнего изменения hosts (ISO 8601)
+    pub last_modified: Option<String>,
+    /// Время создания бэкапа (ISO 8601)
+    pub backup_timestamp: Option<String>,
 }
 
 /// Hosts Manager
@@ -99,14 +105,56 @@ impl HostsManager {
         let hosts_content = self.read_hosts_file().await.unwrap_or_default();
         let (enabled, entries_count) = self.parse_isolate_block(&hosts_content);
         let backup_exists = self.backup_path.exists();
+        
+        // Проверяем возможность записи
+        let is_writable = self.check_writable().await;
+        
+        // Получаем время последнего изменения hosts
+        let last_modified = self.get_file_modified_time(&self.hosts_path).await;
+        
+        // Получаем время создания бэкапа
+        let backup_timestamp = if backup_exists {
+            self.get_file_modified_time(&self.backup_path).await
+        } else {
+            None
+        };
 
         Ok(HostsStatus {
-            enabled,
-            entries_count,
+            discord_enabled: enabled,
+            discord_entries_count: entries_count,
             backup_exists,
+            is_writable,
             hosts_path: self.hosts_path.to_string_lossy().to_string(),
             backup_path: self.backup_path.to_string_lossy().to_string(),
+            last_modified,
+            backup_timestamp,
         })
+    }
+    
+    /// Проверяет возможность записи в hosts файл
+    async fn check_writable(&self) -> bool {
+        // Пробуем открыть файл на запись
+        match tokio::fs::OpenOptions::new()
+            .write(true)
+            .open(&self.hosts_path)
+            .await
+        {
+            Ok(_) => true,
+            Err(_) => false,
+        }
+    }
+    
+    /// Получает время модификации файла
+    async fn get_file_modified_time(&self, path: &PathBuf) -> Option<String> {
+        match fs::metadata(path).await {
+            Ok(meta) => {
+                meta.modified().ok().map(|time| {
+                    let datetime: chrono::DateTime<chrono::Utc> = time.into();
+                    datetime.to_rfc3339()
+                })
+            }
+            Err(_) => None,
+        }
     }
 
     /// Добавляет Discord hosts записи
@@ -383,8 +431,8 @@ mod tests {
 
         let status = manager.get_status().await.unwrap();
 
-        assert!(!status.enabled);
-        assert_eq!(status.entries_count, 0);
+        assert!(!status.discord_enabled);
+        assert_eq!(status.discord_entries_count, 0);
         assert!(!status.backup_exists);
     }
 
@@ -395,8 +443,8 @@ mod tests {
         manager.add_discord_hosts().await.unwrap();
 
         let status = manager.get_status().await.unwrap();
-        assert!(status.enabled);
-        assert_eq!(status.entries_count, 2);
+        assert!(status.discord_enabled);
+        assert_eq!(status.discord_entries_count, 2);
         assert!(status.backup_exists);
 
         // Проверяем содержимое hosts
@@ -417,8 +465,8 @@ mod tests {
         manager.remove_discord_hosts().await.unwrap();
 
         let status = manager.get_status().await.unwrap();
-        assert!(!status.enabled);
-        assert_eq!(status.entries_count, 0);
+        assert!(!status.discord_enabled);
+        assert_eq!(status.discord_entries_count, 0);
 
         // Проверяем что маркеры удалены
         let content = manager.read_hosts_file().await.unwrap();
@@ -442,8 +490,8 @@ mod tests {
 
         // Проверяем что записи удалены
         let status = manager.get_status().await.unwrap();
-        assert!(!status.enabled);
-        assert_eq!(status.entries_count, 0);
+        assert!(!status.discord_enabled);
+        assert_eq!(status.discord_entries_count, 0);
     }
 
     #[tokio::test]

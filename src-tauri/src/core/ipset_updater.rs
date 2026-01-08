@@ -205,12 +205,20 @@ pub async fn get_default_sources() -> Vec<IpsetSource> {
     // Fallback to hardcoded defaults
     vec![
         IpsetSource {
+            id: "zapret-discord-youtube".to_string(),
+            name: "Zapret Discord YouTube".to_string(),
+            url: "https://raw.githubusercontent.com/Flowseal/zapret-discord-youtube/main/ipset-all.txt".to_string(),
+            description: Some("IP addresses for Discord and YouTube from zapret-discord-youtube project".to_string()),
+            enabled: true,
+            priority: 1,
+        },
+        IpsetSource {
             id: "zapret".to_string(),
             name: "Zapret IP List".to_string(),
             url: "https://raw.githubusercontent.com/bol-van/zapret/master/ipset/zapret-ip.txt".to_string(),
             description: Some("IP addresses from zapret project".to_string()),
             enabled: true,
-            priority: 1,
+            priority: 2,
         },
         IpsetSource {
             id: "antifilter".to_string(),
@@ -218,7 +226,7 @@ pub async fn get_default_sources() -> Vec<IpsetSource> {
             url: "https://antifilter.download/list/allyouneed.lst".to_string(),
             description: Some("Comprehensive IP list from antifilter.download".to_string()),
             enabled: true,
-            priority: 2,
+            priority: 3,
         },
     ]
 }

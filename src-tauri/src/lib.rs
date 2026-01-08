@@ -390,6 +390,7 @@ pub fn run() {
             commands::get_hosts_status,
             commands::backup_hosts,
             commands::restore_hosts,
+            commands::flush_dns,
             // Mode commands
             commands::is_silent_mode,
             commands::is_portable_mode,

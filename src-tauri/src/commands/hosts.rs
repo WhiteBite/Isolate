@@ -3,7 +3,8 @@
 //! Tauri IPC команды для управления системным hosts файлом.
 //! Используется для добавления Discord voice серверов в hosts.
 
-use tracing::info;
+use std::process::Command;
+use tracing::{info, warn};
 
 use crate::core::errors::IsolateError;
 use crate::core::hosts_manager::{self, HostsStatus};
@@ -59,4 +60,32 @@ pub async fn restore_hosts() -> Result<(), IsolateError> {
     info!("Restoring hosts from backup");
     
     hosts_manager::restore_hosts().await
+}
+
+/// Flush DNS cache
+///
+/// Clears the Windows DNS resolver cache using `ipconfig /flushdns`.
+/// This should be called after modifying the hosts file to ensure
+/// changes take effect immediately.
+#[tauri::command]
+pub async fn flush_dns() -> Result<(), IsolateError> {
+    info!("Flushing DNS cache");
+    
+    // Run ipconfig /flushdns
+    let output = Command::new("ipconfig")
+        .arg("/flushdns")
+        .output()
+        .map_err(|e| IsolateError::Process(format!("Failed to run ipconfig: {}", e)))?;
+    
+    if output.status.success() {
+        info!("DNS cache flushed successfully");
+        Ok(())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        warn!(stderr = %stderr, "Failed to flush DNS cache");
+        Err(IsolateError::Process(format!(
+            "ipconfig /flushdns failed: {}",
+            stderr
+        )))
+    }
 }

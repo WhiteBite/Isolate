@@ -1,109 +1,152 @@
+/**
+ * IP Set management API
+ * 
+ * Functions for managing IP address lists (ipset) for DPI bypass.
+ * Supports downloading from remote sources and auto-updates.
+ */
+
 import { invoke } from '@tauri-apps/api/core';
 
 // ============================================================================
-// Ipset Types
+// Types
 // ============================================================================
 
 /**
- * Available ipset sources.
+ * Source configuration for an IP set
  */
-export type IpsetSource = 'antifilter' | 'community' | 'custom';
+export interface IpsetSource {
+    /** Source ID */
+    id: string;
+    /** Human-readable name */
+    name: string;
+    /** Remote URL to download from */
+    url: string;
+    /** Optional description */
+    description: string | null;
+    /** Whether this source is enabled */
+    enabled: boolean;
+    /** Priority (lower = higher priority) */
+    priority: number;
+}
 
 /**
- * Information about the current ipset.
+ * Information about an ipset for UI display
  */
 export interface IpsetInfo {
-    /** Source of the ipset */
-    source: IpsetSource;
+    /** Ipset ID (filename without extension) */
+    id: string;
+    /** Human-readable name */
+    name: string;
     /** Last update timestamp (ISO 8601) */
     last_updated: string | null;
-    /** Number of IP addresses/ranges */
-    ip_count: number;
     /** File size in bytes */
-    size_bytes: number;
-    /** Whether an update is available */
+    size: number | null;
+    /** Total number of IP entries */
+    ip_count: number | null;
+    /** Number of IPv4 entries */
+    ipv4_count: number | null;
+    /** Number of IPv6 entries */
+    ipv6_count: number | null;
+    /** Number of CIDR entries */
+    cidr_count: number | null;
+    /** Whether update is available */
     update_available: boolean;
-    /** Auto-update enabled */
-    auto_update: boolean;
-    /** Auto-update interval in hours */
-    auto_update_interval_hours: number;
+    /** Source URL (if configured) */
+    source_url: string | null;
+    /** Whether auto-update is enabled */
+    auto_update_enabled: boolean;
 }
 
 /**
- * Result of an ipset update operation.
+ * Result of updating ipset
  */
 export interface IpsetUpdateResult {
+    /** Whether update was successful */
     success: boolean;
+    /** Number of IP entries after update */
     ip_count: number;
-    size_bytes: number;
-    error?: string;
+    /** Number of IPv4 entries */
+    ipv4_count: number;
+    /** Number of IPv6 entries */
+    ipv6_count: number;
+    /** Number of CIDR entries */
+    cidr_count: number;
+    /** Source URL used */
+    source_url: string;
+    /** Error message if failed */
+    error: string | null;
+    /** Timestamp of update (ISO 8601) */
+    timestamp: string;
 }
 
 // ============================================================================
-// Ipset API Functions
+// API Functions
 // ============================================================================
 
 /**
  * Get information about the current ipset.
+ * 
+ * Returns metadata including IP count, last update time, and source URL.
+ * 
  * @returns Current ipset info
  */
 export async function getIpsetInfo(): Promise<IpsetInfo> {
-    return invoke('get_ipset_info');
+    return invoke<IpsetInfo>('get_ipset_info');
 }
 
 /**
- * Update the ipset from the configured source.
- * @returns Update result
+ * Update ipset from a specific source URL.
+ * 
+ * Downloads IP addresses from the given URL and updates ipset-all.txt.
+ * Validates content before saving (only IPv4/IPv6 and CIDR allowed).
+ * 
+ * @param sourceUrl - URL to download ipset from
+ * @returns Update result with IP counts
  */
-export async function updateIpset(): Promise<IpsetUpdateResult> {
-    return invoke('update_ipset');
+export async function updateIpset(sourceUrl: string): Promise<IpsetUpdateResult> {
+    return invoke<IpsetUpdateResult>('update_ipset', { sourceUrl });
 }
 
 /**
- * Check if an ipset update is available.
- * @returns true if update is available
+ * Update ipset from configured sources.
+ * 
+ * Tries each configured source in priority order until one succeeds.
+ * Primary source is zapret-discord-youtube GitHub repository.
+ * 
+ * @returns Update result with IP counts
  */
-export async function checkIpsetUpdate(): Promise<boolean> {
-    return invoke('check_ipset_update');
+export async function updateIpsetFromSources(): Promise<IpsetUpdateResult> {
+    return invoke<IpsetUpdateResult>('update_ipset_from_sources');
 }
 
 /**
- * Set the ipset source.
- * @param source - Source to use
- */
-export async function setIpsetSource(source: IpsetSource): Promise<void> {
-    return invoke('set_ipset_source', { source });
-}
-
-/**
- * Toggle auto-update for ipset.
+ * Set ipset auto-update enabled/disabled.
+ * 
+ * When enabled, ipset will be automatically updated once per day.
+ * 
  * @param enabled - Whether auto-update should be enabled
  */
-export async function toggleIpsetAutoUpdate(enabled: boolean): Promise<void> {
-    return invoke('toggle_ipset_auto_update', { enabled });
+export async function setIpsetAutoUpdate(enabled: boolean): Promise<void> {
+    return invoke<void>('set_ipset_auto_update', { enabled });
 }
 
 /**
- * Set auto-update interval.
- * @param hours - Interval in hours
+ * Get ipset sources configuration.
+ * 
+ * Returns the list of configured ipset sources with their URLs and priorities.
+ * 
+ * @returns List of configured sources
  */
-export async function setIpsetAutoUpdateInterval(hours: number): Promise<void> {
-    return invoke('set_ipset_auto_update_interval', { hours });
+export async function getIpsetSources(): Promise<IpsetSource[]> {
+    return invoke<IpsetSource[]>('get_ipset_sources');
 }
 
 /**
- * Import a custom ipset from file.
- * @param filePath - Path to the ipset file
- * @returns Import result
+ * Restore ipset from backup.
+ * 
+ * Restores the previous version of ipset-all.txt from backup.
+ * Useful if an update caused issues.
  */
-export async function importCustomIpset(filePath: string): Promise<IpsetUpdateResult> {
-    return invoke('import_custom_ipset', { filePath });
-}
-
-/**
- * Export the current ipset to a file.
- * @param filePath - Path to save the ipset
- */
-export async function exportIpset(filePath: string): Promise<void> {
-    return invoke('export_ipset', { filePath });
+export async function restoreIpsetBackup(): Promise<void> {
+    return invoke<void>('restore_ipset_backup');
 }

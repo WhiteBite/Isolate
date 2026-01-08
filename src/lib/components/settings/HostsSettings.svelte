@@ -8,7 +8,7 @@
   import { browser } from '$app/environment';
   import Button from '$lib/components/Button.svelte';
   import Toggle from '$lib/components/Toggle.svelte';
-  import type { HostsStatus, HostsOperationResult } from '$lib/api/hosts';
+  import type { HostsStatus } from '$lib/api/hosts';
 
   // Props
   interface Props {
@@ -27,14 +27,14 @@
 
   // Derived
   let formattedBackupDate = $derived(
-    status?.backup_timestamp 
-      ? new Date(status.backup_timestamp).toLocaleString() 
+    status?.backupTimestamp 
+      ? new Date(status.backupTimestamp).toLocaleString() 
       : 'No backup'
   );
 
   let formattedLastModified = $derived(
-    status?.last_modified 
-      ? new Date(status.last_modified).toLocaleString() 
+    status?.lastModified 
+      ? new Date(status.lastModified).toLocaleString() 
       : 'Unknown'
   );
 
@@ -71,27 +71,30 @@
     message = null;
     
     try {
-      const { enableDiscordHosts, disableDiscordHosts } = await import('$lib/api/hosts');
-      const result: HostsOperationResult = enabled 
-        ? await enableDiscordHosts() 
-        : await disableDiscordHosts();
+      const { enableDiscordHosts, disableDiscordHosts, flushDns } = await import('$lib/api/hosts');
       
-      if (result.success) {
-        showMessage(
-          enabled 
-            ? `Discord hosts enabled (${result.entries_affected} entries)` 
-            : 'Discord hosts disabled',
-          'success'
-        );
-        await loadStatus();
-      } else if (result.requires_admin) {
-        showMessage('Administrator privileges required', 'warning');
+      if (enabled) {
+        await enableDiscordHosts();
       } else {
-        showMessage(result.error || 'Operation failed', 'error');
+        await disableDiscordHosts();
       }
+      
+      // Flush DNS after change
+      await flushDns();
+      
+      showMessage(
+        enabled ? 'Discord hosts enabled' : 'Discord hosts disabled',
+        'success'
+      );
+      await loadStatus();
     } catch (e) {
       console.error('Failed to toggle Discord hosts:', e);
-      showMessage(`Failed: ${e}`, 'error');
+      const errorMsg = String(e);
+      if (errorMsg.includes('admin') || errorMsg.includes('permission')) {
+        showMessage('Administrator privileges required', 'warning');
+      } else {
+        showMessage(`Failed: ${e}`, 'error');
+      }
     } finally {
       operating = false;
     }
@@ -103,15 +106,10 @@
     operating = true;
     
     try {
-      const { backupHostsFile } = await import('$lib/api/hosts');
-      const result = await backupHostsFile();
-      
-      if (result.success) {
-        showMessage('Backup created successfully', 'success');
-        await loadStatus();
-      } else {
-        showMessage(result.error || 'Backup failed', 'error');
-      }
+      const { backupHosts } = await import('$lib/api/hosts');
+      await backupHosts();
+      showMessage('Backup created successfully', 'success');
+      await loadStatus();
     } catch (e) {
       console.error('Failed to backup hosts:', e);
       showMessage(`Backup failed: ${e}`, 'error');
@@ -121,25 +119,24 @@
   }
 
   async function handleRestore() {
-    if (!browser || !isTauri || operating || !status?.backup_exists) return;
+    if (!browser || !isTauri || operating || !status?.backupExists) return;
     
     operating = true;
     
     try {
-      const { restoreHostsFile } = await import('$lib/api/hosts');
-      const result = await restoreHostsFile();
-      
-      if (result.success) {
-        showMessage('Hosts file restored from backup', 'success');
-        await loadStatus();
-      } else if (result.requires_admin) {
-        showMessage('Administrator privileges required', 'warning');
-      } else {
-        showMessage(result.error || 'Restore failed', 'error');
-      }
+      const { restoreHosts, flushDns } = await import('$lib/api/hosts');
+      await restoreHosts();
+      await flushDns();
+      showMessage('Hosts file restored from backup', 'success');
+      await loadStatus();
     } catch (e) {
       console.error('Failed to restore hosts:', e);
-      showMessage(`Restore failed: ${e}`, 'error');
+      const errorMsg = String(e);
+      if (errorMsg.includes('admin') || errorMsg.includes('permission')) {
+        showMessage('Administrator privileges required', 'warning');
+      } else {
+        showMessage(`Restore failed: ${e}`, 'error');
+      }
     } finally {
       operating = false;
     }
@@ -151,8 +148,8 @@
     operating = true;
     
     try {
-      const { flushDnsCache } = await import('$lib/api/hosts');
-      await flushDnsCache();
+      const { flushDns } = await import('$lib/api/hosts');
+      await flushDns();
       showMessage('DNS cache flushed', 'success');
     } catch (e) {
       console.error('Failed to flush DNS:', e);
@@ -188,7 +185,7 @@
   {:else}
     <div class="space-y-4">
       <!-- Admin Warning -->
-      {#if status && !status.is_writable}
+      {#if status && !status.isWritable}
         <div class="p-4 bg-amber-500/10 rounded-xl border border-amber-500/20">
           <p class="text-amber-400 text-sm flex items-start gap-2">
             <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -204,15 +201,15 @@
         <div id="discord-hosts-label">
           <p class="text-text-primary font-medium">Discord Hosts</p>
           <p class="text-text-secondary text-sm">
-            {status?.discord_enabled 
-              ? `Enabled (${status.discord_entries_count} entries)` 
+            {status?.discordEnabled 
+              ? `Enabled (${status.discordEntriesCount} entries)` 
               : 'Add IP mappings for Discord domains'}
           </p>
         </div>
         <Toggle 
-          checked={status?.discord_enabled ?? false}
+          checked={status?.discordEnabled ?? false}
           onchange={handleToggleDiscord}
-          disabled={operating || (status !== null && !status.is_writable)}
+          disabled={operating || (status !== null && !status.isWritable)}
           aria-labelledby="discord-hosts-label"
         />
       </div>
@@ -223,8 +220,8 @@
         <div class="grid grid-cols-2 gap-4 text-sm">
           <div>
             <span class="text-text-muted">Status:</span>
-            <span class="ml-2 {status?.is_writable ? 'text-emerald-400' : 'text-amber-400'}">
-              {status?.is_writable ? 'Writable' : 'Read-only'}
+            <span class="ml-2 {status?.isWritable ? 'text-emerald-400' : 'text-amber-400'}">
+              {status?.isWritable ? 'Writable' : 'Read-only'}
             </span>
           </div>
           <div>
@@ -234,12 +231,12 @@
           <div>
             <span class="text-text-muted">Backup:</span>
             <span class="text-text-secondary ml-2">
-              {status?.backup_exists ? formattedBackupDate : 'None'}
+              {status?.backupExists ? formattedBackupDate : 'None'}
             </span>
           </div>
           <div>
             <span class="text-text-muted">Discord Entries:</span>
-            <span class="text-text-secondary ml-2">{status?.discord_entries_count ?? 0}</span>
+            <span class="text-text-secondary ml-2">{status?.discordEntriesCount ?? 0}</span>
           </div>
         </div>
       </div>
@@ -250,7 +247,6 @@
           variant="secondary" 
           onclick={handleBackup}
           disabled={operating}
-          aria-label="Create backup of hosts file"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/>
@@ -260,8 +256,7 @@
         <Button 
           variant="secondary" 
           onclick={handleRestore}
-          disabled={operating || !status?.backup_exists}
-          aria-label="Restore hosts file from backup"
+          disabled={operating || !status?.backupExists}
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
@@ -272,7 +267,6 @@
           variant="ghost" 
           onclick={handleFlushDns}
           disabled={operating}
-          aria-label="Flush DNS cache"
         >
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
@@ -287,7 +281,7 @@
           <svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
           </svg>
-          <span>Discord hosts modification adds IP mappings to bypass DPI for Discord. This requires administrator privileges and modifies the Windows hosts file at <code class="bg-void-200 px-1 rounded">C:\Windows\System32\drivers\etc\hosts</code>.</span>
+          <span>Discord hosts modification adds IP mappings to bypass DPI for Discord. This requires administrator privileges and modifies the Windows hosts file.</span>
         </p>
       </div>
     </div>

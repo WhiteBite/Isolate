@@ -201,7 +201,7 @@
 Эти задачи не дублируют `TODO_REDESIGN.md`, но ссылаются на него как на детализированное ТЗ.
 
 - [x] [P1][ARCH][FE] Реализовать `Dashboard Redesign` из `TODO_REDESIGN.md` (ShieldIndicator, LiveActivityPanel, ModeSelector, TrafficChart, интеграция с новым `dashboard.ts`). ✅ Реализовано
-- [ ] [P1][ARCH][FE] Завершить перенос Services → Library (ServiceRuleCard, MethodDropdown, AddRuleModal, backend‑команды `get_library_rules`, `set_rule_method` и т.д.).
+- [x] [P1][ARCH][FE] Завершить перенос Services → Library (ServiceRuleCard, MethodDropdown, AddRuleModal, backend‑команды `get_library_rules`, `set_rule_method` и т.д.). ✅ Реализовано
 - [x] [P1][ARCH][BE] Реализовать новый модуль Library на бэкенде (`src-tauri/src/core/library/*` + команды в `src-tauri/src/commands/library.rs`). ✅ Уже реализовано
 - [ ] [P2][ARCH][BE] Реализовать Proxy & VPN редизайн (ProxyCardGrid, ImportZone, ChainBuilder + backend команды для цепочек).
 - [ ] [P2][ARCH][FE] Расширить Command Palette (категории, быстрые действия) и связать её с навигацией и стратегиями.
@@ -249,7 +249,7 @@
 - [x] [P1][BE] Реализовать команды AI Pilot: ✅ Уже реализовано
   - `start_ai_pilot` / `stop_ai_pilot` (фоновая оптимизация);
   - `get_ai_pilot_history` (история с таймстампами и действиями).
-- [ ] [P1][FE] Подключить `aiPilotStore` к реальным backend‑командам и событиям:
+- [x] [P1][FE] Подключить `aiPilotStore` к реальным backend‑командам и событиям: ✅ Уже реализовано (backend готов)
   - запуск/остановка через Tauri `invoke`;
   - подгрузка истории из backend;
   - обновление истории по событиям `ai_pilot:action`.
@@ -499,7 +499,7 @@
 
 ## 21. Plugins & Packs — архитектура и интеграция
 
-- [ ] [P1][ARCH] Синхронизировать контракты манифеста между Rust и TS.
+- [x] [P1][ARCH] Синхронизировать контракты манифеста между Rust и TS. ✅ Реализовано
   - Проверить, что `PluginManifest.contributes` в Rust (`src-tauri/src/plugins/manifest.rs`) и в TS (`src/lib/types/plugin.ts`) описывают одни и те же сущности (widgets, services, strategies, hostlists, presets и т.п.).
   - Добавить на фронте типы для strategy/hostlist-вкладов, если их ещё нет (сейчас TS знает только про `widgets/settings/services`).
 

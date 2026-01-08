@@ -100,93 +100,109 @@ impl AppState {
         info!("Initializing application state");
 
         // 1. Определяем пути к конфигам
+        info!("[AppState] Step 1: Resolving config paths...");
         let (strategies_dir, services_dir) = Self::get_config_paths()?;
-        debug!(
+        info!(
             strategies_dir = %strategies_dir.display(),
             services_dir = %services_dir.display(),
-            "Config paths resolved"
+            "[AppState] Config paths resolved"
         );
 
         // 2. Создаём ConfigManager
+        info!("[AppState] Step 2: Creating ConfigManager...");
         let config_manager = Arc::new(ConfigManager::new(strategies_dir, services_dir));
 
         // 3. Загружаем стратегии и сервисы для валидации
+        info!("[AppState] Step 3: Loading strategies...");
         let strategies = config_manager.load_strategies().await?;
+        info!("[AppState] Step 3b: Loading services...");
         let services = config_manager.load_services().await?;
         info!(
             strategies_count = strategies.len(),
             services_count = services.len(),
-            "Configurations loaded"
+            "[AppState] Configurations loaded"
         );
 
         // 4. Инициализируем Storage (SQLite)
+        info!("[AppState] Step 4: Initializing Storage (SQLite)...");
         let storage = Arc::new(Storage::new().await?);
-        debug!("Storage initialized");
+        info!("[AppState] Storage initialized");
 
         // 4.5. Создаём менеджеры стратегий
+        info!("[AppState] Step 4.5: Creating BlockedStrategiesManager...");
         let blocked_manager = Arc::new(
             BlockedStrategiesManager::new(storage.clone())
                 .await
                 .map_err(|e| IsolateError::Storage(format!("Failed to create blocked manager: {}", e)))?
         );
-        debug!("Blocked strategies manager created");
+        info!("[AppState] Blocked strategies manager created");
 
+        info!("[AppState] Step 4.6: Creating LockedStrategiesManager...");
         let locked_manager = Arc::new(
             LockedStrategiesManager::new(storage.clone(), blocked_manager.clone())
                 .await
                 .map_err(|e| IsolateError::Storage(format!("Failed to create locked manager: {}", e)))?
         );
-        debug!("Locked strategies manager created");
+        info!("[AppState] Locked strategies manager created");
 
+        info!("[AppState] Step 4.7: Creating StrategyHistoryManager...");
         let history_manager = Arc::new(
             StrategyHistoryManager::new(storage.clone())
                 .await
                 .map_err(|e| IsolateError::Storage(format!("Failed to create history manager: {}", e)))?
         );
-        debug!("Strategy history manager created");
+        info!("[AppState] Strategy history manager created");
 
+        info!("[AppState] Step 4.8: Creating StrategyCacheManager...");
         let cache_manager = Arc::new(
             StrategyCacheManager::new(storage.clone())
                 .await
                 .map_err(|e| IsolateError::Storage(format!("Failed to create cache manager: {}", e)))?
         );
-        debug!("Strategy cache manager created");
+        info!("[AppState] Strategy cache manager created");
 
         // 5. Создаём StrategyEngine
+        info!("[AppState] Step 5: Creating StrategyEngine...");
         let strategy_engine = create_engine();
-        debug!("Strategy engine created");
+        info!("[AppState] Strategy engine created");
 
         // 5.5. Создаём Monitor
+        info!("[AppState] Step 5.5: Creating Monitor...");
         let monitor = Arc::new(Monitor::new(strategy_engine.clone()));
-        debug!("Monitor created");
+        info!("[AppState] Monitor created");
 
         // 5.6. Создаём TelemetryService
+        info!("[AppState] Step 5.6: Creating TelemetryService...");
         let telemetry = Arc::new(TelemetryService::new());
-        debug!("Telemetry service created");
+        info!("[AppState] Telemetry service created");
 
         // 6.5. Создаём StrategyOptimizer
+        info!("[AppState] Step 6.5: Creating StrategyOptimizer...");
         let optimizer = Arc::new(StrategyOptimizer::new(
             strategy_engine.clone(),
             cache_manager.clone(),
             blocked_manager.clone(),
             history_manager.clone(),
         ));
-        debug!("Strategy optimizer created");
+        info!("[AppState] Strategy optimizer created");
 
         // 6.6. Создаём DomainMonitor
+        info!("[AppState] Step 6.6: Creating DomainMonitor...");
         let domain_monitor = Arc::new(DomainMonitor::new(
             locked_manager.clone(),
             blocked_manager.clone(),
             history_manager.clone(),
             MonitorConfig::default(),
         ));
-        debug!("Domain monitor created");
+        info!("[AppState] Domain monitor created");
 
         // 6.7. Создаём EventBus
+        info!("[AppState] Step 6.7: Creating EventBus...");
         let event_bus = create_event_bus();
-        debug!("Event bus created");
+        info!("[AppState] Event bus created");
 
         // 6.8. Создаём AutoFailover
+        info!("[AppState] Step 6.8: Creating AutoFailover...");
         let settings = storage.get_settings().await.unwrap_or_default();
         let auto_failover = Arc::new(AutoFailover::with_config(
             crate::core::auto_failover::FailoverConfig {
@@ -197,23 +213,26 @@ impl AppState {
             }
         ));
         auto_failover.set_enabled(settings.auto_failover_enabled).await;
-        debug!("Auto failover created");
+        info!("[AppState] Auto failover created");
 
         // 7. Собираем EnvInfo
+        info!("[AppState] Step 7: Collecting EnvInfo (may take up to 5s for network info)...");
         let env_info = collect_env_info().await;
         info!(
             asn = ?env_info.asn,
             country = ?env_info.country,
             is_admin = env_info.is_admin,
-            "Environment info collected"
+            "[AppState] Environment info collected"
         );
 
         // 8. Создаём роутеры
+        info!("[AppState] Step 8: Creating routers...");
         let domain_router = Arc::new(DomainRouter::new(storage.clone()));
         let app_router = Arc::new(AppRouter::new(storage.clone()));
-        debug!("Routing managers created");
+        info!("[AppState] Routing managers created");
 
         // 9. Определяем путь к плагинам
+        info!("[AppState] Step 9: Configuring plugins directory...");
         let plugins_dir = if cfg!(debug_assertions) {
             let current = std::env::current_dir()
                 .map_err(|e| IsolateError::Config(format!("Failed to get current dir: {}", e)))?;
@@ -235,9 +254,10 @@ impl AppState {
                 .await
                 .map_err(|e| IsolateError::Config(format!("Failed to create plugins dir: {}", e)))?;
         }
-        debug!(plugins_dir = %plugins_dir.display(), "Plugins directory configured");
+        info!(plugins_dir = %plugins_dir.display(), "[AppState] Plugins directory configured");
 
         // 10. Создаём ServiceRegistry и загружаем сервисы
+        info!("[AppState] Step 10: Creating ServiceRegistry...");
         let service_registry = Arc::new(ServiceRegistry::new());
         
         // Load services from plugins FIRST (they have priority)
@@ -247,32 +267,36 @@ impl AppState {
         
         // Register built-in services (won't override existing from plugins)
         service_registry.register_builtin_services().await;
-        debug!("Service registry initialized");
+        info!("[AppState] Service registry initialized");
 
         // 11. Создаём ServiceChecker
+        info!("[AppState] Step 11: Creating ServiceChecker...");
         let service_checker = Arc::new(ServiceChecker::new(service_registry.clone()));
-        debug!("Service checker created");
+        info!("[AppState] Service checker created");
 
         // 12. Создаём HostlistRegistry и загружаем hostlists из плагинов
+        info!("[AppState] Step 12: Creating HostlistRegistry...");
         let hostlist_registry = create_hostlist_registry();
         if let Err(e) = Self::load_hostlists_from_plugins(&hostlist_registry, &plugins_dir).await {
             tracing::warn!(error = %e, "Failed to load hostlists from plugins");
         }
-        debug!("Hostlist registry initialized");
+        info!("[AppState] Hostlist registry initialized");
 
         // 13. Создаём StrategyRegistry и загружаем стратегии из плагинов
+        info!("[AppState] Step 13: Creating StrategyRegistry...");
         let strategy_registry = Arc::new(StrategyRegistry::new());
         if let Err(e) = Self::load_strategies_from_plugins(&strategy_registry, &plugins_dir).await {
             tracing::warn!(error = %e, "Failed to load strategies from plugins");
         }
-        debug!("Strategy registry initialized");
+        info!("[AppState] Strategy registry initialized");
 
         // 14. Создаём PluginManager для hot reload
+        info!("[AppState] Step 14: Creating PluginManager...");
         let plugin_manager = create_plugin_manager(&plugins_dir);
         if let Err(e) = plugin_manager.init().await {
             tracing::warn!(error = %e, "Failed to initialize plugin manager");
         }
-        debug!("Plugin manager initialized");
+        info!("[AppState] Plugin manager initialized");
 
         let state = Self {
             strategy_engine,

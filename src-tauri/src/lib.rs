@@ -719,7 +719,9 @@ pub fn run() {
                         }
                     }
                     Err(e) => {
-                        tracing::error!("Failed to initialize AppState: {}", e);
+                        tracing::error!("CRITICAL: Failed to initialize AppState: {}", e);
+                        tracing::error!("Backend will NOT be available! Frontend will show 'Backend not ready'");
+                        tracing::error!("Check logs above for the specific step that failed");
                     }
                 }
             });

@@ -428,33 +428,42 @@
 
 <!-- Library Redirect Banner -->
 {#if !bannerDismissed}
-  <div class="mx-4 mt-4 mb-2 p-4 bg-gradient-to-r from-violet-500/10 to-indigo-500/10 border border-violet-500/20 rounded-xl flex items-center justify-between gap-4">
-    <div class="flex items-center gap-3">
-      <span class="text-2xl">📚</span>
-      <div>
-        <p class="text-sm font-medium text-zinc-100">Управление методами доступа переехало в Library</p>
-        <p class="text-xs text-zinc-400 mt-0.5">Там вы найдёте стратегии, сервисы и правила в одном месте</p>
+  <div class="mx-4 mt-4 mb-2 p-5 bg-gradient-to-r from-violet-500/20 to-indigo-500/20 border-2 border-violet-500/30 rounded-xl shadow-lg">
+    <div class="flex items-center justify-between gap-4">
+      <div class="flex items-center gap-4">
+        <div class="flex-shrink-0 w-12 h-12 bg-violet-500/20 rounded-xl flex items-center justify-center">
+          <span class="text-3xl">📚</span>
+        </div>
+        <div>
+          <p class="text-base font-semibold text-zinc-100 mb-1">
+            Новая страница Library доступна!
+          </p>
+          <p class="text-sm text-zinc-300">
+            Управление методами доступа, стратегиями и правилами теперь в одном месте
+          </p>
+        </div>
       </div>
-    </div>
-    <div class="flex items-center gap-2 shrink-0">
-      <button
-        onclick={goToLibrary}
-        class="px-4 py-2 bg-violet-500 hover:bg-violet-600 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
-      >
-        Перейти в Library
-        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M5 12h14M12 5l7 7-7 7"/>
-        </svg>
-      </button>
-      <button
-        onclick={dismissBanner}
-        class="p-2 text-zinc-400 hover:text-zinc-200 hover:bg-white/5 rounded-lg transition-colors"
-        title="Закрыть"
-      >
-        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M18 6L6 18M6 6l12 12"/>
-        </svg>
-      </button>
+      <div class="flex items-center gap-2 shrink-0">
+        <button
+          onclick={goToLibrary}
+          class="px-5 py-2.5 bg-violet-500 hover:bg-violet-600 text-white text-sm font-semibold rounded-lg transition-all duration-150 flex items-center gap-2 shadow-lg hover:shadow-xl"
+        >
+          Перейти в Library
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M5 12h14M12 5l7 7-7 7"/>
+          </svg>
+        </button>
+        <button
+          onclick={dismissBanner}
+          class="p-2 text-zinc-300 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+          title="Закрыть"
+          aria-label="Закрыть баннер"
+        >
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 6L6 18M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
     </div>
   </div>
 {/if}

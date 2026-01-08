@@ -56,45 +56,136 @@ export interface SettingsPanelDefinition {
 // Plugin Contributions
 // ============================================================================
 
+// Service Definitions (matches Rust ServiceDefinition)
 export interface ServiceEndpoint {
-  id?: string;
+  id: string;
+  name: string;
   url: string;
-  method: 'GET' | 'HEAD' | 'POST';
-  expectedStatus?: number;
-  timeout?: number;
+  method?: 'GET' | 'HEAD' | 'POST'; // Default: GET
 }
 
 export interface ServiceDefinition {
   id: string;
   name: string;
   icon: string;
-  category?: string;
+  category: string;
+  description?: string;
   endpoints: ServiceEndpoint[];
 }
 
-export interface UIPluginContributes {
-  /** Dashboard/sidebar/toolbar widgets */
-  widgets?: WidgetDefinition[];
-  /** Settings panels */
-  settings?: SettingsPanelDefinition[];
-  /** Services for checking */
+// Hostlist Definitions (matches Rust HostlistDefinition)
+export type HostlistFormat = 'plain' | 'wildcard' | 'regex';
+
+export interface HostlistDefinition {
+  /** Unique identifier for the hostlist */
+  id: string;
+  /** Human-readable name */
+  name: string;
+  /** Optional description */
+  description?: string;
+  /** Format of domain entries (default: plain) */
+  format?: HostlistFormat;
+  /** Inline domain list (for small lists) */
+  domains?: string[];
+  /** External file path (relative to plugin directory) */
+  file?: string;
+  /** Remote URL for updates */
+  update_url?: string;
+  /** Update interval in seconds (0 = no auto-update) */
+  update_interval?: number;
+  /** Category for grouping (e.g., "social", "video", "gaming") */
+  category?: string;
+  /** Tags for filtering */
+  tags?: string[];
+}
+
+// Strategy Definitions (matches Rust StrategyDefinition - legacy simple version)
+export interface StrategyDefinition {
+  id: string;
+  name: string;
+  family: string;
+  config_file: string;
+}
+
+// Full Strategy Definition (matches Rust PluginStrategyDefinition)
+export type StrategyFamily = 'zapret' | 'vless' | 'shadowsocks' | 'custom';
+
+export interface StrategyPorts {
+  tcp?: string;
+  udp?: string;
+}
+
+export interface StrategyProfile {
+  filter: string;
+  hostlist?: string;
+  hostlist_exclude?: string;
+  hostlist_domains?: string;
+  desync: string;
+  repeats?: number;
+  split_seqovl?: number;
+  split_pos?: string;
+  fooling?: string;
+  fake_tls?: string;
+  fake_quic?: string;
+  ttl?: number;
+  autottl?: string;
+  extra_args?: string[];
+}
+
+export interface PluginStrategyConfig {
+  args?: string[];
+  hostlist?: string;
+  ports?: StrategyPorts;
+  profiles?: StrategyProfile[];
+}
+
+export interface PluginStrategyDefinition {
+  id: string;
+  name: string;
+  description?: string;
+  family?: StrategyFamily;
+  engine?: string; // Default: winws
+  target_services?: string[];
+  priority?: number;
+  config: PluginStrategyConfig;
+  author?: string;
+  label?: string;
+  source_plugin?: string;
+}
+
+// Plugin Contributions (matches Rust PluginContributes)
+// This is the main contract for what a plugin can contribute
+export interface PluginContributes {
+  /** Service definitions for service-checker plugins */
   services?: ServiceDefinition[];
+  /** Hostlist definitions */
+  hostlists?: HostlistDefinition[];
+  /** Strategy definitions (legacy simple version) */
+  strategies?: StrategyDefinition[];
+  /** Dashboard/sidebar/toolbar widgets (UI plugins only) */
+  widgets?: WidgetDefinition[];
+  /** Settings panels (UI plugins only) */
+  settings?: SettingsPanelDefinition[];
 }
 
 // ============================================================================
-// Plugin Permissions
+// Plugin Permissions (matches Rust Permissions)
 // ============================================================================
 
 export interface PluginPermissions {
-  /** Allowed HTTP domains (supports wildcards like *.discord.com) */
+  /** Allowed HTTP domains (for network requests) */
   http?: string[];
-  /** Access to plugin-scoped storage */
+  /** Access to filesystem */
+  filesystem?: boolean;
+  /** Access to process spawning */
+  process?: boolean;
+  /** Access to plugin-scoped storage (UI plugins) */
   storage?: boolean;
-  /** Allowed events to emit/listen */
+  /** Allowed events to emit/listen (UI plugins) */
   events?: string[];
-  /** Max execution time in ms */
+  /** Max execution time in ms (script plugins) */
   timeout?: number;
-  /** Max memory in bytes */
+  /** Max memory in bytes (script plugins) */
   memory?: number;
 }
 
@@ -104,6 +195,7 @@ export interface PluginPermissions {
 
 export type PluginType = 'service-checker' | 'strategy-provider' | 'hostlist-provider' | 'ui-widget' | 'script-plugin';
 
+// Plugin Manifest (matches Rust PluginManifest)
 export interface PluginManifest {
   /** Unique plugin ID (kebab-case) */
   id: string;
@@ -111,18 +203,24 @@ export interface PluginManifest {
   name: string;
   /** Semantic version */
   version: string;
-  /** Plugin type */
-  type: PluginType;
   /** Author name or organization */
-  author?: string;
+  author: string;
   /** Short description */
   description?: string;
-  /** Icon (emoji or path to image) */
-  icon?: string;
-  /** What the plugin contributes */
-  contributes: UIPluginContributes;
+  /** Plugin type */
+  type: PluginType;
+  /** Legacy: Service definition (for service-checker type) - use contributes.services instead */
+  service?: ServiceDefinition;
+  /** Legacy: Strategy definition (for strategy-provider type) - use contributes.strategies instead */
+  strategy?: StrategyDefinition;
+  /** Legacy: Hostlist definition (for hostlist-provider type) - use contributes.hostlists instead */
+  hostlist?: HostlistDefinition;
+  /** What the plugin contributes (unified system) */
+  contributes?: PluginContributes;
   /** Required permissions */
   permissions?: PluginPermissions;
+  /** Icon (emoji or path to image) */
+  icon?: string;
   /** Minimum Isolate version required */
   minAppVersion?: string;
   /** Plugin homepage URL */

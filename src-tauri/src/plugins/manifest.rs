@@ -20,7 +20,13 @@ pub enum PluginType {
 /// A plugin can contribute multiple types of resources:
 /// - Services for availability checking
 /// - Hostlists with domain lists
-/// - Strategies for DPI bypass (future)
+/// - Strategies for DPI bypass
+/// - Widgets for UI (Level 2 plugins, TypeScript only)
+/// - Settings panels (Level 2 plugins, TypeScript only)
+///
+/// **TypeScript Correspondence**: `PluginContributes` in `src/lib/types/plugin.ts`
+/// - Rust fields: services, hostlists, strategies
+/// - TypeScript additional fields: widgets, settings (for UI plugins)
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct PluginContributes {
     /// Service definitions for service-checker plugins
@@ -35,6 +41,10 @@ pub struct PluginContributes {
 }
 
 /// Plugin manifest (plugin.json)
+///
+/// **TypeScript Correspondence**: `PluginManifest` in `src/lib/types/plugin.ts`
+/// - All fields match 1:1 between Rust and TypeScript
+/// - Field order and optionality are synchronized
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PluginManifest {
     pub id: String,
@@ -58,6 +68,8 @@ pub struct PluginManifest {
 }
 
 /// Service definition for checker plugins
+///
+/// **TypeScript Correspondence**: `ServiceDefinition` in `src/lib/types/plugin.ts`
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServiceDefinition {
     pub id: String,
@@ -69,6 +81,8 @@ pub struct ServiceDefinition {
 }
 
 /// Service endpoint to check
+///
+/// **TypeScript Correspondence**: `ServiceEndpoint` in `src/lib/types/plugin.ts`
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServiceEndpoint {
     pub id: String,
@@ -83,6 +97,8 @@ fn default_method() -> String {
 }
 
 /// Legacy strategy definition (simple reference to config file)
+///
+/// **TypeScript Correspondence**: `StrategyDefinition` in `src/lib/types/plugin.ts`
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StrategyDefinition {
     pub id: String,
@@ -262,6 +278,8 @@ pub enum HostlistFormat {
 ///
 /// Defines a list of domains that can be provided by a plugin.
 /// Supports inline domains, external files, and remote updates.
+///
+/// **TypeScript Correspondence**: `HostlistDefinition` in `src/lib/types/plugin.ts`
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HostlistDefinition {
     /// Unique identifier for the hostlist
@@ -295,6 +313,10 @@ pub struct HostlistDefinition {
 }
 
 /// Plugin permissions
+///
+/// **TypeScript Correspondence**: `PluginPermissions` in `src/lib/types/plugin.ts`
+/// - Rust fields: http, filesystem, process
+/// - TypeScript additional fields: storage, events, timeout, memory (for UI/script plugins)
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Permissions {
     #[serde(default)]

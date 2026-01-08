@@ -90,6 +90,7 @@ function createServiceCheckerManifest(): PluginManifest {
     id: 'discord-checker',
     name: 'Discord Checker',
     version: '1.0.0',
+    author: 'Test Author',
     type: 'service-checker',
     contributes: {
       services: [
@@ -99,7 +100,7 @@ function createServiceCheckerManifest(): PluginManifest {
           icon: '🎮',
           category: 'gaming',
           endpoints: [
-            { url: 'https://discord.com/api/v10/gateway', method: 'GET', expectedStatus: 200 }
+            { id: 'gateway', name: 'Gateway', url: 'https://discord.com/api/v10/gateway', method: 'GET' }
           ]
         }
       ]
@@ -112,6 +113,7 @@ function createHostlistProviderManifest(): PluginManifest {
     id: 'youtube-hostlist',
     name: 'YouTube Hostlist',
     version: '1.0.0',
+    author: 'Test Author',
     type: 'hostlist-provider',
     contributes: {}
   };
@@ -128,15 +130,15 @@ describe('Plugin Types', () => {
       
       expect(manifest.id).toBe('test-plugin');
       expect(manifest.type).toBe('ui-widget');
-      expect(manifest.contributes.widgets).toHaveLength(1);
+      expect(manifest.contributes?.widgets).toHaveLength(1);
     });
 
     it('accepts valid service-checker manifest', () => {
       const manifest = createServiceCheckerManifest();
       
       expect(manifest.type).toBe('service-checker');
-      expect(manifest.contributes.services).toHaveLength(1);
-      expect(manifest.contributes.services![0].endpoints).toHaveLength(1);
+      expect(manifest.contributes?.services).toHaveLength(1);
+      expect(manifest.contributes?.services![0].endpoints).toHaveLength(1);
     });
 
     it('accepts valid hostlist-provider manifest', () => {
@@ -177,7 +179,7 @@ describe('Plugin Types', () => {
           }
         });
         
-        expect(manifest.contributes.widgets![0].slot).toBe(slot);
+        expect(manifest.contributes?.widgets![0].slot).toBe(slot);
       });
     });
 
@@ -194,7 +196,7 @@ describe('Plugin Types', () => {
         }
       });
       
-      expect(manifest.contributes.widgets![0].defaultSize).toEqual({ cols: 2, rows: 2 });
+      expect(manifest.contributes?.widgets![0].defaultSize).toEqual({ cols: 2, rows: 2 });
     });
   });
 
@@ -737,8 +739,8 @@ describe('Builtin Plugins', () => {
       
       expect(statusWidgetManifest.id).toBe('builtin-status');
       expect(statusWidgetManifest.type).toBe('ui-widget');
-      expect(statusWidgetManifest.contributes.widgets).toHaveLength(1);
-      expect(statusWidgetManifest.contributes.widgets![0].slot).toBe('dashboard');
+      expect(statusWidgetManifest.contributes?.widgets).toHaveLength(1);
+      expect(statusWidgetManifest.contributes?.widgets![0].slot).toBe('dashboard');
     });
 
     it('defines health widget manifest correctly', async () => {
@@ -746,7 +748,7 @@ describe('Builtin Plugins', () => {
       
       expect(healthWidgetManifest.id).toBe('builtin-health');
       expect(healthWidgetManifest.type).toBe('ui-widget');
-      expect(healthWidgetManifest.contributes.widgets).toHaveLength(1);
+      expect(healthWidgetManifest.contributes?.widgets).toHaveLength(1);
     });
 
     it('exports builtin manifests array', async () => {

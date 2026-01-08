@@ -1,246 +1,193 @@
 <script lang="ts">
   import { libraryStore } from '$lib/stores/library.svelte';
-  import { 
-    ServiceRuleCard, 
-    LibraryFilters, 
-    AddRuleModal 
-  } from '$lib/components/library';
+  import LibraryFilters from '$lib/components/library/LibraryFilters.svelte';
+  import ServiceRuleCard from '$lib/components/library/ServiceRuleCard.svelte';
+  import AddRuleModal from '$lib/components/library/AddRuleModal.svelte';
 
   let showAddModal = $state(false);
-  let selectedIndex = $state(0);
+  let selectedRuleId = $state<string | null>(null);
 
-  // Получаем текущий выбранный сервис
-  let selectedRule = $derived(libraryStore.filteredRules[selectedIndex]);
-
+  // Load rules on mount
   $effect(() => {
     libraryStore.load();
   });
 
-  // Сбрасываем индекс при изменении фильтров
-  $effect(() => {
-    // Подписываемся на изменения filteredRules
-    const _ = libraryStore.filteredRules.length;
-    // Корректируем индекс если он выходит за границы
-    if (selectedIndex >= libraryStore.filteredRules.length) {
-      selectedIndex = Math.max(0, libraryStore.filteredRules.length - 1);
-    }
+  // Stats
+  let stats = $derived({
+    total: libraryStore.rules.length,
+    enabled: libraryStore.enabledCount,
+    accessible: libraryStore.accessibleCount,
+    blocked: libraryStore.blockedCount,
+    filtered: libraryStore.filteredRules.length
   });
-
-  function handleKeydown(event: KeyboardEvent) {
-    // Игнорируем если открыт модал или фокус в input
-    if (showAddModal) return;
-    const target = event.target as HTMLElement;
-    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
-      return;
-    }
-
-    const rulesCount = libraryStore.filteredRules.length;
-    if (rulesCount === 0) return;
-
-    switch (event.key) {
-      case 'ArrowUp':
-        event.preventDefault();
-        selectedIndex = selectedIndex > 0 ? selectedIndex - 1 : rulesCount - 1;
-        scrollToSelected();
-        break;
-      case 'ArrowDown':
-        event.preventDefault();
-        selectedIndex = selectedIndex < rulesCount - 1 ? selectedIndex + 1 : 0;
-        scrollToSelected();
-        break;
-      case 'Enter':
-        event.preventDefault();
-        if (selectedRule) {
-          // Открываем детали/редактирование — пока просто фокусируем карточку
-          const card = document.querySelector(`[data-rule-id="${selectedRule.id}"]`);
-          if (card) {
-            (card as HTMLElement).click();
-          }
-        }
-        break;
-      case 'c':
-      case 'C':
-      case 'с': // Русская 'с'
-      case 'С':
-        // Проверяем что нет модификаторов (Ctrl+C — копирование)
-        if (!event.ctrlKey && !event.metaKey && !event.altKey) {
-          event.preventDefault();
-          if (selectedRule && selectedRule.status !== 'checking') {
-            libraryStore.checkRule(selectedRule.id);
-          }
-        }
-        break;
-    }
-  }
-
-  function scrollToSelected() {
-    // Прокручиваем к выбранному элементу
-    requestAnimationFrame(() => {
-      const selected = document.querySelector(`[data-rule-index="${selectedIndex}"]`);
-      if (selected) {
-        selected.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-      }
-    });
-  }
 </script>
 
-<svelte:window onkeydown={handleKeydown} />
-
-<svelte:head>
-  <title>Library | Isolate</title>
-</svelte:head>
-
-<div class="flex flex-col h-full p-6 space-y-6">
+<div class="h-full flex flex-col">
   <!-- Header -->
-  <div class="flex items-center justify-between">
-    <div>
-      <h1 class="text-2xl font-bold text-white">Library</h1>
-      <p class="text-sm text-zinc-400 mt-1">
-        Управление сервисами и методами доступа
-      </p>
-    </div>
-    
-    <div class="flex items-center gap-4">
-      <!-- Stats -->
-      <div class="flex items-center gap-4 text-sm">
-        <div class="flex items-center gap-2">
-          <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
-          <span class="text-zinc-400">
-            <span class="text-white font-medium">{libraryStore.accessibleCount}</span> доступно
-          </span>
-        </div>
-        <div class="flex items-center gap-2">
-          <span class="w-2 h-2 rounded-full bg-red-400"></span>
-          <span class="text-zinc-400">
-            <span class="text-white font-medium">{libraryStore.blockedCount}</span> заблокировано
-          </span>
-        </div>
+  <div class="flex-shrink-0 px-6 py-4 border-b border-zinc-800">
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-2xl font-bold text-white">Library</h1>
+        <p class="text-sm text-zinc-400 mt-1">
+          Управление правилами доступа к сервисам
+        </p>
       </div>
-
-      <!-- Add button -->
-      <button
-        type="button"
-        class="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white
-               bg-emerald-600 hover:bg-emerald-500 rounded-lg
-               transition-colors duration-150"
-        onclick={() => showAddModal = true}
-      >
-        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-        </svg>
-        Добавить
-      </button>
+      
+      <!-- Stats -->
+      <div class="flex items-center gap-4">
+        <div class="flex items-center gap-2 px-3 py-2 bg-zinc-900/50 border border-zinc-800 rounded-lg">
+          <span class="text-xs text-zinc-400">Всего:</span>
+          <span class="text-sm font-semibold text-white">{stats.total}</span>
+        </div>
+        <div class="flex items-center gap-2 px-3 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
+          <span class="text-xs text-emerald-400">Доступно:</span>
+          <span class="text-sm font-semibold text-emerald-400">{stats.accessible}</span>
+        </div>
+        <div class="flex items-center gap-2 px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-lg">
+          <span class="text-xs text-red-400">Заблокировано:</span>
+          <span class="text-sm font-semibold text-red-400">{stats.blocked}</span>
+        </div>
+        
+        <!-- Add Rule Button -->
+        <button
+          type="button"
+          class="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 
+                 text-white text-sm font-medium rounded-lg
+                 transition-colors duration-150"
+          onclick={() => showAddModal = true}
+          aria-label="Добавить правило"
+        >
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+          </svg>
+          Добавить правило
+        </button>
+      </div>
     </div>
   </div>
 
   <!-- Filters -->
-  <LibraryFilters />
+  <div class="flex-shrink-0 px-6 py-4">
+    <LibraryFilters />
+  </div>
 
   <!-- Content -->
-  <div class="flex-1 overflow-auto">
+  <div class="flex-1 overflow-y-auto px-6 pb-6">
     {#if libraryStore.loading}
-      <!-- Skeleton loading -->
-      <div class="space-y-3" role="status" aria-label="Загрузка...">
-        {#each Array(5) as _}
-          <div class="flex items-center gap-4 p-4 bg-zinc-900/50 border border-zinc-800 rounded-xl animate-pulse">
-            <div class="w-12 h-12 bg-zinc-800 rounded-xl"></div>
-            <div class="flex-1 space-y-2">
-              <div class="h-4 w-32 bg-zinc-800 rounded"></div>
-              <div class="h-3 w-48 bg-zinc-800 rounded"></div>
-            </div>
-            <div class="h-8 w-32 bg-zinc-800 rounded-lg"></div>
-          </div>
-        {/each}
+      <!-- Loading State -->
+      <div class="flex items-center justify-center h-64">
+        <div class="flex flex-col items-center gap-3">
+          <svg class="w-8 h-8 text-emerald-400 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <p class="text-sm text-zinc-400">Загрузка правил...</p>
+        </div>
       </div>
     {:else if libraryStore.error}
-      <!-- Error state -->
-      <div class="flex flex-col items-center justify-center py-16 text-center">
-        <div class="w-16 h-16 flex items-center justify-center bg-red-500/10 rounded-full mb-4">
-          <svg class="w-8 h-8 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-          </svg>
+      <!-- Error State -->
+      <div class="flex items-center justify-center h-64">
+        <div class="max-w-md w-full bg-red-500/10 border border-red-500/30 rounded-2xl p-6 text-center">
+          <div class="w-14 h-14 mx-auto mb-4 rounded-full bg-red-500/20 border border-red-500/30 flex items-center justify-center">
+            <svg class="w-7 h-7 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                    d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h3 class="text-lg font-semibold text-zinc-100 mb-2">Ошибка загрузки</h3>
+          <p class="text-sm text-red-300 mb-6">{libraryStore.error}</p>
+          <button
+            type="button"
+            class="inline-flex items-center gap-2 px-5 py-2.5 bg-red-500/20 border border-red-500/30 rounded-xl
+                   text-red-400 text-sm font-medium
+                   hover:bg-red-500/30 hover:border-red-500/40
+                   transition-all duration-200"
+            onclick={() => libraryStore.load()}
+          >
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Повторить
+          </button>
         </div>
-        <h3 class="text-lg font-medium text-white mb-2">Ошибка загрузки</h3>
-        <p class="text-sm text-zinc-400 mb-4">{libraryStore.error}</p>
-        <button
-          type="button"
-          class="px-4 py-2 text-sm font-medium text-white bg-zinc-800 hover:bg-zinc-700 rounded-lg"
-          onclick={() => libraryStore.load()}
-        >
-          Повторить
-        </button>
       </div>
     {:else if libraryStore.filteredRules.length === 0}
-      <!-- Empty state -->
-      <div class="flex flex-col items-center justify-center py-16 text-center">
-        <div class="w-16 h-16 flex items-center justify-center bg-zinc-800 rounded-full mb-4">
-          <svg class="w-8 h-8 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                  d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-          </svg>
+      <!-- Empty State -->
+      <div class="flex items-center justify-center h-64">
+        <div class="text-center max-w-md">
+          <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-zinc-800 flex items-center justify-center">
+            <svg class="w-8 h-8 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+          </div>
+          
+          {#if stats.total === 0}
+            <h3 class="text-lg font-semibold text-zinc-100 mb-2">Нет правил</h3>
+            <p class="text-sm text-zinc-400 mb-6">
+              Добавьте первое правило для управления доступом к сервисам
+            </p>
+            <button
+              type="button"
+              class="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 
+                     text-white text-sm font-medium rounded-lg
+                     transition-colors duration-150"
+              onclick={() => showAddModal = true}
+            >
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+              </svg>
+              Добавить правило
+            </button>
+          {:else}
+            <h3 class="text-lg font-semibold text-zinc-100 mb-2">Ничего не найдено</h3>
+            <p class="text-sm text-zinc-400 mb-6">
+              Попробуйте изменить фильтры или поисковый запрос
+            </p>
+            <button
+              type="button"
+              class="inline-flex items-center gap-2 px-5 py-2.5 bg-zinc-800 hover:bg-zinc-700 
+                     text-zinc-300 text-sm font-medium rounded-lg border border-zinc-700
+                     transition-colors duration-150"
+              onclick={() => libraryStore.clearFilters()}
+            >
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+              Сбросить фильтры
+            </button>
+          {/if}
         </div>
-        <h3 class="text-lg font-medium text-white mb-2">
-          {libraryStore.rules.length === 0 ? 'Библиотека пуста' : 'Ничего не найдено'}
-        </h3>
-        <p class="text-sm text-zinc-400 mb-4">
-          {libraryStore.rules.length === 0 
-            ? 'Добавьте первый сервис для начала работы' 
-            : 'Попробуйте изменить параметры фильтрации'}
-        </p>
-        {#if libraryStore.rules.length === 0}
-          <button
-            type="button"
-            class="px-4 py-2 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg"
-            onclick={() => showAddModal = true}
-          >
-            Добавить сервис
-          </button>
-        {:else}
-          <button
-            type="button"
-            class="px-4 py-2 text-sm font-medium text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-lg"
-            onclick={() => libraryStore.clearFilters()}
-          >
-            Сбросить фильтры
-          </button>
-        {/if}
       </div>
     {:else}
-      <!-- Rules list -->
-      <div class="space-y-3" role="list" aria-label="Список сервисов">
+      <!-- Rules List -->
+      <div class="space-y-3" role="list" aria-label="Список правил библиотеки">
         {#each libraryStore.filteredRules as rule, index (rule.id)}
           <ServiceRuleCard 
-            {rule} 
-            isSelected={index === selectedIndex}
+            {rule}
+            isSelected={selectedRuleId === rule.id}
+            onclick={() => selectedRuleId = rule.id}
             data-rule-id={rule.id}
             data-rule-index={index}
-            onclick={() => selectedIndex = index}
           />
         {/each}
       </div>
+      
+      <!-- Results count -->
+      {#if stats.filtered < stats.total}
+        <div class="mt-4 text-center">
+          <p class="text-sm text-zinc-400">
+            Показано {stats.filtered} из {stats.total} правил
+          </p>
+        </div>
+      {/if}
     {/if}
   </div>
-
-  <!-- Add Rule Modal -->
-  <AddRuleModal isOpen={showAddModal} onClose={() => showAddModal = false} />
-
-  <!-- Keyboard shortcuts hint -->
-  {#if libraryStore.filteredRules.length > 0 && !libraryStore.loading}
-    <div class="flex items-center justify-center gap-6 py-3 border-t border-zinc-800 text-xs text-zinc-400">
-      <div class="flex items-center gap-1.5">
-        <kbd class="px-1.5 py-0.5 bg-zinc-800 border border-zinc-700 rounded text-zinc-400">↑</kbd>
-        <kbd class="px-1.5 py-0.5 bg-zinc-800 border border-zinc-700 rounded text-zinc-400">↓</kbd>
-        <span>Навигация</span>
-      </div>
-      <div class="flex items-center gap-1.5">
-        <kbd class="px-1.5 py-0.5 bg-zinc-800 border border-zinc-700 rounded text-zinc-400">Enter</kbd>
-        <span>Открыть</span>
-      </div>
-      <div class="flex items-center gap-1.5">
-        <kbd class="px-1.5 py-0.5 bg-zinc-800 border border-zinc-700 rounded text-zinc-400">C</kbd>
-        <span>Проверить</span>
-      </div>
-    </div>
-  {/if}
 </div>
+
+<!-- Add Rule Modal -->
+<AddRuleModal 
+  bind:isOpen={showAddModal}
+  onClose={() => showAddModal = false}
+/>

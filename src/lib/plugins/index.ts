@@ -54,9 +54,11 @@ export type {
   WidgetDefinition,
   WidgetSize,
   SettingsPanelDefinition,
-  UIPluginContributes,
+  PluginContributes,
   ServiceDefinition,
   ServiceEndpoint,
+  HostlistDefinition,
+  StrategyDefinition,
   LoadedUIPlugin,
   PluginSlotLocation,
   PluginComponentProps

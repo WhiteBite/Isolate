@@ -62,7 +62,7 @@ export const widgetsBySlot = derived(uiPlugins, ($plugins) => {
   };
   
   for (const plugin of $plugins) {
-    if (!plugin.enabled || !plugin.manifest.contributes.widgets) continue;
+    if (!plugin.enabled || !plugin.manifest.contributes?.widgets) continue;
     
     const context = createPluginContext(plugin.manifest);
     
@@ -185,8 +185,8 @@ export async function loadPluginComponents(manifest: PluginManifest, pluginPath:
     components: new Map()
   };
   
-  const widgets = manifest.contributes.widgets ?? [];
-  const settings = manifest.contributes.settings ?? [];
+  const widgets = manifest.contributes?.widgets ?? [];
+  const settings = manifest.contributes?.settings ?? [];
   
   // Load all widget components
   for (const widget of widgets) {

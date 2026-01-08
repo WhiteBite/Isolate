@@ -5,7 +5,7 @@
   import { waitForBackend } from '$lib/utils/backend';
   import { toasts } from '$lib/stores/toast';
   import { Spinner, BaseModal } from '$lib/components';
-  import { installedPlugins, loadPluginsFromBackend, installPlugin, reloadAllPlugins } from '$lib/stores/plugins';
+  import { installedPlugins, loadPluginsFromBackend, installPlugin, reloadAllPlugins, setPluginEnabled } from '$lib/stores/plugins';
   import { mockMarketPlugins } from '$lib/mocks';
   import { t } from '$lib/i18n';
 
@@ -85,8 +85,22 @@
 
   async function toggle(p: LoadedPlugin) {
     const i = localPlugins.findIndex(x => x.manifest.id === p.manifest.id);
-    if (i >= 0) { localPlugins[i] = { ...localPlugins[i], enabled: !localPlugins[i].enabled }; localPlugins = [...localPlugins];
-      try { const inv = getInvoke(); if (inv) await inv('set_plugin_enabled', { pluginId: p.manifest.id, enabled: localPlugins[i].enabled }); } catch {} }
+    if (i >= 0) {
+      const newEnabled = !localPlugins[i].enabled;
+      
+      try {
+        // Call the synchronized method
+        await setPluginEnabled(p.manifest.id, newEnabled);
+        
+        // Update local state
+        localPlugins[i] = { ...localPlugins[i], enabled: newEnabled };
+        localPlugins = [...localPlugins];
+        
+        toasts.success(`${p.manifest.name} ${newEnabled ? t('plugins.buttons.enabled').toLowerCase() : t('plugins.buttons.disabled').toLowerCase()}`);
+      } catch (error) {
+        toasts.error(`Failed to update plugin: ${error}`);
+      }
+    }
   }
 
   async function openDeleteModal(p: LoadedPlugin) {

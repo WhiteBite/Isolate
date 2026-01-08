@@ -567,6 +567,7 @@ pub fn run() {
             commands::clear_service_cache,
             commands::register_custom_service,
             commands::unregister_custom_service,
+            commands::check_service_availability,
             // Service Health History commands
             commands::get_service_health_history,
             commands::get_service_health_stats,

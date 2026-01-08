@@ -12,6 +12,8 @@ export interface StrategyTestState {
   latency: number | null;
   progress: number;
   error?: string;
+  isPlugin?: boolean;
+  sourcePlugin?: string;
 }
 
 export interface ServiceProblem {
@@ -21,6 +23,7 @@ export interface ServiceProblem {
   icon: string;
   description: string;
   category: 'video' | 'social' | 'gaming' | 'other';
+  isPluginService?: boolean; // Flag for services from plugins
 }
 
 // Backend event types
@@ -38,6 +41,8 @@ interface TroubleshootStrategyResult {
   success: boolean;
   latency_ms: number | null;
   error: string | null;
+  is_plugin: boolean;
+  source_plugin: string | null;
 }
 
 interface TroubleshootComplete {
@@ -257,7 +262,9 @@ class TroubleshootStore {
         status: data.success ? 'success' : 'failed',
         latency: data.latency_ms,
         progress: 100,
-        error: data.error || undefined
+        error: data.error || undefined,
+        isPlugin: data.is_plugin,
+        sourcePlugin: data.source_plugin || undefined
       };
       
       if (existingIndex >= 0) {

@@ -1,5 +1,6 @@
 import { writable } from 'svelte/store';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import type { PluginSlotLocation } from '$lib/types/plugin';
 import { logger } from '$lib/utils/logger';
 
@@ -138,15 +139,98 @@ export function getTypeIcon(type: PluginType): string {
 // Start with empty array - plugins are loaded from backend
 export const installedPlugins = writable<PluginInfo[]>([]);
 
-// Auto-initialize store from backend when module loads
-// This ensures plugins are available as soon as possible
-if (typeof window !== 'undefined') {
-  loadPluginsFromBackend().then(plugins => {
-    installedPlugins.set(plugins);
-  }).catch(err => {
-    logger.warn('Plugins', 'Auto-init failed:', err);
-    // Keep empty array as fallback
-  });
+// Track loading state for UI indicators
+export const pluginsLoading = writable<boolean>(false);
+export const pluginsError = writable<string | null>(null);
+
+// Track initialization state
+let storeInitialized = false;
+let eventListenerUnlisten: (() => void) | null = null;
+
+/**
+ * Initialize the plugins store
+ * Loads plugins from backend and sets up event listeners
+ */
+export async function initPluginsStore(): Promise<void> {
+  // Prevent multiple initializations
+  if (storeInitialized) {
+    logger.log('Plugins', 'Store already initialized, skipping');
+    return;
+  }
+  
+  // Set loading state
+  pluginsLoading.set(true);
+  pluginsError.set(null);
+  
+  try {
+    logger.log('Plugins', 'Initializing plugins store...');
+    
+    // Load plugins from backend
+    const plugins = await loadPluginsFromBackend();
+    if (plugins.length > 0) {
+      installedPlugins.set(plugins);
+      logger.log('Plugins', `Initialized with ${plugins.length} plugins`);
+    } else {
+      logger.log('Plugins', 'No plugins loaded from backend');
+    }
+    
+    // Set up event listener for plugin state changes
+    if (typeof window !== 'undefined' && '__TAURI__' in window) {
+      try {
+        // Clean up previous listener if exists
+        if (eventListenerUnlisten) {
+          eventListenerUnlisten();
+          eventListenerUnlisten = null;
+        }
+        
+        eventListenerUnlisten = await listen<{ plugin_id: string; enabled: boolean }>('plugin:state_changed', (event) => {
+          logger.log('Plugins', `State changed event received for ${event.payload.plugin_id}: ${event.payload.enabled}`);
+          
+          installedPlugins.update(plugins => {
+            return plugins.map(plugin => {
+              if (plugin.id === event.payload.plugin_id) {
+                return { ...plugin, enabled: event.payload.enabled };
+              }
+              return plugin;
+            });
+          });
+        });
+        logger.log('Plugins', 'Event listener registered for plugin:state_changed');
+      } catch (error) {
+        logger.warn('Plugins', 'Failed to setup event listener:', error);
+      }
+    }
+    
+    // Mark as initialized
+    storeInitialized = true;
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    logger.error('Plugins', 'Failed to initialize store:', errorMsg);
+    pluginsError.set(errorMsg);
+    // Don't throw - allow app to continue with empty plugins
+  } finally {
+    pluginsLoading.set(false);
+  }
+}
+
+/**
+ * Cleanup the plugins store
+ * Removes event listeners and resets state
+ */
+export function cleanupPluginsStore(): void {
+  if (eventListenerUnlisten) {
+    eventListenerUnlisten();
+    eventListenerUnlisten = null;
+    logger.log('Plugins', 'Event listener cleaned up');
+  }
+  storeInitialized = false;
+}
+
+/**
+ * Check if plugins store has been initialized
+ */
+export function isPluginsStoreInitialized(): boolean {
+  return storeInitialized;
 }
 
 // Function to update plugin settings
@@ -194,6 +278,15 @@ export async function loadPluginsFromBackend(): Promise<PluginInfo[]> {
     const backendPlugins = await invoke<BackendPluginInfo[]>('get_all_plugins_cmd');
     logger.log('Plugins', 'Raw backend data:', JSON.stringify(backendPlugins, null, 2));
     
+    // Load saved plugin states
+    let savedStates: Record<string, boolean> = {};
+    try {
+      savedStates = await invoke<Record<string, boolean>>('get_all_plugin_states');
+      logger.log('Plugins', `Loaded ${Object.keys(savedStates).length} saved plugin states`);
+    } catch (error) {
+      logger.warn('Plugins', 'Failed to load saved plugin states:', error);
+    }
+    
     // Map backend structure to frontend PluginInfo
     // Filter out plugins with errors or invalid data
     const mapped = backendPlugins
@@ -229,7 +322,12 @@ export async function loadPluginsFromBackend(): Promise<PluginInfo[]> {
         // Get icon from service.icon or use default
         const icon = bp.manifest.service?.icon || getDefaultIcon(pluginType);
         
-        logger.log('Plugins', `Mapping ${bp.manifest.id}: type=${rawType} -> ${pluginType}, icon=${icon}`);
+        // Use saved state if available, otherwise use manifest enabled state
+        const enabled = savedStates[bp.manifest.id] !== undefined 
+          ? savedStates[bp.manifest.id] 
+          : bp.enabled;
+        
+        logger.log('Plugins', `Mapping ${bp.manifest.id}: type=${rawType} -> ${pluginType}, icon=${icon}, enabled=${enabled}`);
         
         return {
           id: bp.manifest.id,
@@ -240,7 +338,7 @@ export async function loadPluginsFromBackend(): Promise<PluginInfo[]> {
           icon,
           type: pluginType,
           level: getPluginLevel(pluginType),
-          enabled: bp.enabled,
+          enabled,
           installed: true,
         };
       });
@@ -265,16 +363,49 @@ function getDefaultIcon(type: PluginType): string {
   return icons[type] || '📦';
 }
 
+// Function to set plugin enabled state (synced with backend)
+export async function setPluginEnabled(pluginId: string, enabled: boolean): Promise<void> {
+  try {
+    const ready = await invoke<boolean>('is_backend_ready');
+    if (!ready) {
+      throw new Error('Backend not ready');
+    }
+    
+    // Call backend command to persist state
+    // Backend will emit 'plugin:state_changed' event which updates the store
+    await invoke('set_plugin_enabled', { pluginId, enabled });
+    
+    // Also update local store immediately for responsive UI
+    // (event listener will also update, but this ensures immediate feedback)
+    installedPlugins.update(plugins => {
+      return plugins.map(plugin => {
+        if (plugin.id === pluginId) {
+          return { ...plugin, enabled };
+        }
+        return plugin;
+      });
+    });
+    
+    logger.log('Plugins', `Plugin ${pluginId} ${enabled ? 'enabled' : 'disabled'}`);
+  } catch (error) {
+    logger.error('Plugins', `Failed to set plugin enabled state:`, error);
+    throw error;
+  }
+}
+
 // Function to toggle plugin enabled state
-export function togglePlugin(pluginId: string) {
-  installedPlugins.update(plugins => {
-    return plugins.map(plugin => {
-      if (plugin.id === pluginId) {
-        return { ...plugin, enabled: !plugin.enabled };
-      }
-      return plugin;
+export async function togglePlugin(pluginId: string): Promise<void> {
+  const plugins = await new Promise<PluginInfo[]>(resolve => {
+    const unsubscribe = installedPlugins.subscribe(value => {
+      unsubscribe();
+      resolve(value);
     });
   });
+  
+  const plugin = plugins.find(p => p.id === pluginId);
+  if (plugin) {
+    await setPluginEnabled(pluginId, !plugin.enabled);
+  }
 }
 
 // Function to install a plugin
@@ -345,6 +476,89 @@ export async function reloadPlugin(pluginId: string): Promise<boolean> {
     return result;
   } catch (error) {
     logger.error('Plugins', `Failed to reload plugin ${pluginId}:`, error);
+    throw error;
+  }
+}
+
+// ============================================================================
+// Plugin Services
+// ============================================================================
+
+export interface PluginServiceEndpoint {
+  id: string;
+  name: string;
+  url: string;
+  method: string;
+}
+
+export interface PluginServiceDefinition {
+  id: string;
+  name: string;
+  icon: string;
+  category: string;
+  description?: string;
+  endpoints: PluginServiceEndpoint[];
+}
+
+export interface PluginServiceStatus {
+  service_id: string;
+  accessible: boolean;
+  avg_latency_ms?: number;
+  endpoint_results: Array<{
+    endpoint_id: string;
+    success: boolean;
+    latency_ms?: number;
+    error?: string;
+  }>;
+}
+
+// Function to get all services from plugins
+export async function getPluginServices(): Promise<PluginServiceDefinition[]> {
+  try {
+    const ready = await invoke<boolean>('is_backend_ready');
+    if (!ready) {
+      logger.warn('Plugins', 'Backend not ready for getPluginServices');
+      return [];
+    }
+    
+    const services = await invoke<PluginServiceDefinition[]>('get_plugin_services');
+    logger.log('Plugins', `Loaded ${services.length} services from plugins`);
+    return services;
+  } catch (error) {
+    logger.error('Plugins', 'Failed to get plugin services:', error);
+    return [];
+  }
+}
+
+// Function to check a specific plugin service
+export async function checkPluginService(serviceId: string): Promise<PluginServiceStatus | null> {
+  try {
+    const ready = await invoke<boolean>('is_backend_ready');
+    if (!ready) {
+      throw new Error('Backend not ready');
+    }
+    
+    const status = await invoke<PluginServiceStatus>('check_plugin_service', { serviceId });
+    return status;
+  } catch (error) {
+    logger.error('Plugins', `Failed to check plugin service ${serviceId}:`, error);
+    throw error;
+  }
+}
+
+// Function to check all plugin services
+export async function checkAllPluginServices(): Promise<PluginServiceStatus[]> {
+  try {
+    const ready = await invoke<boolean>('is_backend_ready');
+    if (!ready) {
+      throw new Error('Backend not ready');
+    }
+    
+    const results = await invoke<PluginServiceStatus[]>('check_all_plugin_services');
+    logger.log('Plugins', `Checked ${results.length} plugin services`);
+    return results;
+  } catch (error) {
+    logger.error('Plugins', 'Failed to check all plugin services:', error);
     throw error;
   }
 }

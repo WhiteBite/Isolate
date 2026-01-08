@@ -116,6 +116,12 @@
   let hotkeys = $state<HotkeysState>(hotkeysStore.get());
   let recordingHotkey = $state<keyof HotkeysState | null>(null);
   let hotkeyConflict = $state<string | null>(null);
+  
+  // Track unsaved changes for draft settings
+  let initialDomainExceptions = $state<string[]>([]);
+  let hasUnsavedChanges = $derived(
+    JSON.stringify(localSettings.domainExceptions) !== JSON.stringify(initialDomainExceptions)
+  );
 
   // Tabs configuration - labels are computed via t() in template
   const tabs: { id: TabId; labelKey: string; icon: string }[] = [
@@ -184,6 +190,8 @@
       const loaded = await invoke<Partial<AppSettings>>('get_settings').catch(() => ({}));
       if (loaded) {
         localSettings = { ...localSettings, ...loaded };
+        // Store initial values for unsaved changes tracking
+        initialDomainExceptions = [...((loaded as AppSettings).domainExceptions || [])];
       }
       
       // Load game filter mode separately (in case it's not in get_settings response)
@@ -211,6 +219,13 @@
     }
   }
 
+  /**
+   * Save settings that require explicit user action (Save button).
+   * Used for complex settings like domain exceptions, theme, hotkeys.
+   * Shows toast notification on success/failure.
+   * 
+   * @see docs/settings-ux.md for save model guidelines
+   */
   async function saveSettings() {
     if (!browser) return;
     
@@ -233,6 +248,8 @@
       }
       
       saveMessage = { text: t('settings.messages.saved'), type: 'success' };
+      // Update initial values after successful save
+      initialDomainExceptions = [...localSettings.domainExceptions];
       setTimeout(() => { saveMessage = null; }, 3000);
     } catch (e) {
       console.error('Failed to save settings:', e);
@@ -249,6 +266,13 @@
     }
   }
 
+  /**
+   * Auto-save individual setting to backend immediately.
+   * Used for simple, non-critical settings that users expect immediate effect.
+   * No toast notification to avoid notification fatigue.
+   * 
+   * @see docs/settings-ux.md for save model guidelines
+   */
   async function setSetting(key: string, value: unknown) {
     if (!browser || !isTauri) return;
     
@@ -576,7 +600,8 @@
       <button
         onclick={saveSettings}
         disabled={saving}
-        class="px-5 py-2.5 bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 text-white rounded-xl font-medium transition-all duration-200 flex items-center gap-2 shadow-lg shadow-indigo-500/20"
+        class="px-5 py-2.5 bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 text-white rounded-xl font-medium transition-all duration-200 flex items-center gap-2 shadow-lg shadow-indigo-500/20 {hasUnsavedChanges ? 'ring-2 ring-amber-400/50' : ''}"
+        title="Save domain exceptions, hotkeys, and other draft settings"
       >
         {#if saving}
           <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -589,6 +614,9 @@
           </svg>
         {/if}
         {t('common.save')}
+        {#if hasUnsavedChanges}
+          <span class="w-2 h-2 bg-amber-400 rounded-full animate-pulse"></span>
+        {/if}
       </button>
     </div>
   </div>
@@ -638,22 +666,50 @@
         <div>
           <h2 class="text-xl font-semibold text-text-primary mb-6">{t('settings.general.title')}</h2>
           
+          <!-- Info: Auto-save explanation -->
+          <div class="mb-6 p-4 bg-indigo-500/5 rounded-xl border border-indigo-500/20">
+            <p class="text-indigo-400 text-sm flex items-start gap-2">
+              <svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+              <span>
+                Settings on this page are <strong>saved automatically</strong> when changed. 
+                The Save button is for domain exceptions and hotkeys only.
+              </span>
+            </p>
+          </div>
+          
           <div class="space-y-4">
+            <!-- ============================================ -->
+            <!-- AUTO-SAVE SETTINGS (immediate apply)         -->
+            <!-- See docs/settings-ux.md for save model       -->
+            <!-- ============================================ -->
+            
             <!-- Autostart Toggle -->
             <div class="flex items-center justify-between p-4 bg-void-100 rounded-xl border border-glass-border">
-              <div>
-                <p class="text-text-primary font-medium">{t('settings.general.autostart')}</p>
-                <p class="text-text-secondary text-sm">{t('settings.general.autostartDesc')}</p>
+              <div class="flex items-start gap-2">
+                <div>
+                  <p class="text-text-primary font-medium">{t('settings.general.autostart')}</p>
+                  <p class="text-text-secondary text-sm">{t('settings.general.autostartDesc')}</p>
+                </div>
               </div>
-              <button
-                aria-label="Toggle auto-start"
-                role="switch"
-                aria-checked={localSettings.autoStart}
-                onclick={() => { localSettings.autoStart = !localSettings.autoStart; setSetting('autoStart', localSettings.autoStart); }}
-                class="relative w-12 h-6 rounded-full transition-colors duration-200 {localSettings.autoStart ? 'bg-indigo-500' : 'bg-void-200'}"
-              >
-                <span class="absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform duration-200 {localSettings.autoStart ? 'translate-x-6' : 'translate-x-0'}"></span>
-              </button>
+              <div class="flex items-center gap-3">
+                <span class="text-xs text-emerald-400/70 flex items-center gap-1" title="Auto-saved">
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                  </svg>
+                  auto
+                </span>
+                <button
+                  aria-label="Toggle auto-start"
+                  role="switch"
+                  aria-checked={localSettings.autoStart}
+                  onclick={() => { localSettings.autoStart = !localSettings.autoStart; setSetting('autoStart', localSettings.autoStart); }}
+                  class="relative w-12 h-6 rounded-full transition-colors duration-200 {localSettings.autoStart ? 'bg-indigo-500' : 'bg-void-200'}"
+                >
+                  <span class="absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform duration-200 {localSettings.autoStart ? 'translate-x-6' : 'translate-x-0'}"></span>
+                </button>
+              </div>
             </div>
 
             <!-- Language Dropdown -->
@@ -662,17 +718,25 @@
                 <p class="text-text-primary font-medium">{t('settings.general.language')}</p>
                 <p class="text-text-secondary text-sm">{t('settings.general.languageDesc')}</p>
               </div>
-              <select 
-                bind:value={localSettings.language}
-                onchange={() => { 
-                  setSetting('language', localSettings.language);
-                  setLocale(localSettings.language as Locale);
-                }}
-                class="bg-void-200 text-text-primary rounded-lg px-4 py-2 border border-glass-border focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20 focus:outline-none cursor-pointer"
-              >
-                <option value="ru">{t('languages.ru')}</option>
-                <option value="en">{t('languages.en')}</option>
-              </select>
+              <div class="flex items-center gap-3">
+                <span class="text-xs text-emerald-400/70 flex items-center gap-1" title="Auto-saved">
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                  </svg>
+                  auto
+                </span>
+                <select 
+                  bind:value={localSettings.language}
+                  onchange={() => { 
+                    setSetting('language', localSettings.language);
+                    setLocale(localSettings.language as Locale);
+                  }}
+                  class="bg-void-200 text-text-primary rounded-lg px-4 py-2 border border-glass-border focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20 focus:outline-none cursor-pointer"
+                >
+                  <option value="ru">{t('languages.ru')}</option>
+                  <option value="en">{t('languages.en')}</option>
+                </select>
+              </div>
             </div>
 
             <!-- Theme Dropdown -->
@@ -681,15 +745,23 @@
                 <p class="text-text-primary font-medium">{t('settings.general.theme')}</p>
                 <p class="text-text-secondary text-sm">{t('settings.general.themeDesc')}</p>
               </div>
-              <select 
-                bind:value={localSettings.theme}
-                onchange={(e) => handleThemeChange(e.currentTarget.value as Theme)}
-                class="bg-void-200 text-text-primary rounded-lg px-4 py-2 border border-glass-border focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20 focus:outline-none cursor-pointer"
-              >
-                <option value="dark">{t('themes.dark')}</option>
-                <option value="light">{t('themes.light')}</option>
-                <option value="system">{t('themes.system')}</option>
-              </select>
+              <div class="flex items-center gap-3">
+                <span class="text-xs text-emerald-400/70 flex items-center gap-1" title="Auto-saved">
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                  </svg>
+                  auto
+                </span>
+                <select 
+                  bind:value={localSettings.theme}
+                  onchange={(e) => handleThemeChange(e.currentTarget.value as Theme)}
+                  class="bg-void-200 text-text-primary rounded-lg px-4 py-2 border border-glass-border focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20 focus:outline-none cursor-pointer"
+                >
+                  <option value="dark">{t('themes.dark')}</option>
+                  <option value="light">{t('themes.light')}</option>
+                  <option value="system">{t('themes.system')}</option>
+                </select>
+              </div>
             </div>
 
             <!-- Minimize to Tray Toggle -->
@@ -698,15 +770,23 @@
                 <p class="text-text-primary font-medium">{t('settings.general.minimizeToTray')}</p>
                 <p class="text-text-secondary text-sm">{t('settings.general.minimizeToTrayDesc')}</p>
               </div>
-              <button
-                aria-label="Toggle minimize to tray"
-                role="switch"
-                aria-checked={localSettings.minimizeToTray}
-                onclick={() => { localSettings.minimizeToTray = !localSettings.minimizeToTray; setSetting('minimizeToTray', localSettings.minimizeToTray); }}
-                class="relative w-12 h-6 rounded-full transition-colors duration-200 {localSettings.minimizeToTray ? 'bg-indigo-500' : 'bg-void-200'}"
-              >
-                <span class="absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform duration-200 {localSettings.minimizeToTray ? 'translate-x-6' : 'translate-x-0'}"></span>
-              </button>
+              <div class="flex items-center gap-3">
+                <span class="text-xs text-emerald-400/70 flex items-center gap-1" title="Auto-saved">
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                  </svg>
+                  auto
+                </span>
+                <button
+                  aria-label="Toggle minimize to tray"
+                  role="switch"
+                  aria-checked={localSettings.minimizeToTray}
+                  onclick={() => { localSettings.minimizeToTray = !localSettings.minimizeToTray; setSetting('minimizeToTray', localSettings.minimizeToTray); }}
+                  class="relative w-12 h-6 rounded-full transition-colors duration-200 {localSettings.minimizeToTray ? 'bg-indigo-500' : 'bg-void-200'}"
+                >
+                  <span class="absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform duration-200 {localSettings.minimizeToTray ? 'translate-x-6' : 'translate-x-0'}"></span>
+                </button>
+              </div>
             </div>
 
             <!-- Notifications Toggle -->
@@ -715,15 +795,23 @@
                 <p class="text-text-primary font-medium">{t('settings.general.notifications')}</p>
                 <p class="text-text-secondary text-sm">{t('settings.general.notificationsDesc')}</p>
               </div>
-              <button
-                aria-label="Toggle notifications"
-                role="switch"
-                aria-checked={localSettings.notifications}
-                onclick={() => { localSettings.notifications = !localSettings.notifications; setSetting('notifications', localSettings.notifications); }}
-                class="relative w-12 h-6 rounded-full transition-colors duration-200 {localSettings.notifications ? 'bg-indigo-500' : 'bg-void-200'}"
-              >
-                <span class="absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform duration-200 {localSettings.notifications ? 'translate-x-6' : 'translate-x-0'}"></span>
-              </button>
+              <div class="flex items-center gap-3">
+                <span class="text-xs text-emerald-400/70 flex items-center gap-1" title="Auto-saved">
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                  </svg>
+                  auto
+                </span>
+                <button
+                  aria-label="Toggle notifications"
+                  role="switch"
+                  aria-checked={localSettings.notifications}
+                  onclick={() => { localSettings.notifications = !localSettings.notifications; setSetting('notifications', localSettings.notifications); }}
+                  class="relative w-12 h-6 rounded-full transition-colors duration-200 {localSettings.notifications ? 'bg-indigo-500' : 'bg-void-200'}"
+                >
+                  <span class="absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform duration-200 {localSettings.notifications ? 'translate-x-6' : 'translate-x-0'}"></span>
+                </button>
+              </div>
             </div>
 
             <!-- ISP Provider Profile -->
@@ -739,7 +827,25 @@
         <div>
           <h2 class="text-xl font-semibold text-text-primary mb-6">{t('settings.routing.title')}</h2>
           
+          <!-- Info: Explicit save required -->
+          <div class="mb-6 p-4 bg-amber-500/5 rounded-xl border border-amber-500/20">
+            <p class="text-amber-400 text-sm flex items-start gap-2">
+              <svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+              </svg>
+              <span>
+                Domain exceptions require clicking <strong>Save</strong> to apply. 
+                You can add multiple domains before saving.
+              </span>
+            </p>
+          </div>
+          
           <div class="space-y-6">
+            <!-- ============================================ -->
+            <!-- EXPLICIT SAVE REQUIRED (draft mode)          -->
+            <!-- See docs/settings-ux.md for save model       -->
+            <!-- ============================================ -->
+            
             <!-- Domain Exceptions -->
             <div class="p-4 bg-void-100 rounded-xl border border-glass-border">
               <div class="mb-4">
@@ -806,7 +912,27 @@
         <div>
           <h2 class="text-xl font-semibold text-text-primary mb-6">{t('settings.hotkeys.title')}</h2>
           
+          <!-- Info: Explicit save required -->
+          <div class="mb-6 p-4 bg-amber-500/5 rounded-xl border border-amber-500/20">
+            <p class="text-amber-400 text-sm flex items-start gap-2">
+              <svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+              </svg>
+              <span>
+                Hotkey changes require clicking <strong>Save</strong> to persist. 
+                Configure all your hotkeys, then save once.
+              </span>
+            </p>
+          </div>
+          
           <div class="space-y-4">
+            <!-- ============================================ -->
+            <!-- EXPLICIT SAVE REQUIRED (draft mode)          -->
+            <!-- Hotkeys are stored in hotkeysStore and       -->
+            <!-- persisted to backend only on Save button     -->
+            <!-- See docs/settings-ux.md for save model       -->
+            <!-- ============================================ -->
+            
             <!-- Hotkey list -->
             {#each HOTKEY_ACTIONS as action}
               <div class="flex items-center justify-between p-4 bg-void-100 rounded-xl border border-glass-border">
@@ -1032,7 +1158,26 @@
         <div>
           <h2 class="text-xl font-semibold text-text-primary mb-6">{t('settings.advanced.title')}</h2>
           
+          <!-- Info: Auto-save explanation -->
+          <div class="mb-6 p-4 bg-indigo-500/5 rounded-xl border border-indigo-500/20">
+            <p class="text-indigo-400 text-sm flex items-start gap-2">
+              <svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+              <span>
+                Advanced settings are <strong>saved automatically</strong> when changed. 
+                Auto-Recovery has its own Save button.
+              </span>
+            </p>
+          </div>
+          
           <div class="space-y-6">
+            <!-- ============================================ -->
+            <!-- AUTO-SAVE SETTINGS (immediate apply)         -->
+            <!-- Exception: Auto-Recovery has own Save button -->
+            <!-- See docs/settings-ux.md for save model       -->
+            <!-- ============================================ -->
+            
             <!-- ============================================ -->
             <!-- SECTION: General Advanced Settings -->
             <!-- ============================================ -->

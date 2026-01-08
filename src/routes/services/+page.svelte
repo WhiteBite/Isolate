@@ -8,6 +8,8 @@
   import { ServiceList, ServiceDetails, ServiceConfigModal, AddServiceModal } from '$lib/components/services';
   import BaseModal from '$lib/components/BaseModal.svelte';
   import { goto } from '$app/navigation';
+  import { getPluginServices, checkPluginService, type PluginServiceDefinition } from '$lib/stores/plugins';
+  import { onMount } from 'svelte';
 
   // Library redirect banner state
   const BANNER_DISMISSED_KEY = 'services-library-banner-dismissed';
@@ -32,6 +34,7 @@
     ping?: number;
     category: string;
     isCustom?: boolean;
+    isPluginService?: boolean; // Flag for plugin services
     error?: string | null;
   }
 
@@ -45,6 +48,7 @@
 
   // State
   let services: ServiceWithStatus[] = $state([]);
+  let pluginServices: PluginServiceDefinition[] = $state([]);
   let selectedId: string | null = $state(null);
   let loading = $state(true);
   let scanning = $state(false);
@@ -98,13 +102,43 @@
   );
 
   // Load services on mount - use onMount to run only once
-  import { onMount } from 'svelte';
   
   onMount(() => {
     loadFromBackend();
+    loadPluginServices();
   });
 
   // ===== Backend Operations =====
+  
+  async function loadPluginServices() {
+    logs.info('services', 'Loading plugin services...');
+    try {
+      pluginServices = await getPluginServices();
+      
+      // Add plugin services to the main services list
+      for (const pluginService of pluginServices) {
+        const serviceWithStatus: ServiceWithStatus = {
+          id: pluginService.id,
+          name: pluginService.name,
+          status: 'unknown',
+          category: pluginService.category || 'other',
+          ping: undefined,
+          isCustom: false,
+          isPluginService: true
+        };
+        
+        // Check if not already in services
+        if (!services.some(s => s.id === pluginService.id)) {
+          services.push(serviceWithStatus);
+        }
+      }
+      
+      services = [...services]; // Trigger reactivity
+      logs.success('services', `Loaded ${pluginServices.length} plugin services`);
+    } catch (e) {
+      logs.warn('services', `Failed to load plugin services: ${e}`);
+    }
+  }
   
   async function loadFromBackend() {
     loading = true;
@@ -222,16 +256,31 @@
     logs.info(id, `Checking service...`);
     
     const { invoke } = await import('@tauri-apps/api/core');
+    
+    // Check if this is a plugin service
+    const isPlugin = services[idx].isPluginService;
+    
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
         const timeoutPromise = new Promise<null>((_, reject) => 
           setTimeout(() => reject(new Error('Timeout')), 10000)
         );
         
-        const result = await Promise.race([
-          invoke<any>('check_single_service', { serviceId: id }),
-          timeoutPromise
-        ]);
+        let result: any;
+        
+        if (isPlugin) {
+          // Use plugin service check
+          result = await Promise.race([
+            checkPluginService(id),
+            timeoutPromise
+          ]);
+        } else {
+          // Use regular service check
+          result = await Promise.race([
+            invoke<any>('check_single_service', { serviceId: id }),
+            timeoutPromise
+          ]);
+        }
         
         if (result) {
           services[idx] = {

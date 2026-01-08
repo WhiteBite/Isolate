@@ -7,10 +7,44 @@ use serde::{Deserialize, Serialize};
 
 use crate::core::errors::IsolateError;
 use crate::state::AppState;
+use crate::plugins::RegisteredStrategy;
 
 // ============================================================================
 // Types
 // ============================================================================
+
+/// Wrapper for testable strategies (builtin or plugin)
+enum TestableStrategy {
+    Builtin(crate::core::models::Strategy),
+    Plugin(RegisteredStrategy),
+}
+
+impl TestableStrategy {
+    fn id(&self) -> &str {
+        match self {
+            TestableStrategy::Builtin(s) => &s.id,
+            TestableStrategy::Plugin(s) => &s.definition.id,
+        }
+    }
+    
+    fn name(&self) -> &str {
+        match self {
+            TestableStrategy::Builtin(s) => &s.name,
+            TestableStrategy::Plugin(s) => &s.definition.name,
+        }
+    }
+    
+    fn is_plugin(&self) -> bool {
+        matches!(self, TestableStrategy::Plugin(_))
+    }
+    
+    fn source_plugin(&self) -> Option<&str> {
+        match self {
+            TestableStrategy::Plugin(s) => s.definition.source_plugin.as_deref(),
+            _ => None,
+        }
+    }
+}
 
 /// Проблема сервиса для диагностики
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -38,6 +72,8 @@ pub struct TroubleshootStrategyResult {
     pub success: bool,
     pub latency_ms: Option<u32>,
     pub error: Option<String>,
+    pub is_plugin: bool,
+    pub source_plugin: Option<String>,
 }
 
 /// Финальный результат troubleshoot
@@ -74,42 +110,86 @@ pub async fn troubleshoot_service(
     let service = services.get(&service_id)
         .ok_or_else(|| IsolateError::Config(format!("Service not found: {}", service_id)))?;
     
-    // Загружаем все стратегии (HashMap<String, Strategy>)
+    // Загружаем builtin стратегии (HashMap<String, Strategy>)
     let strategies_map = state.config_manager.load_strategies().await?;
     
-    // Фильтруем стратегии, поддерживающие глобальный режим
-    let testable_strategies: Vec<_> = strategies_map
+    // Загружаем plugin стратегии из registry
+    let plugin_strategies = state.strategy_registry.list_enabled().await;
+    
+    // Фильтруем builtin стратегии, поддерживающие глобальный режим
+    let mut testable_strategies: Vec<TestableStrategy> = strategies_map
         .values()
         .filter(|s| s.mode_capabilities.supports_global)
-        .take(6) // Максимум 6 стратегий для теста
+        .map(|s| TestableStrategy::Builtin(s.clone()))
         .collect();
+    
+    // Добавляем plugin стратегии (все plugin стратегии поддерживают глобальный режим)
+    testable_strategies.extend(
+        plugin_strategies
+            .into_iter()
+            .map(TestableStrategy::Plugin)
+    );
+    
+    // Ограничиваем до 6 стратегий для теста
+    testable_strategies.truncate(6);
     
     let total = testable_strategies.len();
     let mut results: Vec<TroubleshootStrategyResult> = Vec::new();
     let mut best_strategy: Option<(String, String, u32)> = None; // (id, name, latency)
     
-    for (index, strategy) in testable_strategies.iter().enumerate() {
+    for (index, testable_strategy) in testable_strategies.iter().enumerate() {
+        let strategy_id = testable_strategy.id().to_string();
+        let strategy_name = testable_strategy.name().to_string();
+        let is_plugin = testable_strategy.is_plugin();
+        let source_plugin = testable_strategy.source_plugin().map(|s| s.to_string());
+        
         // Эмитим прогресс - начало тестирования
         let _ = window.emit("troubleshoot:progress", TroubleshootProgress {
-            strategy_id: strategy.id.clone(),
-            strategy_name: strategy.name.clone(),
+            strategy_id: strategy_id.clone(),
+            strategy_name: strategy_name.clone(),
             status: "testing".to_string(),
             progress: 0,
             latency_ms: None,
         });
         
-        // Запускаем стратегию
-        let start_result = state.strategy_engine.start_global(strategy).await;
+        // Запускаем стратегию в зависимости от типа
+        let start_result = match testable_strategy {
+            TestableStrategy::Builtin(strategy) => {
+                state.strategy_engine.start_global(strategy).await
+            }
+            TestableStrategy::Plugin(registered) => {
+                // Для plugin стратегий используем strategy_engine с конвертацией
+                // TODO: Реализовать поддержку plugin стратегий в strategy_engine
+                // Пока пропускаем plugin стратегии
+                warn!(strategy_id = %strategy_id, "Plugin strategies not yet supported in strategy_engine, skipping");
+                
+                let result = TroubleshootStrategyResult {
+                    strategy_id: strategy_id.clone(),
+                    strategy_name: strategy_name.clone(),
+                    success: false,
+                    latency_ms: None,
+                    error: Some("Plugin strategies not yet supported".to_string()),
+                    is_plugin,
+                    source_plugin: source_plugin.clone(),
+                };
+                
+                let _ = window.emit("troubleshoot:strategy_result", &result);
+                results.push(result);
+                continue;
+            }
+        };
         
         if let Err(e) = start_result {
-            warn!(strategy_id = %strategy.id, error = %e, "Failed to start strategy");
+            warn!(strategy_id = %strategy_id, error = %e, "Failed to start strategy");
             
             let result = TroubleshootStrategyResult {
-                strategy_id: strategy.id.clone(),
-                strategy_name: strategy.name.clone(),
+                strategy_id: strategy_id.clone(),
+                strategy_name: strategy_name.clone(),
                 success: false,
                 latency_ms: None,
                 error: Some(format!("Failed to start: {}", e)),
+                is_plugin,
+                source_plugin: source_plugin.clone(),
             };
             
             let _ = window.emit("troubleshoot:strategy_result", &result);
@@ -122,8 +202,8 @@ pub async fn troubleshoot_service(
         
         // Эмитим прогресс - 50%
         let _ = window.emit("troubleshoot:progress", TroubleshootProgress {
-            strategy_id: strategy.id.clone(),
-            strategy_name: strategy.name.clone(),
+            strategy_id: strategy_id.clone(),
+            strategy_name: strategy_name.clone(),
             status: "testing".to_string(),
             progress: 50,
             latency_ms: None,
@@ -145,7 +225,7 @@ pub async fn troubleshoot_service(
             Ok(latency) => {
                 // Обновляем лучшую стратегию
                 if best_strategy.is_none() || latency < best_strategy.as_ref().unwrap().2 {
-                    best_strategy = Some((strategy.id.clone(), strategy.name.clone(), latency));
+                    best_strategy = Some((strategy_id.clone(), strategy_name.clone(), latency));
                 }
                 (true, Some(latency), None)
             }
@@ -153,18 +233,20 @@ pub async fn troubleshoot_service(
         };
         
         let result = TroubleshootStrategyResult {
-            strategy_id: strategy.id.clone(),
-            strategy_name: strategy.name.clone(),
+            strategy_id: strategy_id.clone(),
+            strategy_name: strategy_name.clone(),
             success,
             latency_ms,
             error,
+            is_plugin,
+            source_plugin: source_plugin.clone(),
         };
         
         // Эмитим результат стратегии
         let _ = window.emit("troubleshoot:strategy_result", &result);
         let _ = window.emit("troubleshoot:progress", TroubleshootProgress {
-            strategy_id: strategy.id.clone(),
-            strategy_name: strategy.name.clone(),
+            strategy_id: strategy_id.clone(),
+            strategy_name: strategy_name.clone(),
             status: if success { "success" } else { "failed" }.to_string(),
             progress: 100,
             latency_ms,
@@ -173,9 +255,10 @@ pub async fn troubleshoot_service(
         results.push(result);
         
         info!(
-            strategy_id = %strategy.id,
+            strategy_id = %strategy_id,
             success,
             latency_ms = ?latency_ms,
+            is_plugin,
             progress = format!("{}/{}", index + 1, total),
             "Strategy test completed"
         );

@@ -9,6 +9,7 @@ use crate::core::paths::{get_plugins_dir, get_app_data_dir};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
+use tauri::Emitter;
 use tokio::sync::OnceCell;
 use tracing::{error, info, warn};
 
@@ -307,14 +308,17 @@ async fn save_plugins_state_config(config: &PluginsStateConfig) -> Result<(), St
 /// Set plugin enabled state
 ///
 /// Persists the enabled/disabled state of a plugin to disk.
+/// Emits a `plugin:state_changed` event to notify frontend.
 ///
 /// # Arguments
 /// * `plugin_id` - The plugin identifier
 /// * `enabled` - Whether the plugin should be enabled
+/// * `app` - Tauri app handle for event emission
 #[tauri::command]
 pub async fn set_plugin_enabled(
     plugin_id: String,
     enabled: bool,
+    app: tauri::AppHandle,
 ) -> Result<(), String> {
     info!(plugin = %plugin_id, enabled = %enabled, "Setting plugin enabled state");
     
@@ -322,7 +326,19 @@ pub async fn set_plugin_enabled(
     config.plugins.insert(plugin_id.clone(), PluginState { enabled });
     save_plugins_state_config(&config).await?;
     
-    info!(plugin = %plugin_id, enabled = %enabled, "Plugin state saved");
+    // Emit event to notify frontend
+    #[derive(Clone, serde::Serialize)]
+    struct PluginStateChangedPayload {
+        plugin_id: String,
+        enabled: bool,
+    }
+    
+    let _ = app.emit("plugin:state_changed", PluginStateChangedPayload {
+        plugin_id: plugin_id.clone(),
+        enabled,
+    });
+    
+    info!(plugin = %plugin_id, enabled = %enabled, "Plugin state saved and event emitted");
     Ok(())
 }
 

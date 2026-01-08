@@ -1,6 +1,7 @@
 //! Service-related Tauri commands
 
 use std::sync::Arc;
+use serde::{Deserialize, Serialize};
 use tauri::State;
 use tracing::info;
 
@@ -353,4 +354,86 @@ pub async fn unregister_custom_service(
         .unregister(&service_id)
         .await
         .map_err(|e| IsolateError::Config(e.to_string()))
+}
+
+// ============================================================================
+// Library Service Checking (for library.svelte.ts)
+// ============================================================================
+
+use crate::core::checker::{Endpoint, EndpointChecker};
+
+/// Check service availability by domain (for Library)
+/// 
+/// This command checks if a domain is accessible by making HTTP requests.
+/// Used by the Library feature to test service availability.
+#[tauri::command]
+pub async fn check_service_availability(
+    domain: String,
+) -> Result<ServiceAvailabilityResult, IsolateError> {
+    // Validate domain
+    validate_not_empty(&domain, "Domain")?;
+    
+    let domain = domain.trim();
+    if domain.len() > 253 {
+        return Err(IsolateError::Validation(
+            "Domain exceeds maximum length of 253 characters".to_string()
+        ));
+    }
+    
+    info!(domain = %domain, "Checking service availability");
+    
+    // Create endpoints to check
+    let endpoints = vec![
+        Endpoint::new(format!("https://{}", domain), "HTTPS")
+            .with_timeout(5000),
+        Endpoint::new(format!("http://{}", domain), "HTTP")
+            .with_timeout(5000),
+    ];
+    
+    // Check endpoints
+    let checker = EndpointChecker::new();
+    let results = checker.check_all(&endpoints).await;
+    
+    // Determine overall status
+    let accessible = results.iter().any(|r| r.accessible);
+    let status = if accessible {
+        "accessible"
+    } else {
+        // Check if it's a timeout or connection error
+        let has_timeout = results.iter().any(|r| {
+            r.error.as_ref().map_or(false, |e| e.contains("timed out") || e.contains("timeout"))
+        });
+        
+        if has_timeout {
+            "unknown"
+        } else {
+            "blocked"
+        }
+    };
+    
+    // Calculate average ping from successful checks
+    let successful_pings: Vec<u64> = results
+        .iter()
+        .filter_map(|r| r.latency_ms)
+        .collect();
+    
+    let ping = if !successful_pings.is_empty() {
+        Some(successful_pings.iter().sum::<u64>() / successful_pings.len() as u64)
+    } else {
+        None
+    };
+    
+    Ok(ServiceAvailabilityResult {
+        status: status.to_string(),
+        ping,
+    })
+}
+
+/// Result of service availability check
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServiceAvailabilityResult {
+    /// Status: "accessible", "blocked", or "unknown"
+    pub status: String,
+    /// Average ping in milliseconds (if accessible)
+    pub ping: Option<u64>,
 }

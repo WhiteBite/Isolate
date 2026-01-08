@@ -13,6 +13,7 @@
     ping?: number;
     category: string;
     isCustom?: boolean;
+    isPluginService?: boolean;
     error?: string | null;
   }
 
@@ -127,7 +128,14 @@
           {/if}
         </div>
         <div class="flex-1">
-          <h1 class="text-2xl font-bold text-zinc-100 mb-2">{service.name}</h1>
+          <div class="flex items-center gap-2 mb-2">
+            <h1 class="text-2xl font-bold text-zinc-100">{service.name}</h1>
+            {#if service.isPluginService}
+              <span class="px-2 py-0.5 text-xs bg-purple-500/20 text-purple-400 rounded-lg border border-purple-500/30">
+                Plugin
+              </span>
+            {/if}
+          </div>
           <div class="flex items-center gap-3">
             <span class="px-3 py-1 rounded-lg text-xs font-medium border {getStatusBadge(service.status)}">
               {getStatusText(service.status)}

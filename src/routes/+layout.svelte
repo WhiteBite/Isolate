@@ -9,6 +9,8 @@
   import { themeStore } from '$lib/stores/theme';
   import { hotkeysStore, matchesHotkey, type HotkeysState } from '$lib/stores/hotkeys';
   import { aiPilotStore } from '$lib/stores/aiPilot.svelte';
+  import { initPluginsStore } from '$lib/stores/plugins';
+  import { initializePluginLoader } from '$lib/plugins/loader';
   import { initLocale, t } from '$lib/i18n';
   import { 
     ToastContainer, 
@@ -69,6 +71,17 @@
     if (browser) {
       const cleanup = themeStore.init();
       initLocale(); // Initialize i18n
+      
+      // Initialize plugin system
+      Promise.all([
+        initializePluginLoader(),
+        initPluginsStore()
+      ]).then(() => {
+        console.log('[Layout] Plugin system initialized');
+      }).catch(err => {
+        console.error('[Layout] Failed to initialize plugin system:', err);
+        // Don't block app loading on plugin errors
+      });
       
       // Initialize AI Pilot store
       aiPilotStore.init().catch(err => {

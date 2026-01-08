@@ -1,6 +1,8 @@
 <script lang="ts">
   import { troubleshootStore, type ServiceProblem } from '$lib/stores/troubleshoot.svelte';
   import { libraryStore } from '$lib/stores/library.svelte';
+  import { getPluginServices, type PluginServiceDefinition } from '$lib/stores/plugins';
+  import { onMount } from 'svelte';
 
   const categoryLabels: Record<string, string> = {
     video: 'Видео',
@@ -10,6 +12,40 @@
   };
 
   const categoryOrder = ['video', 'social', 'gaming', 'other'];
+  
+  let pluginServices = $state<PluginServiceDefinition[]>([]);
+  
+  // Load plugin services on mount
+  onMount(async () => {
+    pluginServices = await getPluginServices();
+    
+    // Add plugin services to troubleshoot problems
+    for (const service of pluginServices) {
+      const categoryMap: Record<string, 'video' | 'social' | 'gaming' | 'other'> = {
+        'video': 'video',
+        'social': 'social',
+        'gaming': 'gaming',
+        'messenger': 'social',
+        'streaming': 'video',
+      };
+      const mappedCategory = categoryMap[service.category?.toLowerCase() || ''] || 'other';
+      
+      const problem: ServiceProblem = {
+        id: `plugin-${service.id}`,
+        serviceId: service.id,
+        serviceName: service.name,
+        icon: service.icon,
+        description: service.description || `Check ${service.name} availability`,
+        category: mappedCategory,
+        isPluginService: true
+      };
+      
+      // Check if not already in problems
+      if (!troubleshootStore.problems.some(p => p.serviceId === service.id)) {
+        troubleshootStore.problems.push(problem);
+      }
+    }
+  });
 
   let groupedProblems = $derived(() => {
     const groups: Record<string, ServiceProblem[]> = {};
@@ -144,7 +180,11 @@
                     <h4 class="font-medium text-white {!isDisabled ? 'group-hover:text-blue-400' : ''} transition-colors">
                       {problem.serviceName}
                     </h4>
-                    {#if currentMethod}
+                    {#if problem.isPluginService}
+                      <span class="px-2 py-0.5 text-xs bg-purple-500/20 text-purple-400 rounded border border-purple-500/30">
+                        from plugin
+                      </span>
+                    {:else if currentMethod}
                       <span class="px-2 py-0.5 text-xs bg-indigo-500/20 text-indigo-400 rounded border border-indigo-500/30">
                         {currentMethod}
                       </span>

@@ -25,6 +25,8 @@ export interface AIPilotAction {
   reason: string;
   actionType: string;
   success: boolean;
+  isPluginStrategy: boolean;
+  sourcePlugin?: string;
 }
 
 export interface AIPilotState {
@@ -62,6 +64,8 @@ interface BackendAIPilotAction {
   reason: string;
   timestamp: number; // Unix timestamp ms
   success: boolean;
+  is_plugin_strategy: boolean;
+  source_plugin: string | null;
 }
 
 /**
@@ -126,6 +130,8 @@ function convertBackendAction(action: BackendAIPilotAction): AIPilotAction {
     reason: action.reason,
     actionType: action.action_type,
     success: action.success,
+    isPluginStrategy: action.is_plugin_strategy,
+    sourcePlugin: action.source_plugin ?? undefined,
   };
 }
 
@@ -513,6 +519,8 @@ class AIPilotStore {
           reason: demoReasons[Math.floor(Math.random() * demoReasons.length)],
           actionType: 'switch_strategy',
           success: true,
+          isPluginStrategy: false,
+          sourcePlugin: undefined,
         };
         
         this.addAction(action);

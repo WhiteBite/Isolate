@@ -53,6 +53,10 @@ pub struct AiPilotAction {
     pub timestamp: i64,
     /// Whether the action was successful
     pub success: bool,
+    /// Whether the new strategy is from a plugin
+    pub is_plugin_strategy: bool,
+    /// Source plugin ID if strategy is from plugin
+    pub source_plugin: Option<String>,
 }
 
 /// History of AI Pilot actions
@@ -320,6 +324,8 @@ pub async fn undo_ai_pilot_action(
         reason: format!("Undo action {}", action_id),
         timestamp: current_timestamp_ms(),
         success: true, // Mock always succeeds
+        is_plugin_strategy: action.is_plugin_strategy,
+        source_plugin: action.source_plugin.clone(),
     };
     
     // Add to history

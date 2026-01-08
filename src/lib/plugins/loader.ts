@@ -297,14 +297,46 @@ export function clearAllPlugins(): void {
 // Initialization
 // ============================================================================
 
+/** Flag to track if plugins have been initialized */
+let isInitialized = false;
+
 /**
  * Initialize plugin loader and load builtin plugins
+ * This should be called once at application startup
  */
 export async function initializePluginLoader(): Promise<void> {
+  // Prevent multiple initializations
+  if (isInitialized) {
+    console.log('[PluginLoader] Already initialized, skipping');
+    return;
+  }
+  
   console.log('[PluginLoader] Initializing...');
   
-  // Load builtin plugins
-  // These will be registered from the builtin directory
-  
-  console.log('[PluginLoader] Ready');
+  try {
+    // Load builtin plugins
+    // These will be registered from the builtin directory
+    
+    // Mark as initialized
+    isInitialized = true;
+    console.log('[PluginLoader] Ready');
+  } catch (error) {
+    console.error('[PluginLoader] Initialization failed:', error);
+    throw error;
+  }
+}
+
+/**
+ * Check if plugin loader has been initialized
+ */
+export function isPluginLoaderInitialized(): boolean {
+  return isInitialized;
+}
+
+/**
+ * Reset initialization state (for testing/hot reload)
+ */
+export function resetPluginLoader(): void {
+  isInitialized = false;
+  clearAllPlugins();
 }

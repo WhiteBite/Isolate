@@ -10,6 +10,7 @@
     ping?: number;
     category: string;
     isCustom?: boolean;
+    isPluginService?: boolean; // Flag for plugin services
     error?: string | null;
   }
 
@@ -208,7 +209,14 @@
         
         <!-- Info -->
         <div class="flex-1 text-left min-w-0">
-          <div class="text-sm font-medium text-zinc-100 truncate">{service.name}</div>
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-medium text-zinc-100 truncate">{service.name}</span>
+            {#if service.isPluginService}
+              <span class="px-1.5 py-0.5 text-[10px] bg-purple-500/20 text-purple-400 rounded border border-purple-500/30 whitespace-nowrap">
+                plugin
+              </span>
+            {/if}
+          </div>
           <div class="text-xs text-zinc-400 capitalize">{service.category}</div>
         </div>
 

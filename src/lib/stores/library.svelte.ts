@@ -461,9 +461,35 @@ async function applyPresetInBackend(presetId: string): Promise<BackendLibraryRul
 }
 
 /**
+ * Извлекает чистый домен из паттерна
+ * Примеры:
+ * - "*.youtube.com" -> "youtube.com"
+ * - "youtube.com" -> "youtube.com"
+ * - "*.cdn.discord.com" -> "cdn.discord.com"
+ */
+function extractDomainFromPattern(pattern: string): string {
+  // Убираем wildcard в начале
+  let domain = pattern.replace(/^\*\./, '');
+  // Убираем wildcard в конце (если есть)
+  domain = domain.replace(/\.\*$/, '');
+  // Убираем одиночный wildcard
+  domain = domain.replace(/^\*$/, '');
+  // Trim пробелы
+  return domain.trim();
+}
+
+/**
  * Проверяет доступность сервиса через backend
  */
 async function checkService(domain: string): Promise<{ status: ServiceStatus; ping?: number }> {
+  // Извлекаем чистый домен из паттерна
+  const cleanDomain = extractDomainFromPattern(domain);
+  
+  if (!cleanDomain) {
+    console.warn('[Library] Empty domain after extraction:', domain);
+    return { status: 'unknown' };
+  }
+  
   if (!isTauri()) {
     // Demo: имитация проверки
     await new Promise(resolve => setTimeout(resolve, 800 + Math.random() * 400));
@@ -473,10 +499,21 @@ async function checkService(domain: string): Promise<{ status: ServiceStatus; pi
     };
   }
   
+  // Проверяем готовность backend
+  const ready = await isBackendReady();
+  if (!ready) {
+    console.warn('[Library] Backend not ready for service check');
+    return { status: 'unknown' };
+  }
+  
   try {
-    return await invoke<{ status: ServiceStatus; ping?: number }>('check_service_availability', { domain });
-  } catch {
-    // Если команда не реализована, возвращаем unknown
+    const result = await invoke<{ status: string; ping: number | null }>('check_service_availability', { domain: cleanDomain });
+    return {
+      status: result.status as ServiceStatus,
+      ping: result.ping ?? undefined
+    };
+  } catch (e) {
+    console.error('[Library] Failed to check service:', e);
     return { status: 'unknown' };
   }
 }
@@ -842,6 +879,7 @@ class LibraryStore {
 
   /**
    * Проверяет доступность сервиса
+   * Показывает toast с результатом проверки
    */
   async checkRule(ruleId: string) {
     const rule = this.rules.find(r => r.id === ruleId);
@@ -863,11 +901,39 @@ class LibraryStore {
           ping: result.ping
         } : r
       );
+      
+      // Показываем toast с результатом
+      const { toasts } = await import('./toast');
+      
+      switch (result.status) {
+        case 'accessible':
+          toasts.success(
+            `${rule.name} доступен${result.ping ? ` (${result.ping}ms)` : ''}`,
+            { dedupeKey: `check-${ruleId}` }
+          );
+          break;
+        case 'blocked':
+          toasts.warning(
+            `${rule.name} заблокирован`,
+            { dedupeKey: `check-${ruleId}` }
+          );
+          break;
+        case 'unknown':
+          toasts.info(
+            `${rule.name}: статус неизвестен`,
+            { dedupeKey: `check-${ruleId}` }
+          );
+          break;
+      }
     } catch (e) {
       console.error('[Library] Failed to check rule:', e);
       this.rules = this.rules.map(r => 
         r.id === ruleId ? { ...r, status: 'unknown' as ServiceStatus, lastChecked: Date.now() } : r
       );
+      
+      // Показываем toast с ошибкой
+      const { toasts } = await import('./toast');
+      toasts.error(`Ошибка проверки ${rule.name}`, { dedupeKey: `check-${ruleId}` });
     }
   }
 

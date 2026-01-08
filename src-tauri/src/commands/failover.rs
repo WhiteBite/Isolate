@@ -61,31 +61,53 @@ pub async fn get_failover_config(app: AppHandle) -> Result<FailoverConfig, Isola
 /// Update failover configuration
 /// 
 /// # Arguments
+/// * `primary_strategy_id` - ID of the primary strategy (optional)
+/// * `backup_strategy_ids` - List of backup strategies in priority order
 /// * `max_failures` - Number of failures before switching (default: 3)
-/// * `cooldown_secs` - Seconds to wait before retry (default: 60)
+/// * `cooldown_secs` - Seconds to wait before trying to restore primary (default: 300)
+/// * `enabled` - Whether failover is enabled
 #[tauri::command]
 pub async fn set_failover_config(
     app: AppHandle,
-    max_failures: u32,
-    cooldown_secs: u32,
+    primary_strategy_id: Option<String>,
+    backup_strategy_ids: Option<Vec<String>>,
+    max_failures: Option<u32>,
+    cooldown_secs: Option<u64>,
+    enabled: Option<bool>,
 ) -> Result<(), IsolateError> {
     let state = get_state_or_error(&app)?;
     
-    info!(max_failures, cooldown_secs, "Setting failover config");
+    // Get current config
+    let current_config = state.auto_failover.get_config().await;
+    
+    // Build new config with provided values or defaults
+    let config = FailoverConfig {
+        primary_strategy_id: primary_strategy_id.or(current_config.primary_strategy_id),
+        backup_strategy_ids: backup_strategy_ids.unwrap_or(current_config.backup_strategy_ids),
+        max_failures: max_failures.unwrap_or(current_config.max_failures),
+        cooldown_secs: cooldown_secs.unwrap_or(current_config.cooldown_secs),
+        enabled: enabled.unwrap_or(current_config.enabled),
+    };
+    
+    info!(
+        max_failures = config.max_failures,
+        cooldown_secs = config.cooldown_secs,
+        enabled = config.enabled,
+        "Setting failover config"
+    );
     
     // Update failover config
-    let config = FailoverConfig {
-        max_failures,
-        cooldown_secs,
-        backup_strategies: state.auto_failover.get_config().await.backup_strategies,
-    };
-    state.auto_failover.update_config(config).await;
+    state.auto_failover.update_config(config.clone()).await;
+    
+    // Update enabled state separately
+    state.auto_failover.set_enabled(config.enabled).await;
     
     // Also update settings
     let mut settings = state.storage.get_settings().await
         .map_err(|e| IsolateError::Storage(e.to_string()))?;
-    settings.failover_max_failures = max_failures;
-    settings.failover_cooldown_secs = cooldown_secs;
+    settings.failover_max_failures = config.max_failures;
+    settings.failover_cooldown_secs = config.cooldown_secs as u32;
+    settings.auto_failover_enabled = config.enabled;
     state.storage.save_settings(&settings).await
         .map_err(|e| IsolateError::Storage(e.to_string()))?;
     
@@ -114,6 +136,55 @@ pub async fn trigger_manual_failover(app: AppHandle) -> Result<Option<String>, I
     }
     
     Ok(backup_strategy)
+}
+
+/// Force restore primary strategy (ignores cooldown)
+/// 
+/// Immediately switches back to the primary strategy,
+/// regardless of cooldown timer.
+/// 
+/// Returns the ID of the primary strategy,
+/// or None if no primary is configured.
+#[tauri::command]
+pub async fn force_restore_primary(app: AppHandle) -> Result<Option<String>, IsolateError> {
+    let state = get_state_or_error(&app)?;
+    
+    info!("Force restoring primary strategy");
+    
+    let primary_strategy = state.auto_failover.force_restore_primary().await;
+    
+    if let Some(ref strategy_id) = primary_strategy {
+        info!(strategy_id, "Force restore: switching to primary strategy");
+    } else {
+        info!("Force restore: no primary strategy configured");
+    }
+    
+    Ok(primary_strategy)
+}
+
+/// Try to restore primary strategy (respects cooldown)
+/// 
+/// Attempts to switch back to the primary strategy if:
+/// - Currently on a backup strategy
+/// - Cooldown period has elapsed
+/// 
+/// Returns the ID of the primary strategy if restoration is possible,
+/// or None if conditions are not met.
+#[tauri::command]
+pub async fn try_restore_primary(app: AppHandle) -> Result<Option<String>, IsolateError> {
+    let state = get_state_or_error(&app)?;
+    
+    info!("Trying to restore primary strategy");
+    
+    let primary_strategy = state.auto_failover.try_restore_primary().await;
+    
+    if let Some(ref strategy_id) = primary_strategy {
+        info!(strategy_id, "Restore primary: cooldown expired, switching to primary");
+    } else {
+        info!("Restore primary: conditions not met (not on backup or cooldown active)");
+    }
+    
+    Ok(primary_strategy)
 }
 
 /// Get list of learned strategies (successfully used in the past)

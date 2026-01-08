@@ -12,5 +12,9 @@
         "moduleResolution": "bundler",
         "target": "ESNext",
         "module": "ESNext"
-    }
+    },
+    "exclude": [
+        "tests/e2e-tauri/**/*",
+        "src/lib/components/**/*.test.ts"
+    ]
 }

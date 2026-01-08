@@ -212,7 +212,7 @@
         <Toggle 
           checked={status?.discord_enabled ?? false}
           onchange={handleToggleDiscord}
-          disabled={operating || (status && !status.is_writable)}
+          disabled={operating || (status !== null && !status.is_writable)}
           aria-labelledby="discord-hosts-label"
         />
       </div>

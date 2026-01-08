@@ -51,7 +51,6 @@
 
   // Unsubscribe functions
   let unsubscribers: (() => void)[] = [];
-</script>
 
   // Derived
   let canStart = $derived(
@@ -260,7 +259,7 @@
             <span class="text-text-muted">Testing...</span>
             <span class="text-indigo-400 font-medium">{currentStrategy || 'Preparing'}</span>
           </div>
-          <ProgressBar value={progress} max={100} />
+          <ProgressBar value={progress} showPercent />
           <p class="text-xs text-text-muted text-center">
             This may take a few minutes. Each strategy is tested {iterations} times.
           </p>

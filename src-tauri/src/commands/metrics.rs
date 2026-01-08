@@ -52,6 +52,7 @@ pub async fn get_aggregated_metrics(
     Ok(get_aggregated_stats(history_period).await)
 }
 
+
 #[tauri::command]
 pub async fn take_metrics_snapshot(
     _state: State<'_, Arc<AppState>>,
@@ -118,7 +119,7 @@ fn parse_period(period: &str) -> Result<HistoryPeriod, IsolateError> {
             .map(HistoryPeriod::Custom)
             .map_err(|_| {
                 IsolateError::Validation(format!(
-                    "Invalid period: {}. Use 1h, 24h, 7d, or number of hours",
+                    "Invalid period: {}. Use '1h', '24h', '7d', or number of hours",
                     period
                 ))
             }),

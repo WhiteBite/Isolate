@@ -371,9 +371,272 @@ pub fn bench_strategy_lookup(c: &mut Criterion) {
     group.finish();
 }
 
+// ============================================================================
+// Strategy Start/Stop Benchmarks
+// ============================================================================
+
+/// Mock strategy state for benchmarking start/stop operations
+#[derive(Clone)]
+struct MockStrategyState {
+    id: String,
+    is_running: bool,
+    process_id: Option<String>,
+    socks_port: Option<u16>,
+    start_time: Option<std::time::Instant>,
+}
+
+impl MockStrategyState {
+    fn new(id: &str) -> Self {
+        Self {
+            id: id.to_string(),
+            is_running: false,
+            process_id: None,
+            socks_port: None,
+            start_time: None,
+        }
+    }
+}
+
+/// Simulate strategy start preparation (CPU-bound parts)
+fn prepare_strategy_start(strategy: &Strategy, state: &mut MockStrategyState) -> Result<(), String> {
+    // Validate strategy before start
+    validate_strategy(strategy)?;
+    
+    // Check if already running
+    if state.is_running {
+        return Err(format!("Strategy {} is already running", strategy.id));
+    }
+    
+    // Prepare launch arguments
+    let template = strategy.global_template.as_ref()
+        .or(strategy.socks_template.as_ref())
+        .ok_or_else(|| "No launch template".to_string())?;
+    
+    // Build command line (CPU-bound)
+    let _args: Vec<String> = template.args.iter()
+        .map(|arg| {
+            // Simulate variable substitution
+            arg.replace("{port}", "1080")
+               .replace("{hostlist}", "hostlists/youtube.txt")
+        })
+        .collect();
+    
+    // Update state
+    state.is_running = true;
+    state.process_id = Some(format!("proc_{}", strategy.id));
+    state.start_time = Some(std::time::Instant::now());
+    
+    Ok(())
+}
+
+/// Simulate strategy stop preparation (CPU-bound parts)
+fn prepare_strategy_stop(state: &mut MockStrategyState) -> Result<(), String> {
+    if !state.is_running {
+        return Err("Strategy is not running".to_string());
+    }
+    
+    // Clear state
+    state.is_running = false;
+    state.process_id = None;
+    state.socks_port = None;
+    state.start_time = None;
+    
+    Ok(())
+}
+
+pub fn bench_strategy_start(c: &mut Criterion) {
+    let mut group = c.benchmark_group("strategy_start");
+    
+    // Simple strategy start
+    let simple_strategy: Strategy = serde_yaml::from_str(SIMPLE_STRATEGY_YAML).unwrap();
+    group.bench_function("simple_strategy_prepare", |b| {
+        b.iter(|| {
+            let mut state = MockStrategyState::new("test");
+            prepare_strategy_start(black_box(&simple_strategy), &mut state)
+        })
+    });
+    
+    // Complex strategy start
+    let complex_strategy: Strategy = serde_yaml::from_str(COMPLEX_STRATEGY_YAML).unwrap();
+    group.bench_function("complex_strategy_prepare", |b| {
+        b.iter(|| {
+            let mut state = MockStrategyState::new("test");
+            prepare_strategy_start(black_box(&complex_strategy), &mut state)
+        })
+    });
+    
+    // Batch strategy start (simulating multiple strategies)
+    let strategies: Vec<Strategy> = (0..10)
+        .map(|i| {
+            let yaml = SIMPLE_STRATEGY_YAML.replace("zapret_youtube_disorder", &format!("strategy_{}", i));
+            serde_yaml::from_str(&yaml).unwrap()
+        })
+        .collect();
+    
+    group.throughput(Throughput::Elements(10));
+    group.bench_function("batch_10_strategies_prepare", |b| {
+        b.iter(|| {
+            for strategy in &strategies {
+                let mut state = MockStrategyState::new(&strategy.id);
+                let _ = prepare_strategy_start(black_box(strategy), &mut state);
+            }
+        })
+    });
+    
+    group.finish();
+}
+
+pub fn bench_strategy_stop(c: &mut Criterion) {
+    let mut group = c.benchmark_group("strategy_stop");
+    
+    // Single strategy stop
+    group.bench_function("single_strategy_stop", |b| {
+        b.iter(|| {
+            let mut state = MockStrategyState {
+                id: "test".to_string(),
+                is_running: true,
+                process_id: Some("proc_test".to_string()),
+                socks_port: Some(1080),
+                start_time: Some(std::time::Instant::now()),
+            };
+            prepare_strategy_stop(black_box(&mut state))
+        })
+    });
+    
+    // Batch strategy stop
+    group.throughput(Throughput::Elements(10));
+    group.bench_function("batch_10_strategies_stop", |b| {
+        b.iter(|| {
+            for i in 0..10 {
+                let mut state = MockStrategyState {
+                    id: format!("strategy_{}", i),
+                    is_running: true,
+                    process_id: Some(format!("proc_{}", i)),
+                    socks_port: Some(1080 + i),
+                    start_time: Some(std::time::Instant::now()),
+                };
+                let _ = prepare_strategy_stop(black_box(&mut state));
+            }
+        })
+    });
+    
+    group.finish();
+}
+
+// ============================================================================
+// Port Allocation Benchmarks
+// ============================================================================
+
+/// Mock port allocator for benchmarking
+struct MockPortAllocator {
+    used_ports: std::collections::HashSet<u16>,
+    base_port: u16,
+}
+
+impl MockPortAllocator {
+    fn new(base_port: u16) -> Self {
+        Self {
+            used_ports: std::collections::HashSet::new(),
+            base_port,
+        }
+    }
+    
+    fn with_used_ports(base_port: u16, used: &[u16]) -> Self {
+        let mut allocator = Self::new(base_port);
+        for port in used {
+            allocator.used_ports.insert(*port);
+        }
+        allocator
+    }
+    
+    /// Allocate next available port
+    fn allocate(&mut self) -> u16 {
+        let mut port = self.base_port;
+        while self.used_ports.contains(&port) {
+            port += 1;
+            if port > 65535 {
+                port = self.base_port;
+                break;
+            }
+        }
+        self.used_ports.insert(port);
+        port
+    }
+    
+    /// Release a port
+    fn release(&mut self, port: u16) {
+        self.used_ports.remove(&port);
+    }
+    
+    /// Check if port is available
+    fn is_available(&self, port: u16) -> bool {
+        !self.used_ports.contains(&port)
+    }
+}
+
+pub fn bench_port_allocation(c: &mut Criterion) {
+    let mut group = c.benchmark_group("port_allocation");
+    
+    // Simple allocation (no conflicts)
+    group.bench_function("simple_allocate", |b| {
+        b.iter(|| {
+            let mut allocator = MockPortAllocator::new(1080);
+            allocator.allocate()
+        })
+    });
+    
+    // Allocation with conflicts
+    let used_ports: Vec<u16> = (1080..1090).collect();
+    group.bench_function("allocate_with_10_conflicts", |b| {
+        b.iter(|| {
+            let mut allocator = MockPortAllocator::with_used_ports(1080, black_box(&used_ports));
+            allocator.allocate()
+        })
+    });
+    
+    // Batch allocation
+    for size in [10, 50, 100].iter() {
+        group.throughput(Throughput::Elements(*size as u64));
+        group.bench_with_input(
+            BenchmarkId::new("batch_allocate", size),
+            size,
+            |b, &size| {
+                b.iter(|| {
+                    let mut allocator = MockPortAllocator::new(1080);
+                    for _ in 0..size {
+                        allocator.allocate();
+                    }
+                })
+            },
+        );
+    }
+    
+    // Port availability check
+    let allocator = MockPortAllocator::with_used_ports(1080, &(1080..1180).collect::<Vec<_>>());
+    group.bench_function("check_availability_100_used", |b| {
+        b.iter(|| {
+            allocator.is_available(black_box(1150))
+        })
+    });
+    
+    // Allocate and release cycle
+    group.bench_function("allocate_release_cycle", |b| {
+        b.iter(|| {
+            let mut allocator = MockPortAllocator::new(1080);
+            let port = allocator.allocate();
+            allocator.release(port);
+        })
+    });
+    
+    group.finish();
+}
+
 criterion_group!(
     strategy_engine_benches,
     bench_yaml_parsing,
     bench_config_validation,
     bench_strategy_lookup,
+    bench_strategy_start,
+    bench_strategy_stop,
+    bench_port_allocation,
 );

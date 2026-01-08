@@ -8,7 +8,7 @@ use tracing::{info, warn};
 
 use crate::core::ab_testing::{
     ABTest, ABTestManager, ABTestProgress, ABTestResult, ABTestSummary,
-    create_ab_test_manager_with_storage,
+    StatisticalComparison, create_ab_test_manager_with_storage,
 };
 use crate::core::errors::IsolateError;
 use crate::state::AppState;
@@ -231,4 +231,24 @@ pub async fn clear_ab_test_results(
     info!("Clearing all A/B test results");
     let manager = get_ab_manager(&state).await;
     manager.clear_all_results().await
+}
+
+/// Получает историю A/B тестов (алиас для get_all_ab_test_results)
+#[tauri::command]
+pub async fn get_ab_test_history(
+    state: State<'_, Arc<AppState>>,
+) -> Result<Vec<ABTestResult>, IsolateError> {
+    let manager = get_ab_manager(&state).await;
+    Ok(manager.get_all_results().await)
+}
+
+/// Получает статистическое сравнение из результата теста
+#[tauri::command]
+pub async fn get_ab_test_statistics(
+    state: State<'_, Arc<AppState>>,
+    test_id: String,
+) -> Result<Option<StatisticalComparison>, IsolateError> {
+    let manager = get_ab_manager(&state).await;
+    let result = manager.get_test_results(&test_id).await;
+    Ok(result.and_then(|r| r.statistical_comparison))
 }

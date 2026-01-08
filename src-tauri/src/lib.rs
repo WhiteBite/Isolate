@@ -434,6 +434,8 @@ pub fn run() {
             commands::get_all_ab_test_results,
             commands::compare_strategies,
             commands::clear_ab_test_results,
+            commands::get_ab_test_history,
+            commands::get_ab_test_statistics,
             // TUN mode commands
             commands::start_tun,
             commands::stop_tun,
@@ -600,6 +602,8 @@ pub fn run() {
             commands::get_failover_config,
             commands::set_failover_config,
             commands::trigger_manual_failover,
+            commands::force_restore_primary,
+            commands::try_restore_primary,
             commands::get_learned_strategies,
             commands::reset_failover_state,
             // Provider commands

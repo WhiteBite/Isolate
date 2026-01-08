@@ -191,8 +191,9 @@ impl AppState {
         let auto_failover = Arc::new(AutoFailover::with_config(
             crate::core::auto_failover::FailoverConfig {
                 max_failures: settings.failover_max_failures,
-                cooldown_secs: settings.failover_cooldown_secs,
-                backup_strategies: Vec::new(), // Will use learned strategies
+                cooldown_secs: settings.failover_cooldown_secs as u64,
+                backup_strategy_ids: Vec::new(), // Will use learned strategies
+                ..Default::default()
             }
         ));
         auto_failover.set_enabled(settings.auto_failover_enabled).await;

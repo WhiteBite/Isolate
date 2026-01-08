@@ -274,8 +274,150 @@ pub fn bench_strategy_ranking(c: &mut Criterion) {
     group.finish();
 }
 
+// ============================================================================
+// Score Comparison Benchmarks
+// ============================================================================
+
+/// Compare two scores and determine winner
+fn compare_scores(a: &StrategyScore, b: &StrategyScore) -> std::cmp::Ordering {
+    // First compare by success rate (must be viable)
+    let a_viable = a.success_rate >= 0.8;
+    let b_viable = b.success_rate >= 0.8;
+    
+    match (a_viable, b_viable) {
+        (true, false) => std::cmp::Ordering::Greater,
+        (false, true) => std::cmp::Ordering::Less,
+        _ => {
+            // Both viable or both not viable - compare by score
+            a.score.partial_cmp(&b.score).unwrap_or(std::cmp::Ordering::Equal)
+        }
+    }
+}
+
+/// Find best score from a list using comparison
+fn find_best_by_comparison(scores: &[StrategyScore]) -> Option<&StrategyScore> {
+    scores.iter().max_by(|a, b| compare_scores(a, b))
+}
+
+/// Compare scores with detailed breakdown
+#[derive(Clone)]
+struct ScoreComparison {
+    winner_id: String,
+    score_diff: f64,
+    success_rate_diff: f64,
+    is_significant: bool,
+}
+
+fn detailed_comparison(a: &StrategyScore, b: &StrategyScore) -> ScoreComparison {
+    let score_diff = a.score - b.score;
+    let success_rate_diff = a.success_rate - b.success_rate;
+    let is_significant = score_diff.abs() > 0.05 || success_rate_diff.abs() > 0.1;
+    
+    let winner_id = if compare_scores(a, b) == std::cmp::Ordering::Greater {
+        a.strategy_id.clone()
+    } else {
+        b.strategy_id.clone()
+    };
+    
+    ScoreComparison {
+        winner_id,
+        score_diff,
+        success_rate_diff,
+        is_significant,
+    }
+}
+
+/// Tournament-style comparison to find best strategy
+fn tournament_best(scores: &[StrategyScore]) -> Option<&StrategyScore> {
+    if scores.is_empty() {
+        return None;
+    }
+    
+    let mut best = &scores[0];
+    for score in scores.iter().skip(1) {
+        if compare_scores(score, best) == std::cmp::Ordering::Greater {
+            best = score;
+        }
+    }
+    Some(best)
+}
+
+pub fn bench_score_comparison(c: &mut Criterion) {
+    let mut group = c.benchmark_group("score_comparison");
+    
+    // Pairwise comparison
+    let score_a = StrategyScore {
+        strategy_id: "strategy_a".to_string(),
+        success_rate: 0.95,
+        score: 0.87,
+    };
+    let score_b = StrategyScore {
+        strategy_id: "strategy_b".to_string(),
+        success_rate: 0.88,
+        score: 0.82,
+    };
+    
+    group.bench_function("pairwise_compare", |b| {
+        b.iter(|| compare_scores(black_box(&score_a), black_box(&score_b)))
+    });
+    
+    group.bench_function("detailed_comparison", |b| {
+        b.iter(|| detailed_comparison(black_box(&score_a), black_box(&score_b)))
+    });
+    
+    // Find best from list
+    for size in [10, 50, 100, 200].iter() {
+        let scores = generate_strategy_scores(*size);
+        
+        group.throughput(Throughput::Elements(*size as u64));
+        
+        group.bench_with_input(
+            BenchmarkId::new("find_best_by_comparison", size),
+            &scores,
+            |b, scores| {
+                b.iter(|| find_best_by_comparison(black_box(scores)))
+            },
+        );
+        
+        group.bench_with_input(
+            BenchmarkId::new("tournament_best", size),
+            &scores,
+            |b, scores| {
+                b.iter(|| tournament_best(black_box(scores)))
+            },
+        );
+    }
+    
+    // All pairwise comparisons (n*(n-1)/2)
+    for size in [10, 20, 50].iter() {
+        let scores = generate_strategy_scores(*size);
+        let num_comparisons = (*size * (*size - 1)) / 2;
+        
+        group.throughput(Throughput::Elements(num_comparisons as u64));
+        group.bench_with_input(
+            BenchmarkId::new("all_pairwise", size),
+            &scores,
+            |b, scores| {
+                b.iter(|| {
+                    let mut count = 0;
+                    for i in 0..scores.len() {
+                        for j in (i + 1)..scores.len() {
+                            let _ = compare_scores(black_box(&scores[i]), black_box(&scores[j]));
+                            count += 1;
+                        }
+                    }
+                    count
+                })
+            },
+        );
+    }
+    
+    group.finish();
+}
+
 criterion_group!(
     scoring_benches,
     bench_scoring,
     bench_strategy_ranking,
+    bench_score_comparison,
 );

@@ -172,6 +172,32 @@ impl ABTest {
     }
 }
 
+/// Доверительный интервал
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConfidenceInterval {
+    /// Нижняя граница
+    pub lower: f64,
+    /// Верхняя граница
+    pub upper: f64,
+    /// Уровень доверия (0.95 = 95%)
+    pub level: f64,
+}
+
+/// Результат Mann-Whitney U теста
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MannWhitneyResult {
+    /// U-статистика
+    pub u_statistic: f64,
+    /// Z-score (нормализованная статистика)
+    pub z_score: f64,
+    /// P-value (двусторонний)
+    pub p_value: f64,
+    /// Статистически значимая разница
+    pub is_significant: bool,
+    /// Effect size (r = Z / sqrt(N))
+    pub effect_size: f64,
+}
+
 /// Результат статистического сравнения
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StatisticalComparison {
@@ -187,6 +213,18 @@ pub struct StatisticalComparison {
     pub effect_size: f64,
     /// Интерпретация effect size
     pub effect_interpretation: String,
+    /// Mann-Whitney U тест (более робастный для не-нормальных распределений)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mann_whitney: Option<MannWhitneyResult>,
+    /// Доверительный интервал для разницы средних latency
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub latency_diff_ci: Option<ConfidenceInterval>,
+    /// Доверительный интервал для среднего latency стратегии A
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub strategy_a_ci: Option<ConfidenceInterval>,
+    /// Доверительный интервал для среднего latency стратегии B
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub strategy_b_ci: Option<ConfidenceInterval>,
 }
 
 /// Полный результат A/B теста
@@ -747,15 +785,40 @@ impl ABTestManager {
             0.0
         };
         
-        let effect_interpretation = if effect_size < 0.2 {
-            "negligible".to_string()
-        } else if effect_size < 0.5 {
-            "small".to_string()
-        } else if effect_size < 0.8 {
-            "medium".to_string()
-        } else {
-            "large".to_string()
-        };
+        let effect_interpretation = Self::interpret_effect_size(effect_size);
+        
+        // Mann-Whitney U тест (более робастный для не-нормальных распределений)
+        let mann_whitney = self.perform_mann_whitney_test(
+            &result_a.latencies,
+            &result_b.latencies,
+        );
+        
+        // Доверительные интервалы (95%)
+        let ci_level = 0.95;
+        let z_critical = 1.96; // для 95% CI
+        
+        // CI для разницы средних
+        let latency_diff_ci = Some(ConfidenceInterval {
+            lower: (mean1 - mean2) - z_critical * se,
+            upper: (mean1 - mean2) + z_critical * se,
+            level: ci_level,
+        });
+        
+        // CI для стратегии A
+        let se_a = (var1 / n1).sqrt();
+        let strategy_a_ci = Some(ConfidenceInterval {
+            lower: mean1 - z_critical * se_a,
+            upper: mean1 + z_critical * se_a,
+            level: ci_level,
+        });
+        
+        // CI для стратегии B
+        let se_b = (var2 / n2).sqrt();
+        let strategy_b_ci = Some(ConfidenceInterval {
+            lower: mean2 - z_critical * se_b,
+            upper: mean2 + z_critical * se_b,
+            level: ci_level,
+        });
         
         Some(StatisticalComparison {
             t_statistic,
@@ -764,7 +827,125 @@ impl ABTestManager {
             is_significant: p_value < (1.0 - MIN_CONFIDENCE_LEVEL),
             effect_size,
             effect_interpretation,
+            mann_whitney,
+            latency_diff_ci,
+            strategy_a_ci,
+            strategy_b_ci,
         })
+    }
+    
+    /// Интерпретирует effect size по Cohen's d
+    fn interpret_effect_size(d: f64) -> String {
+        if d < 0.2 {
+            "negligible".to_string()
+        } else if d < 0.5 {
+            "small".to_string()
+        } else if d < 0.8 {
+            "medium".to_string()
+        } else {
+            "large".to_string()
+        }
+    }
+    
+    /// Выполняет Mann-Whitney U тест (Wilcoxon rank-sum test)
+    /// Более робастный тест для сравнения распределений, не требует нормальности
+    fn perform_mann_whitney_test(
+        &self,
+        sample_a: &[u32],
+        sample_b: &[u32],
+    ) -> Option<MannWhitneyResult> {
+        if sample_a.is_empty() || sample_b.is_empty() {
+            return None;
+        }
+        
+        let n1 = sample_a.len();
+        let n2 = sample_b.len();
+        
+        // Объединяем и ранжируем все значения
+        let mut combined: Vec<(u32, usize)> = Vec::with_capacity(n1 + n2);
+        for &val in sample_a {
+            combined.push((val, 0)); // 0 = группа A
+        }
+        for &val in sample_b {
+            combined.push((val, 1)); // 1 = группа B
+        }
+        
+        // Сортируем по значению
+        combined.sort_by_key(|&(val, _)| val);
+        
+        // Присваиваем ранги (с учётом связей)
+        let ranks = self.assign_ranks(&combined);
+        
+        // Сумма рангов для группы A
+        let r1: f64 = ranks.iter()
+            .zip(combined.iter())
+            .filter(|(_, (_, group))| *group == 0)
+            .map(|(rank, _)| *rank)
+            .sum();
+        
+        // U-статистика для группы A
+        let u1 = r1 - (n1 as f64 * (n1 as f64 + 1.0)) / 2.0;
+        
+        // U-статистика для группы B
+        let u2 = (n1 as f64 * n2 as f64) - u1;
+        
+        // Берём меньшую U-статистику
+        let u = u1.min(u2);
+        
+        // Среднее и стандартное отклонение для нормальной аппроксимации
+        let mean_u = (n1 as f64 * n2 as f64) / 2.0;
+        let std_u = ((n1 as f64 * n2 as f64 * (n1 as f64 + n2 as f64 + 1.0)) / 12.0).sqrt();
+        
+        if std_u == 0.0 {
+            return None;
+        }
+        
+        // Z-score с коррекцией непрерывности
+        let z_score = (u - mean_u + 0.5) / std_u;
+        
+        // P-value (двусторонний)
+        let p_value = 2.0 * (1.0 - self.normal_cdf(z_score.abs()));
+        
+        // Effect size (r = Z / sqrt(N))
+        let total_n = (n1 + n2) as f64;
+        let effect_size = z_score.abs() / total_n.sqrt();
+        
+        Some(MannWhitneyResult {
+            u_statistic: u,
+            z_score,
+            p_value,
+            is_significant: p_value < (1.0 - MIN_CONFIDENCE_LEVEL),
+            effect_size,
+        })
+    }
+    
+    /// Присваивает ранги с учётом связей (tied ranks)
+    fn assign_ranks(&self, sorted_data: &[(u32, usize)]) -> Vec<f64> {
+        let n = sorted_data.len();
+        let mut ranks = vec![0.0; n];
+        let mut i = 0;
+        
+        while i < n {
+            let current_val = sorted_data[i].0;
+            let mut j = i;
+            
+            // Находим все элементы с одинаковым значением
+            while j < n && sorted_data[j].0 == current_val {
+                j += 1;
+            }
+            
+            // Средний ранг для связанных значений
+            let avg_rank = (i + 1..=j).map(|r| r as f64).sum::<f64>() / (j - i) as f64;
+            
+            // Присваиваем средний ранг всем связанным элементам
+            for k in i..j {
+                ranks[k] = avg_rank;
+            }
+            
+            i = j;
+        }
+        
+        ranks
     }
     
     /// Аппроксимация p-value для t-распределения
@@ -848,25 +1029,56 @@ impl ABTestManager {
         
         // Приоритет 2: Статистически значимая разница в latency
         if let Some(ref comparison) = stats {
-            if comparison.is_significant {
+            // Проверяем оба теста: t-test и Mann-Whitney
+            let t_test_significant = comparison.is_significant;
+            let mw_significant = comparison.mann_whitney
+                .as_ref()
+                .map(|mw| mw.is_significant)
+                .unwrap_or(false);
+            
+            // Если хотя бы один тест показывает значимость
+            if t_test_significant || mw_significant {
                 let latency_diff = result_a.avg_latency_ms - result_b.avg_latency_ms;
+                
+                // Используем более высокий confidence если оба теста согласны
+                let confidence = if t_test_significant && mw_significant {
+                    comparison.confidence_level.max(
+                        comparison.mann_whitney.as_ref()
+                            .map(|mw| 1.0 - mw.p_value)
+                            .unwrap_or(0.0)
+                    )
+                } else {
+                    comparison.confidence_level
+                };
+                
+                // Формируем детальное объяснение
+                let test_info = if t_test_significant && mw_significant {
+                    format!(
+                        "p={:.3}, MW p={:.3}, effect={}",
+                        comparison.p_value,
+                        comparison.mann_whitney.as_ref().map(|mw| mw.p_value).unwrap_or(1.0),
+                        comparison.effect_interpretation
+                    )
+                } else if t_test_significant {
+                    format!("t-test p={:.3}, effect={}", comparison.p_value, comparison.effect_interpretation)
+                } else {
+                    format!(
+                        "Mann-Whitney p={:.3}",
+                        comparison.mann_whitney.as_ref().map(|mw| mw.p_value).unwrap_or(1.0)
+                    )
+                };
+                
                 if latency_diff < 0.0 {
                     return (
                         Some(result_a.strategy_id.clone()),
-                        comparison.confidence_level,
-                        format!(
-                            "Strategy A is {:.0}ms faster (p={:.3}, effect={})",
-                            -latency_diff, comparison.p_value, comparison.effect_interpretation
-                        ),
+                        confidence,
+                        format!("Strategy A is {:.0}ms faster ({})", -latency_diff, test_info),
                     );
                 } else {
                     return (
                         Some(result_b.strategy_id.clone()),
-                        comparison.confidence_level,
-                        format!(
-                            "Strategy B is {:.0}ms faster (p={:.3}, effect={})",
-                            latency_diff, comparison.p_value, comparison.effect_interpretation
-                        ),
+                        confidence,
+                        format!("Strategy B is {:.0}ms faster ({})", latency_diff, test_info),
                     );
                 }
             }
@@ -1258,11 +1470,74 @@ mod tests {
             is_significant: true,
             effect_size: 0.6,
             effect_interpretation: "medium".to_string(),
+            mann_whitney: Some(MannWhitneyResult {
+                u_statistic: 15.0,
+                z_score: -2.1,
+                p_value: 0.036,
+                is_significant: true,
+                effect_size: 0.47,
+            }),
+            latency_diff_ci: Some(ConfidenceInterval {
+                lower: -150.0,
+                upper: -50.0,
+                level: 0.95,
+            }),
+            strategy_a_ci: Some(ConfidenceInterval {
+                lower: 80.0,
+                upper: 120.0,
+                level: 0.95,
+            }),
+            strategy_b_ci: Some(ConfidenceInterval {
+                lower: 180.0,
+                upper: 220.0,
+                level: 0.95,
+            }),
         };
         
         assert!(comparison.is_significant);
         assert!(comparison.confidence_level > MIN_CONFIDENCE_LEVEL);
         assert_eq!(comparison.effect_interpretation, "medium");
+        assert!(comparison.mann_whitney.is_some());
+        assert!(comparison.latency_diff_ci.is_some());
+    }
+    
+    #[test]
+    fn test_mann_whitney_result() {
+        let mw = MannWhitneyResult {
+            u_statistic: 10.0,
+            z_score: -2.5,
+            p_value: 0.012,
+            is_significant: true,
+            effect_size: 0.56,
+        };
+        
+        assert!(mw.is_significant);
+        assert!(mw.p_value < 0.05);
+        assert!(mw.effect_size > 0.0);
+    }
+    
+    #[test]
+    fn test_confidence_interval() {
+        let ci = ConfidenceInterval {
+            lower: 90.0,
+            upper: 110.0,
+            level: 0.95,
+        };
+        
+        assert!(ci.lower < ci.upper);
+        assert_eq!(ci.level, 0.95);
+        
+        // Проверяем что 100 попадает в интервал
+        let mean = 100.0;
+        assert!(mean >= ci.lower && mean <= ci.upper);
+    }
+    
+    #[test]
+    fn test_effect_size_interpretation() {
+        assert_eq!(ABTestManager::interpret_effect_size(0.1), "negligible");
+        assert_eq!(ABTestManager::interpret_effect_size(0.3), "small");
+        assert_eq!(ABTestManager::interpret_effect_size(0.6), "medium");
+        assert_eq!(ABTestManager::interpret_effect_size(1.0), "large");
     }
     
     #[test]

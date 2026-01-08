@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Modal, JsonEditor } from '$lib/components';
-  import type { RoutingRule, ProxyConfig } from './types';
+  import type { RoutingRule } from './types';
+  import type { ProxyConfig } from '$lib/api/types';
   import { getProxyFlag, getProxyCountryName } from '$lib/utils/countries';
 
   interface Props {

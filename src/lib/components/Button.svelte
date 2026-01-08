@@ -8,6 +8,7 @@
     loading?: boolean;
     class?: string;
     title?: string;
+    'aria-label'?: string;
     onclick?: () => void;
     children?: Snippet;
   }
@@ -19,6 +20,7 @@
     loading = false,
     class: className = '',
     title,
+    'aria-label': ariaLabel,
     onclick,
     children 
   }: Props = $props();
@@ -45,6 +47,7 @@
   class={classes}
   disabled={disabled || loading}
   {title}
+  aria-label={ariaLabel}
   onclick={onclick}
 >
   {#if loading}

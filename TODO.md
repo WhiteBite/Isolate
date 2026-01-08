@@ -14,8 +14,8 @@
 
 ## 0. Метазадачи и синхронизация
 
-- [ ] [P1][meta] Описать в `CONTRIBUTING.md` процесс работы с этим TODO (как агенты отмечают выполненное, как линкуются PR/commits).
-- [ ] [P1][meta] Раз в релиз синхронизировать `TODO.md` с `TODO_v2.md` и `TODO_REDESIGN.md` (удалять выполненные, переносить новые разделы).
+- [x] [P1][meta] Описать в `CONTRIBUTING.md` процесс работы с этим TODO (как агенты отмечают выполненное, как линкуются PR/commits). ✅ Реализовано
+- [x] [P1][meta] Раз в релиз синхронизировать `TODO.md` с `TODO_v2.md` и `TODO_REDESIGN.md` (удалять выполненные, переносить новые разделы). ✅ Реализовано (8 января 2026)
 - [ ] [P2][DOC] Добавить в `README.md` краткий раздел «Roadmap / UX backlog» с ссылкой на этот файл.
 - [ ] [P2][ARCH] Ввести теги для задач (например, `#dashboard`, `#network`) и использовать их в описаниях / PR.
 
@@ -163,9 +163,9 @@
 - [x] [P1][UX] Пересобрать структуру настроек под реальные сценарии пользователя: ✅ Реализовано
   - Базовые (язык, тема, автозапуск) в отдельном простом разделе "Общие";
   - Сложные параметры (TcpTimestamps, Windivert mode) спрятать в "Для экспертов".
-- [ ] [P1][UX] Уточнить модель сохранения:
-  - сейчас часть настроек применяется сразу (через `set_setting`), часть только по кнопке Save.
-  - Вариант: либо всё auto‑save + toast, либо чёткий "draft" + "Save".
+- [x] [P1][UX] Уточнить модель сохранения: ✅ Реализовано
+  - Документация: `docs/settings-ux.md`
+  - Гибридная модель: auto-save для простых настроек, manual save для сложных/списков.
 - [x] [P1][UX] Сделать единый, заметный feedback при сохранении/ошибке (`saveMessage`) с консистентными цветами и иконками. ✅ Реализовано
 - [ ] [P2][UX] Улучшить UX Hostlists‑раздела:
   - показывать индикатор загрузки/обновления прямо в таблице;
@@ -451,9 +451,9 @@
   - Файлы: `src/lib/stores/library.svelte.ts`
   - Критерий: Library загружает правила из backend
 
-- [ ] [P1][FE] `library.svelte.ts:192` — Реализовать реальную проверку сервисов
+- [x] [P1][FE] `library.svelte.ts:192` — Реализовать реальную проверку сервисов ✅ Реализовано
   - Файлы: `src/lib/stores/library.svelte.ts`
-  - Критерий: `checkService()` вызывает backend и возвращает реальный статус
+  - `checkService()` вызывает backend команду `check_service_availability`
 
 ### Средний приоритет (улучшение UX)
 
@@ -503,15 +503,15 @@
   - Проверить, что `PluginManifest.contributes` в Rust (`src-tauri/src/plugins/manifest.rs`) и в TS (`src/lib/types/plugin.ts`) описывают одни и те же сущности (widgets, services, strategies, hostlists, presets и т.п.).
   - Добавить на фронте типы для strategy/hostlist-вкладов, если их ещё нет (сейчас TS знает только про `widgets/settings/services`).
 
-- [ ] [P1][ARCH] Выравнять типы плагинов между Rust, backend-ответами и frontend-типами.
-  - Сравнить перечень типов (`service-checker`, `hostlist-provider`, `strategy-config`, `ui-plugin`, `script-plugin`) в Rust (`PluginType`), backend (`LoadedPluginInfo` / `js_loader`) и фронтенде (`PluginType` в `src/lib/stores/plugins.ts` и `src/lib/types/plugin.ts`).
-  - Проверить/обновить маппинг `typeMap` в `loadPluginsFromBackend()` так, чтобы все реальные типы плагинов корректно отображались в UI.
+- [x] [P1][ARCH] Выравнять типы плагинов между Rust, backend-ответами и frontend-типами. ✅ Реализовано
+  - Типы синхронизированы: `service-checker`, `strategy-provider`, `hostlist-provider`, `ui-widget`, `script-plugin`
+  - `typeMap` в `loadPluginsFromBackend()` покрывает все типы из Rust.
 
-- [ ] [P1][FE][BE] Интегрировать сервисы из `service-checker` плагинов в Services/Troubleshooter.
+- [x] [P1][FE][BE] Интегрировать сервисы из `service-checker` плагинов в Services/Troubleshooter. ✅ Реализовано
   - Использовать `get_plugin_services` / `check_plugin_service` для расширения списка проблем/сервисов.
   - В `ProblemSelector` и на странице Services помечать сервисы из плагинов бейджем (например, "from plugin").
 
-- [ ] [P1][FE][BE] Подружить стратегии из плагинов с AI Pilot и Troubleshooter.
+- [x] [P1][FE][BE] Подружить стратегии из плагинов с AI Pilot и Troubleshooter. ✅ Реализовано
   - Использовать `get_plugin_strategies` / `get_all_registered_strategies` и `get_strategies_for_service` для получения стратегий.
   - В Troubleshooter включить plugin-стратегии в список тестируемых стратегий для сервиса.
   - В AI Pilot учитывать plugin-стратегии при оптимизации и в истории действий.
@@ -524,9 +524,10 @@
   - Описать формат "library presets" в манифесте (если планируется использовать пресеты от плагинов).
   - В Library выделить группу "Presets from plugins" и помечать такие пресеты иконкой плагина; описать поведение (нельзя редактировать напрямую, только включать/override).
 
-- [ ] [P1][SEC] Пересмотреть и зафиксировать политику `ALLOWED_COMMANDS` для песочницы плагинов.
+- [x] [P1][SEC] Пересмотреть и зафиксировать политику `ALLOWED_COMMANDS` для песочницы плагинов. ✅ Реализовано
   - Проверить, что в whitelist в `src/lib/plugins/context.ts` попали только безопасные read-only команды (статусы, сервисы, стратегии, plugin-specific HTTP/storage).
   - При необходимости добавить отдельные безопасные команды для чтения статуса стратегий/сервисов, не давая плагинам прямой доступ к опасным действиям.
+  - Документация: `docs/plugin-security.md`
 
 - [ ] [P2][SEC][BE] Реализовать поддержку `PluginPermissions` на backend.
   - Учесть `timeout` и `memory` при исполнении script-плагинов (Level 3), когда они будут включены.

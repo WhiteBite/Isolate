@@ -156,6 +156,42 @@ refactor: extract process runner into separate module
 docs: update strategy configuration guide
 ```
 
+## Working with TODO.md
+
+`TODO.md` is the single source of truth for the project backlog. When working with tasks:
+
+### Finding Tasks
+
+1. Open `TODO.md` and look for unchecked items `- [ ]`
+2. Tasks are prioritized: `[P0]` critical → `[P1]` high → `[P2]` medium → `[P3]` nice-to-have
+3. Task types: `[UX]` interface, `[FE]` frontend, `[BE]` backend, `[ARCH]` architecture, `[DOC]` documentation
+
+### Claiming a Task
+
+1. Create a branch: `git checkout -b feat/task-description`
+2. Work on the task following code style guidelines
+3. Mark task as done in `TODO.md`: `- [x] [P1][FE] Task description ✅ Реализовано`
+
+### Completing a Task
+
+1. Add `✅ Реализовано` (or `✅ Done`) after the task description
+2. If task has sub-items, mark them too
+3. Commit the TODO.md change with your feature commit
+4. Reference the task in your PR description
+
+### Adding New Tasks
+
+1. Add tasks to the appropriate section in `TODO.md`
+2. Use the format: `- [ ] [Priority][Type] Description`
+3. Include file paths and acceptance criteria when possible
+4. For inline code TODOs, also add to section 20 "Inline TODO/FIXME"
+
+### Syncing with Other Files
+
+- `TODO_v2.md` and `TODO_REDESIGN.md` contain detailed specs
+- `TODO.md` is the canonical task list
+- Sync periodically: move completed items, add new tasks from specs
+
 ## Questions?
 
 - Check existing [issues](https://github.com/aspect-build/isolate/issues)

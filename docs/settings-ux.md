@@ -1,106 +1,34 @@
 # Settings UX Model
 
-## Обзор
+## Current Behavior
 
-Страница Settings использует **гибридную модель сохранения** для оптимального UX:
-- **Auto-save** — для простых настроек с мгновенным эффектом
-- **Draft + Save** — для сложных настроек, требующих подтверждения
+Settings in Isolate use a **hybrid save model**:
 
-## Модели сохранения
+### Auto-Save Settings (immediate)
+These settings apply immediately when changed:
+- Language / Theme
+- Autostart on boot (`autoStart`)
+- Minimize to tray (`minimizeToTray`)
+- Notifications toggle
+- Silent mode
+- Telemetry preferences
+- Block QUIC (`blockQuic`)
+- Debug mode (`debugMode`)
+- WinDivert mode selection
+- Game filter mode
+- DNS override
+- TCP Timestamps
 
-### 🔄 Auto-save (мгновенное сохранение)
+### Manual Save Settings (require confirmation)
+These settings require explicit "Save" action:
+- Domain exceptions (Routing tab)
+- Hotkey configurations (Hotkeys tab)
+- Auto-Recovery settings (has own Save button)
+- ISP Profile selection (ProviderSelector)
 
-**Когда использовать:**
-- Простые toggle-переключатели
-- Настройки с немедленным визуальным эффектом
-- Низкорисковые изменения
+## Implementation
 
-**Настройки с auto-save:**
-
-| Настройка | Вкладка | Причина |
-|-----------|---------|---------|
-| `autoStart` | General | Простой toggle, мгновенный эффект |
-| `minimizeToTray` | General | Простой toggle |
-| `notifications` | General | Простой toggle |
-| `language` | General | Мгновенная смена языка UI |
-| `theme` | General | Мгновенная смена темы |
-| `blockQuic` | Advanced | Простой toggle |
-| `debugMode` | Advanced | Простой toggle |
-| `windivertMode` | Advanced | Dropdown с немедленным эффектом |
-| `gameFilterMode` | Advanced | Toggle с визуальным feedback |
-| `dnsOverride` | Advanced | Текстовое поле |
-| `tcpTimestamps` | Advanced | Toggle (требует admin) |
-
-**UX поведение:**
-- ✅ Изменение применяется сразу при клике/изменении
-- ✅ Нет toast-уведомлений (избегаем notification fatigue)
-- ⚠️ Toast показывается только при ошибке
-- 🔵 Визуальный индикатор "auto-save" рядом с настройкой
-
-### 💾 Draft + Save (явное сохранение)
-
-**Когда использовать:**
-- Списки/коллекции (domain exceptions)
-- Настройки с комплексным вводом (hotkeys)
-- Изменения, которые пользователь может захотеть отменить
-- Настройки, требующие batch-сохранения
-
-**Настройки с draft+save:**
-
-| Настройка | Вкладка | Причина |
-|-----------|---------|---------|
-| `domainExceptions` | Routing | Список доменов, batch-редактирование |
-| `hotkeys` | Hotkeys | Комплексный ввод, возможность отмены |
-
-**UX поведение:**
-- ⚠️ Изменения накапливаются локально
-- 🟡 Индикатор "unsaved changes" при наличии изменений
-- 💾 Кнопка Save применяет все изменения
-- ✅ Toast "Saved" при успешном сохранении
-- ❌ Toast с ошибкой при неудаче
-
-## Визуальные индикаторы
-
-### Info-блоки по вкладкам
-
-Каждая вкладка имеет info-блок в начале:
-
-**General tab (auto-save):**
-```
-🔵 Settings on this page are saved automatically when changed.
-   The Save button is for domain exceptions and hotkeys only.
-```
-
-**Routing tab (draft+save):**
-```
-🟡 Domain exceptions require clicking Save to apply.
-   You can add multiple domains before saving.
-```
-
-**Hotkeys tab (draft+save):**
-```
-🟡 Hotkey changes require clicking Save to persist.
-   Configure all your hotkeys, then save once.
-```
-
-**Advanced tab (mixed):**
-```
-🔵 Advanced settings are saved automatically when changed.
-   Auto-Recovery has its own Save button.
-```
-
-### Индикаторы состояния
-
-1. **Auto-save indicator** — маленькая иконка ✓ или "auto" badge
-2. **Unsaved changes** — жёлтая точка или badge "Unsaved"
-3. **Saving spinner** — анимация на кнопке Save
-4. **Success toast** — зелёный, исчезает через 3 сек
-5. **Error toast** — красный, исчезает через 5 сек
-
-## Реализация
-
-### Auto-save функция
-
+### Auto-Save Pattern
 ```typescript
 /**
  * Auto-save individual setting to backend immediately.
@@ -119,20 +47,29 @@ async function setSetting(key: string, value: unknown) {
     saveMessage = { text: `Failed to save: ${e}`, type: 'error' };
   }
 }
+
+// Usage example
+async function handleToggle(key: string, value: boolean) {
+  await setSetting(key, value);
+  // No success toast - immediate visual feedback is enough
+}
 ```
 
-### Draft+Save функция
-
+### Manual Save Pattern
 ```typescript
 /**
  * Save settings that require explicit user action (Save button).
  * Used for complex settings like domain exceptions, hotkeys.
  * Shows toast notification on success/failure.
  */
+let draft = $state({ ...currentSettings });
+let hasChanges = $derived(JSON.stringify(draft) !== JSON.stringify(currentSettings));
+
 async function saveSettings() {
   saving = true;
   try {
-    await invoke('save_settings', { settings: localSettings });
+    await invoke('save_settings', { settings: draft });
+    currentSettings = { ...draft };
     saveMessage = { text: 'Settings saved', type: 'success' };
   } catch (e) {
     saveMessage = { text: `Failed: ${e}`, type: 'error' };
@@ -142,46 +79,87 @@ async function saveSettings() {
 }
 ```
 
-## Компоненты с собственной логикой сохранения
+## Feedback
 
-Некоторые компоненты имеют собственную кнопку Save:
+- **Auto-save**: No toast on success (avoids notification fatigue), error toast only on failure
+- **Manual save**: "Save" button enabled only when `hasChanges` is true
+- **Success**: Green toast, disappears after 3 seconds
+- **Errors**: Red toast with error message, disappears after 5 seconds
+- **Saving state**: Spinner animation on Save button
 
-- **AutoRecoverySettings** — сложная конфигурация failover
-- **ProviderSelector** — выбор ISP профиля
+## Visual Indicators
 
-Эти компоненты инкапсулируют свою логику сохранения и не зависят от глобальной кнопки Save.
+### Info Blocks per Tab
 
-## Рекомендации для новых настроек
+Each tab has an info block explaining the save behavior:
 
-### Выбор модели
+**General tab (auto-save):**
+```
+🔵 Settings on this page are saved automatically when changed.
+```
+
+**Routing tab (draft+save):**
+```
+🟡 Domain exceptions require clicking Save to apply.
+```
+
+**Hotkeys tab (draft+save):**
+```
+🟡 Hotkey changes require clicking Save to persist.
+```
+
+**Advanced tab (mixed):**
+```
+🔵 Advanced settings are saved automatically when changed.
+```
+
+### State Indicators
+
+| Indicator | Meaning |
+|-----------|---------|
+| ✓ or "auto" badge | Setting uses auto-save |
+| Yellow dot / "Unsaved" badge | Pending changes need Save |
+| Spinner on button | Save in progress |
+| Green toast | Success |
+| Red toast | Error |
+
+## Recommendations
+
+1. **Prefer auto-save** for simple toggles and selections
+2. **Use manual save** for complex/dangerous settings or collections (lists)
+3. **Always show feedback** — user should know if change was applied (visual state change for auto-save, toast for manual save)
+4. **Confirm destructive changes** — reset to defaults, clear data
+5. **Avoid notification fatigue** — don't show success toasts for every auto-save
+
+## Decision Tree for New Settings
 
 ```
-Новая настройка
+New setting
     │
     ▼
 ┌─────────────────────────────┐
-│ Это простой toggle/dropdown?│
+│ Is it a simple toggle/dropdown?│
 └─────────────────────────────┘
-    │ ДА                │ НЕТ
+    │ YES               │ NO
     ▼                   ▼
 Auto-save          ┌──────────────────────┐
-                   │ Это список/коллекция?│
+                   │ Is it a list/collection?│
                    └──────────────────────┘
-                        │ ДА           │ НЕТ
+                        │ YES          │ NO
                         ▼              ▼
-                   Draft+Save    ┌─────────────────────┐
-                                 │ Требует подтверждения│
-                                 │ или может быть отменён?│
-                                 └─────────────────────┘
-                                      │ ДА        │ НЕТ
-                                      ▼           ▼
-                                 Draft+Save   Auto-save
+                   Manual Save    ┌─────────────────────┐
+                                  │ Requires confirmation│
+                                  │ or can be cancelled? │
+                                  └─────────────────────┘
+                                       │ YES       │ NO
+                                       ▼           ▼
+                                  Manual Save   Auto-save
 ```
 
-### Checklist для новой настройки
+## Checklist for Adding New Settings
 
-- [ ] Определить модель сохранения (auto-save / draft+save)
-- [ ] Добавить в соответствующую секцию UI
-- [ ] Добавить комментарий в коде о модели
-- [ ] Обновить info-блок вкладки если нужно
-- [ ] Добавить в эту документацию
+- [ ] Determine save model (auto-save / manual save)
+- [ ] Add to appropriate UI section
+- [ ] Add code comment about save model
+- [ ] Update tab info block if needed
+- [ ] Update this documentation

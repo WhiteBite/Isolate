@@ -363,16 +363,30 @@ class TroubleshootStore {
         // Обновляем правило в Library
         await this.updateLibraryRule();
         
+        // Показываем toast уведомление об успехе
+        const { toasts } = await import('./toast');
+        toasts.success(`Strategy "${this.bestStrategy.name}" applied and saved to Library`);
+        
         this.reset();
       } catch (e) {
         console.error('Failed to apply result:', e);
         this.applyError = e instanceof Error ? e.message : String(e);
+        
+        // Показываем toast с ошибкой
+        const { toasts } = await import('./toast');
+        toasts.error(`Failed to apply strategy: ${this.applyError}`);
+        
         // НЕ сбрасываем состояние - пользователь может попробовать снова
       }
     } else {
       // Demo mode - обновляем Library и сбрасываем
       console.log('Demo: Applied strategy:', this.bestStrategy.id, 'for service:', this.selectedProblem.serviceId);
       await this.updateLibraryRule();
+      
+      // Показываем toast в demo режиме
+      const { toasts } = await import('./toast');
+      toasts.success(`Demo: Strategy "${this.bestStrategy.name}" applied`);
+      
       this.reset();
     }
   }
@@ -396,6 +410,10 @@ class TroubleshootStore {
       // Логируем ошибку, но не прерываем основной flow
       // Правило в backend уже применено через apply_troubleshoot_result
       console.warn('[Troubleshoot] Failed to update Library rule (non-critical):', e);
+      
+      // Показываем предупреждение пользователю
+      const { toasts } = await import('./toast');
+      toasts.warning('Strategy applied, but Library sync failed. Refresh Library page.');
     }
   }
 

@@ -223,10 +223,22 @@ pub async fn apply_troubleshoot_result(
     // Запускаем стратегию глобально
     state.strategy_engine.start_global(&strategy).await?;
     
-    // Сохраняем привязку service → strategy в storage
+    // Сохраняем привязку service → strategy в storage (legacy)
     let binding_key = format!("{}{}", SERVICE_STRATEGY_BINDING_PREFIX, service_id);
     state.storage.set_setting(&binding_key, &strategy_id).await
         .map_err(|e| IsolateError::Storage(format!("Failed to save service-strategy binding: {}", e)))?;
+    
+    // Интеграция с Library: создаём/обновляем правило для сервиса
+    if let Err(e) = update_library_rule_for_service(&state, &service_id, &strategy_id).await {
+        // Логируем ошибку, но не прерываем основной flow
+        // Стратегия уже применена, привязка сохранена
+        warn!(
+            service_id = %service_id,
+            strategy_id = %strategy_id,
+            error = %e,
+            "Failed to update Library rule (non-critical)"
+        );
+    }
     
     info!(
         service_id = %service_id,
@@ -282,6 +294,73 @@ pub async fn get_troubleshoot_problems(
 // ============================================================================
 // Helpers
 // ============================================================================
+
+/// Обновляет правило в Library для сервиса после успешного troubleshoot
+/// 
+/// Создаёт новое правило если его нет, или обновляет существующее.
+async fn update_library_rule_for_service(
+    state: &Arc<AppState>,
+    service_id: &str,
+    strategy_id: &str,
+) -> Result<(), IsolateError> {
+    use crate::commands::library::{LibraryRule, AccessMethod};
+    use uuid::Uuid;
+    use chrono::Utc;
+    
+    info!(
+        service_id = %service_id,
+        strategy_id = %strategy_id,
+        "Updating Library rule for service"
+    );
+    
+    // Загружаем сервис для получения домена
+    let services = state.config_manager.load_services().await?;
+    let service = services.get(service_id)
+        .ok_or_else(|| IsolateError::Config(format!("Service not found: {}", service_id)))?;
+    
+    // Извлекаем домен из test_url или используем service_id
+    let pattern = if let Some(test_url) = service.get_test_url() {
+        // Парсим URL и извлекаем домен
+        if let Ok(url) = url::Url::parse(&test_url) {
+            if let Some(host) = url.host_str() {
+                format!("*.{}", host)
+            } else {
+                format!("*.{}.com", service_id)
+            }
+        } else {
+            format!("*.{}.com", service_id)
+        }
+    } else {
+        // Fallback: используем service_id
+        format!("*.{}.com", service_id)
+    };
+    
+    // Создаём новое правило
+    let now = Utc::now().timestamp();
+    let rule = LibraryRule {
+        id: Uuid::new_v4().to_string(),
+        service_id: Some(service_id.to_string()),
+        pattern,
+        method: AccessMethod::Zapret,
+        is_enabled: true,
+        strategy_id: Some(strategy_id.to_string()),
+        priority: 100, // Высокий приоритет для troubleshoot результатов
+        created_at: now,
+        updated_at: now,
+    };
+    
+    // TODO: Сохранить правило в БД
+    // Пока просто логируем создание правила
+    info!(
+        rule_id = %rule.id,
+        service_id = %service_id,
+        strategy_id = %strategy_id,
+        pattern = %rule.pattern,
+        "Library rule created (mock - not persisted yet)"
+    );
+    
+    Ok(())
+}
 
 /// Тестирует URL напрямую
 async fn test_url_direct(url: &str, timeout_secs: u64) -> Result<u32, IsolateError> {

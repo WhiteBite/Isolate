@@ -6,13 +6,22 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tauri::State;
+use tauri::{Emitter, State};
+use tokio::sync::RwLock;
 use tracing::{info, warn};
 
 use crate::commands::get_state_or_error;
 use crate::core::errors::IsolateError;
 use crate::core::models::ProxyProtocol;
 use crate::state::AppState;
+
+// ============================================================================
+// In-Memory Storage
+// ============================================================================
+
+/// Global in-memory storage for proxy chains
+static PROXY_CHAINS: once_cell::sync::Lazy<Arc<RwLock<HashMap<String, ProxyChain>>>> =
+    once_cell::sync::Lazy::new(|| Arc::new(RwLock::new(HashMap::new())));
 
 // ============================================================================
 // Data Structures
@@ -184,7 +193,7 @@ pub async fn batch_import_proxies(
 
 /// Get all proxy chains
 /// 
-/// Returns list of all configured proxy chains (currently mock data)
+/// Returns list of all configured proxy chains from in-memory storage
 #[tauri::command]
 pub async fn get_proxy_chains(
     app: tauri::AppHandle,
@@ -193,17 +202,14 @@ pub async fn get_proxy_chains(
     
     info!("Getting all proxy chains");
     
-    // TODO: Implement real storage for proxy chains
-    // For now, return mock data
-    Ok(vec![
-        ProxyChain {
-            id: "chain_default".to_string(),
-            name: "Default Chain".to_string(),
-            proxies: vec![],
-            is_active: false,
-            created_at: chrono::Utc::now().timestamp_millis(),
-        },
-    ])
+    let chains = PROXY_CHAINS.read().await;
+    let mut result: Vec<ProxyChain> = chains.values().cloned().collect();
+    
+    // Sort by creation time (newest first)
+    result.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+    
+    info!(count = result.len(), "Retrieved proxy chains");
+    Ok(result)
 }
 
 /// Save or update a proxy chain
@@ -237,10 +243,11 @@ pub async fn save_proxy_chain(
         chain.created_at = chrono::Utc::now().timestamp_millis();
     }
     
-    // TODO: Implement real storage for proxy chains
-    // For now, just return the chain as-is
+    // Save to in-memory storage
+    let mut chains = PROXY_CHAINS.write().await;
+    chains.insert(chain.id.clone(), chain.clone());
     
-    info!(id = %chain.id, "Proxy chain saved");
+    info!(id = %chain.id, "Proxy chain saved to storage");
     Ok(chain)
 }
 
@@ -261,13 +268,47 @@ pub async fn apply_proxy_chain(
         return Err(IsolateError::Validation("Chain ID cannot be empty".to_string()));
     }
     
+    // Get chain from storage and update states
+    let mut chains = PROXY_CHAINS.write().await;
+    
+    // Check if chain exists
+    if !chains.contains_key(&chain_id) {
+        return Err(IsolateError::NotFound(format!("Chain '{}' not found", chain_id)));
+    }
+    
+    // Collect IDs of chains to deactivate
+    let mut deactivated_ids = Vec::new();
+    
+    // Deactivate all chains and activate the target one
+    for (id, chain) in chains.iter_mut() {
+        if id == &chain_id {
+            chain.is_active = true;
+        } else if chain.is_active {
+            chain.is_active = false;
+            deactivated_ids.push(id.clone());
+        }
+    }
+    
+    // Release the lock before emitting events
+    drop(chains);
+    
+    // Emit deactivation events
+    for id in deactivated_ids {
+        info!(chain_id = %id, "Deactivated chain");
+        let _ = app.emit("proxy:chain_deactivated", id);
+    }
+    
     // TODO: Implement real proxy chain activation
     // This would involve:
     // 1. Loading the chain configuration
     // 2. Starting sing-box with chained outbound configuration
     // 3. Updating system proxy settings if needed
     
-    info!(chain_id = %chain_id, "Proxy chain applied (mock)");
+    info!(chain_id = %chain_id, "Proxy chain activated");
+    
+    // Emit activation event
+    let _ = app.emit("proxy:chain_activated", chain_id.clone());
+    
     Ok(())
 }
 
@@ -286,11 +327,17 @@ pub async fn delete_proxy_chain(
         return Err(IsolateError::Validation("Chain ID cannot be empty".to_string()));
     }
     
-    // TODO: Implement real deletion
-    // 1. Stop chain if active
-    // 2. Remove from storage
+    // Remove from storage
+    let mut chains = PROXY_CHAINS.write().await;
+    let chain = chains.remove(&chain_id)
+        .ok_or_else(|| IsolateError::NotFound(format!("Chain '{}' not found", chain_id)))?;
     
-    info!(chain_id = %chain_id, "Proxy chain deleted (mock)");
+    // If chain was active, emit deactivation event
+    if chain.is_active {
+        let _ = app.emit("proxy:chain_deactivated", chain_id.clone());
+    }
+    
+    info!(chain_id = %chain_id, "Proxy chain deleted from storage");
     Ok(())
 }
 
@@ -309,11 +356,23 @@ pub async fn deactivate_proxy_chain(
         return Err(IsolateError::Validation("Chain ID cannot be empty".to_string()));
     }
     
+    // Get chain from storage
+    let mut chains = PROXY_CHAINS.write().await;
+    let chain = chains.get_mut(&chain_id)
+        .ok_or_else(|| IsolateError::NotFound(format!("Chain '{}' not found", chain_id)))?;
+    
+    // Deactivate
+    chain.is_active = false;
+    
     // TODO: Implement real deactivation
     // 1. Stop sing-box chain configuration
     // 2. Restore system proxy settings
     
-    info!(chain_id = %chain_id, "Proxy chain deactivated (mock)");
+    info!(chain_id = %chain_id, "Proxy chain deactivated");
+    
+    // Emit deactivation event
+    let _ = app.emit("proxy:chain_deactivated", chain_id.clone());
+    
     Ok(())
 }
 
@@ -366,11 +425,23 @@ pub async fn get_proxy_chain_stats(
     
     info!("Getting proxy chain statistics");
     
-    // TODO: Implement real statistics
+    let chains = PROXY_CHAINS.read().await;
+    
+    let total_chains = chains.len();
+    let active_chains = chains.values().filter(|c| c.is_active).count();
+    let total_proxies_in_chains: usize = chains.values().map(|c| c.proxies.len()).sum();
+    
     let mut stats = HashMap::new();
-    stats.insert("total_chains".to_string(), serde_json::json!(1));
-    stats.insert("active_chains".to_string(), serde_json::json!(0));
-    stats.insert("total_proxies_in_chains".to_string(), serde_json::json!(0));
+    stats.insert("total_chains".to_string(), serde_json::json!(total_chains));
+    stats.insert("active_chains".to_string(), serde_json::json!(active_chains));
+    stats.insert("total_proxies_in_chains".to_string(), serde_json::json!(total_proxies_in_chains));
+    
+    info!(
+        total_chains = total_chains,
+        active_chains = active_chains,
+        total_proxies = total_proxies_in_chains,
+        "Chain statistics retrieved"
+    );
     
     Ok(stats)
 }

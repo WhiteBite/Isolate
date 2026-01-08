@@ -175,7 +175,7 @@
       <!-- Empty state -->
       <div class="flex flex-col items-center justify-center py-16 text-center">
         <div class="w-16 h-16 flex items-center justify-center bg-zinc-800 rounded-full mb-4">
-          <svg class="w-8 h-8 text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <svg class="w-8 h-8 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
                   d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
           </svg>
@@ -227,7 +227,7 @@
 
   <!-- Keyboard shortcuts hint -->
   {#if libraryStore.filteredRules.length > 0 && !libraryStore.loading}
-    <div class="flex items-center justify-center gap-6 py-3 border-t border-zinc-800 text-xs text-zinc-500">
+    <div class="flex items-center justify-center gap-6 py-3 border-t border-zinc-800 text-xs text-zinc-400">
       <div class="flex items-center gap-1.5">
         <kbd class="px-1.5 py-0.5 bg-zinc-800 border border-zinc-700 rounded text-zinc-400">↑</kbd>
         <kbd class="px-1.5 py-0.5 bg-zinc-800 border border-zinc-700 rounded text-zinc-400">↓</kbd>

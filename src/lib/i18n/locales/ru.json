@@ -409,5 +409,110 @@
       "clear": "Очистить",
       "export": "Экспорт"
     }
+  },
+  "troubleshoot": {
+    "title": "Диагностика",
+    "subtitle": "Найдём и исправим проблемы с доступом",
+    "buttons": {
+      "reset": "Начать заново",
+      "startTest": "Начать тестирование"
+    },
+    "steps": {
+      "select": "Выбор проблемы",
+      "testing": "Тестирование",
+      "results": "Результаты"
+    },
+    "aiAssistant": {
+      "title": "AI Помощник",
+      "subtitle": "Автоматический подбор стратегии",
+      "selectPrompt": "Выберите сервис, с которым возникли проблемы. Я проанализирую ситуацию и подберу оптимальную стратегию обхода.",
+      "selectedServicePrefix": "Отлично! Вы выбрали",
+      "selectedServiceSuffix": "Нажмите \"Начать тестирование\" для поиска рабочей стратегии.",
+      "testingPrefix": "Тестирую стратегии для",
+      "testingNote": "Это может занять несколько минут",
+      "resultsReady": "Тестирование завершено! Выберите рекомендованную стратегию или попробуйте другие варианты."
+    },
+    "tips": {
+      "title": "Советы",
+      "closeVpn": "Закройте VPN и прокси перед тестированием",
+      "runAsAdmin": "Убедитесь, что приложение запущено от администратора",
+      "tryVless": "Если ничего не помогает — попробуйте VLESS прокси"
+    },
+    "systemStatus": {
+      "title": "Статус системы",
+      "windivert": "WinDivert",
+      "internet": "Интернет",
+      "adminRights": "Права админа",
+      "ready": "Готов",
+      "connected": "Подключен",
+      "available": "Есть"
+    },
+    "advanced": {
+      "title": "Продвинутые опции",
+      "description": "Хотите протестировать все стратегии сразу или настроить параметры оптимизации?",
+      "openOrchestra": "Открыть оптимизацию"
+    }
+  },
+  "plugins": {
+    "title": "Plugins",
+    "tabs": {
+      "installed": "Installed",
+      "marketplace": "Market"
+    },
+    "buttons": {
+      "openFolder": "Открыть папку",
+      "refresh": "Обновить",
+      "enable": "Вкл",
+      "disable": "Откл",
+      "delete": "Удалить",
+      "install": "Установить",
+      "installed": "Установлен"
+    },
+    "search": {
+      "placeholder": "Поиск..."
+    },
+    "empty": {
+      "noPlugins": "Нет плагинов",
+      "goToMarket": "Marketplace →",
+      "selectPlugin": "Выберите плагин"
+    },
+    "details": {
+      "description": "Описание",
+      "type": "Тип",
+      "adds": "Добавляет",
+      "permissions": "Разрешения",
+      "path": "Путь",
+      "category": "Категория",
+      "downloads": "Загрузки"
+    },
+    "permissions": {
+      "http": "HTTP",
+      "httpTitle": "Доступ к сети",
+      "httpDesc": "Загрузка данных из интернета",
+      "httpDomains": "Домены",
+      "fs": "FS",
+      "fsTitle": "Файловая система",
+      "fsDesc": "Чтение и запись файлов",
+      "proc": "Proc",
+      "procTitle": "Запуск процессов",
+      "procDesc": "Выполнение внешних программ",
+      "none": "Нет особых разрешений"
+    },
+    "deleteModal": {
+      "title": "Удалить плагин?",
+      "willBeDeleted": "Будет удалено:",
+      "service": "Сервис",
+      "strategy": "Стратегия",
+      "hostlist": "Hostlist",
+      "warning": "Это действие необратимо. Файлы плагина будут удалены с диска.",
+      "cancel": "Отмена",
+      "confirm": "Удалить"
+    },
+    "messages": {
+      "reloaded": "Перезагружено",
+      "error": "Ошибка",
+      "deleted": "Удалён",
+      "pathCopied": "Путь скопирован"
+    }
   }
 }

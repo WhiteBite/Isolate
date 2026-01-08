@@ -31,7 +31,7 @@
   {:else if currentStep === 1}
     <button
       onclick={onSkip}
-      class="px-5 py-3 text-zinc-500 hover:text-zinc-400 font-medium transition-colors"
+      class="px-5 py-3 text-zinc-400 hover:text-zinc-400 font-medium transition-colors"
     >
       Skip
     </button>
@@ -46,7 +46,7 @@
       onclick={onNext}
       disabled={!canProceed}
       class="flex items-center justify-center gap-2 px-6 py-3 
-             bg-indigo-500 hover:bg-indigo-600 disabled:bg-zinc-800 disabled:text-zinc-600
+             bg-indigo-500 hover:bg-indigo-600 disabled:bg-zinc-800 disabled:text-zinc-400
              text-white rounded-xl font-medium transition-all
              disabled:cursor-not-allowed shadow-lg shadow-indigo-500/20 disabled:shadow-none
              hover:-translate-y-0.5 disabled:translate-y-0"
@@ -71,7 +71,7 @@
       </svg>
     </button>
   {:else}
-    <div class="flex items-center gap-2 px-6 py-3 text-zinc-500">
+    <div class="flex items-center gap-2 px-6 py-3 text-zinc-400">
       <div class="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
       Setting up...
     </div>

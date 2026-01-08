@@ -260,7 +260,7 @@
       <div class="flex items-center justify-between mb-4">
         <h2 class="text-lg font-medium text-white">
           Your Proxies
-          <span class="ml-2 text-sm text-zinc-500">({proxies.length})</span>
+          <span class="ml-2 text-sm text-zinc-400">({proxies.length})</span>
         </h2>
         
         <button

@@ -9,6 +9,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { isTauriEnv, waitForBackend } from '$lib/utils/backend';
+import { toasts } from '$lib/stores/toast';
 
 // ============================================================================
 // Types
@@ -199,20 +200,28 @@ class AIPilotStore {
       if (this._isTauriMode) {
         const ready = await isBackendReady();
         if (!ready) {
+          const errorMsg = 'Backend не готов. Попробуйте позже.';
+          toasts.error(errorMsg);
           throw new Error('Backend not ready');
         }
         
         const status = await invoke<BackendAIPilotStatus>('start_ai_pilot');
         this.updateFromStatus(status);
+        toasts.success('AI Pilot запущен');
       } else {
         // Demo mode
         console.log('[Demo] start_ai_pilot called with interval:', this.interval);
         this.enabled = true;
         this.startedAt = new Date();
         this.startDemoMonitoring();
+        toasts.success('AI Pilot запущен (Demo режим)');
       }
     } catch (error) {
       console.error('Failed to start AI Pilot:', error);
+      const errorMsg = error instanceof Error ? error.message : 'Неизвестная ошибка';
+      if (!errorMsg.includes('Backend не готов')) {
+        toasts.error(`Не удалось запустить AI Pilot: ${errorMsg}`);
+      }
       throw error;
     }
   }
@@ -227,19 +236,27 @@ class AIPilotStore {
       if (this._isTauriMode) {
         const ready = await isBackendReady();
         if (!ready) {
+          const errorMsg = 'Backend не готов. Попробуйте позже.';
+          toasts.error(errorMsg);
           throw new Error('Backend not ready');
         }
         
         const status = await invoke<BackendAIPilotStatus>('stop_ai_pilot');
         this.updateFromStatus(status);
+        toasts.success('AI Pilot остановлен');
       } else {
         // Demo mode
         console.log('[Demo] stop_ai_pilot called');
         this.enabled = false;
         this.stopDemoMonitoring();
+        toasts.success('AI Pilot остановлен (Demo режим)');
       }
     } catch (error) {
       console.error('Failed to stop AI Pilot:', error);
+      const errorMsg = error instanceof Error ? error.message : 'Неизвестная ошибка';
+      if (!errorMsg.includes('Backend не готов')) {
+        toasts.error(`Не удалось остановить AI Pilot: ${errorMsg}`);
+      }
       throw error;
     }
   }
@@ -275,6 +292,7 @@ class AIPilotStore {
       }
     } catch (error) {
       console.error('Failed to fetch AI Pilot history:', error);
+      toasts.error('Не удалось загрузить историю AI Pilot');
     }
   }
 
@@ -301,6 +319,7 @@ class AIPilotStore {
       await this.fetchHistory();
     } catch (error) {
       console.error('Failed to sync with backend:', error);
+      toasts.error('Не удалось синхронизировать состояние AI Pilot');
     }
   }
 
@@ -347,12 +366,14 @@ class AIPilotStore {
           this.checksCount = status.checks_count;
           this.actionsCount = status.actions_count;
         }
+        toasts.info('Проверка завершена');
       } else {
         // Demo режим: симуляция проверки
         await this.runDemoCheck();
       }
     } catch (error) {
       console.error('AI Pilot check failed:', error);
+      toasts.error('Ошибка при проверке AI Pilot');
     } finally {
       this.isChecking = false;
     }
@@ -535,6 +556,7 @@ class AIPilotStore {
       if (this._isTauriMode) {
         const ready = await isBackendReady();
         if (!ready) {
+          toasts.error('Backend не готов. Попробуйте позже.');
           throw new Error('Backend not ready');
         }
         
@@ -546,16 +568,22 @@ class AIPilotStore {
         // Backend добавит undo action через событие ai_pilot:action
         // Но мы можем удалить оригинальное действие из UI
         this.history = this.history.filter(a => a.id !== actionId);
+        toasts.success('Действие отменено');
       } else {
         // Demo mode
         console.log('[Demo] undo_ai_pilot_action called with id:', actionId);
         this.history = this.history.filter(a => a.id !== actionId);
+        toasts.success('Действие отменено (Demo режим)');
       }
       
       this.dismissNotification();
       console.log('Action undone:', actionId);
     } catch (error) {
       console.error('Failed to undo action:', error);
+      const errorMsg = error instanceof Error ? error.message : 'Неизвестная ошибка';
+      if (!errorMsg.includes('Backend не готов')) {
+        toasts.error(`Не удалось отменить действие: ${errorMsg}`);
+      }
       throw error;
     }
   }

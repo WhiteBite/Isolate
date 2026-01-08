@@ -49,7 +49,7 @@
   <!-- Search -->
   <div class="relative flex-1 min-w-[200px]">
     <svg 
-      class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" 
+      class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" 
       fill="none" 
       viewBox="0 0 24 24" 
       stroke="currentColor"
@@ -61,7 +61,7 @@
       type="text"
       placeholder="Поиск по названию или домену..."
       class="w-full pl-10 pr-4 py-2 bg-zinc-800 border border-zinc-700 rounded-lg
-             text-sm text-white placeholder-zinc-500
+             text-sm text-white placeholder-zinc-400
              focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600
              transition-colors duration-150"
       value={libraryStore.filters.search}

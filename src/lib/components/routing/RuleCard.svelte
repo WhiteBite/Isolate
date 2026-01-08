@@ -188,7 +188,7 @@
       <!-- Drag Handle -->
       <div 
         class="drag-handle flex-shrink-0 cursor-grab active:cursor-grabbing p-1.5 -ml-1 rounded-lg
-               text-zinc-600 hover:text-zinc-400 hover:bg-zinc-800/60 transition-all duration-200
+               text-zinc-400 hover:text-zinc-400 hover:bg-zinc-800/60 transition-all duration-200
                {isDragging ? 'cursor-grabbing text-indigo-400' : ''}"
         title="Drag to reorder (or use Ctrl+↑/↓)"
         aria-hidden="true"
@@ -274,7 +274,7 @@
 
       <!-- Arrow -->
       <div class="flex-shrink-0 flex items-center" aria-hidden="true">
-        <svg class="w-10 h-10 text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="w-10 h-10 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" 
                 d="M13 7l5 5m0 0l-5 5m5-5H6" />
         </svg>
@@ -291,7 +291,7 @@
 
       <!-- Arrow -->
       <div class="flex-shrink-0 flex items-center" aria-hidden="true">
-        <svg class="w-10 h-10 text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="w-10 h-10 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" 
                 d="M13 7l5 5m0 0l-5 5m5-5H6" />
         </svg>
@@ -311,9 +311,9 @@
           </div>
           <div class="flex-1 min-w-0">
             <div class="text-xs uppercase tracking-wider
-                        {actionColor === 'emerald' ? 'text-emerald-400/60' : ''}
-                        {actionColor === 'indigo' ? 'text-indigo-400/60' : ''}
-                        {actionColor === 'red' ? 'text-red-400/60' : ''}">
+                        {actionColor === 'emerald' ? 'text-emerald-400' : ''}
+                        {actionColor === 'indigo' ? 'text-indigo-400' : ''}
+                        {actionColor === 'red' ? 'text-red-400' : ''}">
               Action
             </div>
             <div class="text-sm font-medium truncate

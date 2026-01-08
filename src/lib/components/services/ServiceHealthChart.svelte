@@ -126,7 +126,7 @@
   }
 
   function getLatencyColor(latency: number | null): string {
-    if (latency === null) return 'text-zinc-500';
+    if (latency === null) return 'text-zinc-400';
     if (latency < 50) return 'text-emerald-400';
     if (latency < 150) return 'text-amber-400';
     return 'text-red-400';
@@ -238,7 +238,7 @@
       </svg>
       
       <!-- Time labels -->
-      <div class="flex justify-between mt-1 text-[10px] text-zinc-500">
+      <div class="flex justify-between mt-1 text-[10px] text-zinc-400">
         <span>{hours}h ago</span>
         <span>now</span>
       </div>
@@ -249,7 +249,7 @@
       <div class="grid grid-cols-3 gap-2">
         <!-- Uptime -->
         <div class="p-2 bg-zinc-900/40 rounded-lg">
-          <div class="text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Uptime</div>
+          <div class="text-[10px] text-zinc-400 uppercase tracking-wider mb-0.5">Uptime</div>
           <div class="text-sm font-semibold {getUptimeColor(stats.uptimePercent)}">
             {stats.uptimePercent.toFixed(1)}%
           </div>
@@ -257,7 +257,7 @@
 
         <!-- Avg Latency -->
         <div class="p-2 bg-zinc-900/40 rounded-lg">
-          <div class="text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Avg Latency</div>
+          <div class="text-[10px] text-zinc-400 uppercase tracking-wider mb-0.5">Avg Latency</div>
           <div class="text-sm font-semibold {getLatencyColor(stats.avgLatencyMs)}">
             {stats.avgLatencyMs !== null ? `${Math.round(stats.avgLatencyMs)}ms` : '—'}
           </div>
@@ -265,7 +265,7 @@
 
         <!-- Checks -->
         <div class="p-2 bg-zinc-900/40 rounded-lg">
-          <div class="text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Checks</div>
+          <div class="text-[10px] text-zinc-400 uppercase tracking-wider mb-0.5">Checks</div>
           <div class="text-sm font-semibold text-zinc-100">
             {stats.totalChecks}
           </div>
@@ -289,7 +289,7 @@
 
       <!-- Latency Range -->
       {#if stats.minLatencyMs !== null && stats.maxLatencyMs !== null}
-        <div class="flex items-center gap-2 text-xs text-zinc-500 px-1">
+        <div class="flex items-center gap-2 text-xs text-zinc-400 px-1">
           <span>Latency range:</span>
           <span class="text-zinc-400">
             {stats.minLatencyMs}ms — {stats.maxLatencyMs}ms

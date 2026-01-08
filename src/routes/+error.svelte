@@ -162,7 +162,7 @@ Stack: ${getErrorStack() || 'N/A'}
     </div>
     
     <!-- Help Text -->
-    <p class="mt-6 text-xs text-zinc-600 text-center">
+    <p class="mt-6 text-xs text-zinc-400 text-center">
       If this problem persists, try restarting the application or check the logs for more details.
     </p>
   </div>

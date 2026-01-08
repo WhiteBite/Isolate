@@ -39,7 +39,10 @@
   }
 
   function handleToggle() {
-    aiPilotStore.toggle();
+    aiPilotStore.toggle().catch(err => {
+      console.error('Toggle failed:', err);
+      // Ошибка уже показана через toast в store
+    });
   }
 
   function handleIntervalChange(value: 30 | 60 | 120) {
@@ -47,7 +50,10 @@
   }
 
   function handleManualCheck() {
-    aiPilotStore.runCheck();
+    aiPilotStore.runCheck().catch(err => {
+      console.error('Manual check failed:', err);
+      // Ошибка уже показана через toast в store
+    });
   }
 </script>
 
@@ -103,6 +109,7 @@
         type="button"
         role="switch"
         aria-checked={isEnabled}
+        aria-label={isEnabled ? 'Выключить AI Pilot' : 'Включить AI Pilot'}
         class="relative w-14 h-8 rounded-full transition-colors duration-200
                {isEnabled ? 'bg-blue-500' : 'bg-white/20'}
                focus:outline-none focus:ring-2 focus:ring-blue-500/50"

@@ -149,7 +149,7 @@
             </svg>
           {:else}
             <svg class="w-4 h-4 transition-colors duration-200
-                        {isDisabled ? 'text-zinc-600' : 'text-zinc-400 group-hover:text-zinc-200'}" 
+                        {isDisabled ? 'text-zinc-400' : 'text-zinc-400 group-hover:text-zinc-200'}" 
                  fill="none" stroke="currentColor" viewBox="0 0 24 24" 
                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d={actionIcons[action.id] || 'M13 10V3L4 14h7v7l9-11h-7z'}/>
@@ -162,7 +162,7 @@
                      {action.loading 
                        ? 'text-electric' 
                        : isDisabled 
-                         ? 'text-zinc-600' 
+                         ? 'text-zinc-400' 
                          : 'text-zinc-400 group-hover:text-zinc-200'}">
           {action.loading ? (loadingText[action.id] || action.label) : action.label}
         </span>
@@ -195,7 +195,7 @@
                 <span>🔒</span> {disabledReason}
               </p>
             {:else if tooltip.sideEffects}
-              <p class="text-xs text-amber-400/80 mt-2 leading-relaxed">{tooltip.sideEffects}</p>
+              <p class="text-xs text-amber-400 mt-2 leading-relaxed">{tooltip.sideEffects}</p>
             {/if}
           </div>
         </div>

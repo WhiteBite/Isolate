@@ -183,11 +183,11 @@
   {:else if !status}
     <!-- No failover configured -->
     <div class="flex-1 flex flex-col items-center justify-center text-center p-4">
-      <svg class="w-8 h-8 text-zinc-600 mb-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <svg class="w-8 h-8 text-zinc-400 mb-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
         <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
       </svg>
-      <span class="text-xs text-zinc-500">Auto-recovery disabled</span>
-      <span class="text-[10px] text-zinc-600 mt-1">Enable in settings</span>
+      <span class="text-xs text-zinc-400">Auto-recovery disabled</span>
+      <span class="text-[10px] text-zinc-400 mt-1">Enable in settings</span>
     </div>
   {:else}
     <!-- Status Header -->
@@ -251,7 +251,7 @@
           disabled={switching || status.state === 'on_backup'}
           class="flex-1 px-3 py-2 text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-1.5
             {status.state === 'on_backup' 
-              ? 'bg-zinc-800/50 text-zinc-600 cursor-not-allowed' 
+              ? 'bg-zinc-800/50 text-zinc-400 cursor-not-allowed' 
               : 'bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 border border-amber-500/20'}"
           title="Force switch to backup strategy"
         >
@@ -273,7 +273,7 @@
           disabled={restoring || status.is_primary}
           class="flex-1 px-3 py-2 text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-1.5
             {status.is_primary 
-              ? 'bg-zinc-800/50 text-zinc-600 cursor-not-allowed' 
+              ? 'bg-zinc-800/50 text-zinc-400 cursor-not-allowed' 
               : 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20'}"
           title="Force restore to primary strategy"
         >
@@ -301,7 +301,7 @@
 
     <!-- Last timestamps (compact footer) -->
     {#if !compact}
-      <div class="flex items-center justify-between px-1 pt-1 border-t border-white/5 text-[10px] text-zinc-600">
+      <div class="flex items-center justify-between px-1 pt-1 border-t border-white/5 text-[10px] text-zinc-400">
         {#if status.last_failure_at}
           <span title="Last failure">
             ❌ {new Date(status.last_failure_at).toLocaleTimeString()}

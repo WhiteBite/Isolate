@@ -32,7 +32,7 @@
       {#if !preventClose}
         <button
           onclick={handleClose}
-          class="p-1.5 text-zinc-500 hover:text-white rounded-lg hover:bg-white/5 transition-colors"
+          class="p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors"
           aria-label="Close modal"
         >
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -44,7 +44,7 @@
   {:else if !preventClose}
     <button
       onclick={handleClose}
-      class="absolute top-4 right-4 p-1.5 text-zinc-500 hover:text-white rounded-lg hover:bg-white/5 transition-colors z-10"
+      class="absolute top-4 right-4 p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors z-10"
       aria-label="Close modal"
     >
       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -84,7 +84,7 @@
           <p class="text-sm text-zinc-400 mt-1">
             Версия {updateInfo.version}
             {#if updateInfo.publishedAt}
-              <span class="text-zinc-500">• {new Date(updateInfo.publishedAt).toLocaleDateString()}</span>
+              <span class="text-zinc-400">• {new Date(updateInfo.publishedAt).toLocaleDateString()}</span>
             {/if}
           </p>
           
@@ -115,7 +115,7 @@
         
         <button
           onclick={dismiss}
-          class="flex-shrink-0 text-zinc-500 hover:text-zinc-300 transition-colors"
+          class="flex-shrink-0 text-zinc-400 hover:text-zinc-300 transition-colors"
           aria-label="Закрыть"
         >
           <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">

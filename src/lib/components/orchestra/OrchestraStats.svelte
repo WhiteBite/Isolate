@@ -19,19 +19,19 @@
   <div class="grid grid-cols-2 gap-3">
     <div class="p-3 bg-zinc-800/30 rounded-lg text-center">
       <div class="text-2xl font-bold text-emerald-400">{passedCount}</div>
-      <div class="text-xs text-zinc-500 mt-1">{t('orchestra.stats.success')}</div>
+      <div class="text-xs text-zinc-400 mt-1">{t('orchestra.stats.success')}</div>
     </div>
     <div class="p-3 bg-zinc-800/30 rounded-lg text-center">
       <div class="text-2xl font-bold text-red-400">{failedCount}</div>
-      <div class="text-xs text-zinc-500 mt-1">{t('orchestra.stats.failed')}</div>
+      <div class="text-xs text-zinc-400 mt-1">{t('orchestra.stats.failed')}</div>
     </div>
     <div class="p-3 bg-zinc-800/30 rounded-lg text-center">
       <div class="text-2xl font-bold text-amber-400">{testingCount}</div>
-      <div class="text-xs text-zinc-500 mt-1">{t('orchestra.stats.testing')}</div>
+      <div class="text-xs text-zinc-400 mt-1">{t('orchestra.stats.testing')}</div>
     </div>
     <div class="p-3 bg-zinc-800/30 rounded-lg text-center">
       <div class="text-2xl font-bold text-zinc-400">{pendingCount}</div>
-      <div class="text-xs text-zinc-500 mt-1">{t('orchestra.stats.pending')}</div>
+      <div class="text-xs text-zinc-400 mt-1">{t('orchestra.stats.pending')}</div>
     </div>
   </div>
 </BentoWidget>

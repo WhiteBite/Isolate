@@ -168,7 +168,7 @@
         <div class="flex items-center justify-between p-4 bg-zinc-900/50 rounded-xl border border-white/5">
           <div class="space-y-1">
             <p class="text-sm font-medium text-white">Rule Enabled</p>
-            <p class="text-xs text-zinc-500">Toggle to enable or disable this rule</p>
+            <p class="text-xs text-zinc-400">Toggle to enable or disable this rule</p>
           </div>
           <button
             type="button"
@@ -195,7 +195,7 @@
             bind:value={name}
             placeholder="My Rule"
             class="w-full bg-zinc-900 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm
-                   placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 
+                   placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 
                    focus:border-indigo-500/50 transition-colors"
           />
         </div>
@@ -236,10 +236,10 @@
             bind:value={sourceValue}
             placeholder={currentPlaceholder}
             class="w-full bg-zinc-900 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm
-                   placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 
+                   placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 
                    focus:border-indigo-500/50 transition-colors font-mono"
           />
-          <p class="text-xs text-zinc-600">
+          <p class="text-xs text-zinc-400">
             {#if source === 'domain'}
               Use * for wildcards: *.youtube.com
             {:else if source === 'app'}
@@ -264,14 +264,14 @@
                          : 'bg-zinc-900/50 border border-white/5 hover:bg-zinc-800/50'}"
               >
                 <div class="w-8 h-8 rounded-lg flex items-center justify-center text-lg
-                            {action === option.value ? 'bg-indigo-500/20 text-indigo-300' : 'bg-zinc-800 text-zinc-500'}">
+                            {action === option.value ? 'bg-indigo-500/20 text-indigo-300' : 'bg-zinc-800 text-zinc-400'}">
                   {option.icon}
                 </div>
                 <div class="flex-1 min-w-0">
                   <p class="text-sm font-medium {action === option.value ? 'text-white' : 'text-zinc-300'}">
                     {option.label}
                   </p>
-                  <p class="text-xs text-zinc-500 truncate">{option.description}</p>
+                  <p class="text-xs text-zinc-400 truncate">{option.description}</p>
                 </div>
                 {#if action === option.value}
                   <svg class="w-5 h-5 text-indigo-400 shrink-0" fill="currentColor" viewBox="0 0 20 20">
@@ -315,7 +315,7 @@
 
         <!-- Rule Info -->
         <div class="p-4 bg-zinc-900/30 rounded-xl border border-white/5">
-          <div class="flex items-center gap-2 text-xs text-zinc-500">
+          <div class="flex items-center gap-2 text-xs text-zinc-400">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
@@ -332,7 +332,7 @@
           type="button"
           onclick={handleSubmit}
           disabled={!isValid || !hasChanges}
-          class="w-full px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-800 disabled:text-zinc-600
+          class="w-full px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-800 disabled:text-zinc-400
                  text-white text-sm font-medium rounded-lg transition-colors 
                  focus:outline-none focus:ring-2 focus:ring-indigo-500/50 disabled:cursor-not-allowed"
         >

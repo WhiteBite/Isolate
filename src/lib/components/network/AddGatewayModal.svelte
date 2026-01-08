@@ -438,7 +438,7 @@
           type="button"
           onclick={() => activeTab = 'single'}
           class="flex-1 px-4 py-3 text-sm font-medium transition-colors relative
-                 {activeTab === 'single' ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'}"
+                 {activeTab === 'single' ? 'text-white' : 'text-zinc-400 hover:text-zinc-300'}"
         >
           Single URL
           {#if activeTab === 'single'}
@@ -449,7 +449,7 @@
           type="button"
           onclick={() => activeTab = 'subscription'}
           class="flex-1 px-4 py-3 text-sm font-medium transition-colors relative
-                 {activeTab === 'subscription' ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'}"
+                 {activeTab === 'subscription' ? 'text-white' : 'text-zinc-400 hover:text-zinc-300'}"
         >
           Subscription
           {#if activeTab === 'subscription'}
@@ -472,14 +472,14 @@
               oninput={parseUrl}
               placeholder="vless://, vmess://, ss://, trojan://, socks5://, http://"
               class="w-full bg-zinc-900 border border-white/10 rounded-lg pl-3 pr-10 py-2.5 text-white text-sm
-                     placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 
+                     placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 
                      focus:border-indigo-500/50 transition-colors"
             />
             {#if urlInput}
               <button
                 type="button"
                 onclick={() => { urlInput = ''; parseError = ''; }}
-                class="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-zinc-500 hover:text-zinc-300"
+                class="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-zinc-400 hover:text-zinc-300"
                 aria-label="Clear input"
               >
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -503,7 +503,7 @@
         <!-- Divider -->
         <div class="flex items-center gap-3">
           <div class="flex-1 h-px bg-white/5"></div>
-          <span class="text-xs text-zinc-600">or enter manually</span>
+          <span class="text-xs text-zinc-400">or enter manually</span>
           <div class="flex-1 h-px bg-white/5"></div>
         </div>
 
@@ -518,7 +518,7 @@
               bind:value={name}
               placeholder="My Proxy Server"
               class="w-full bg-zinc-900 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm
-                     placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 
+                     placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 
                      focus:border-indigo-500/50 transition-colors"
             />
           </div>
@@ -550,7 +550,7 @@
                 bind:value={server}
                 placeholder="example.com"
                 class="w-full bg-zinc-900 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm
-                       placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 
+                       placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 
                        focus:border-indigo-500/50 transition-colors"
               />
             </div>
@@ -563,7 +563,7 @@
                 min="1"
                 max="65535"
                 class="w-full bg-zinc-900 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm
-                       placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 
+                       placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 
                        focus:border-indigo-500/50 transition-colors"
               />
             </div>
@@ -579,7 +579,7 @@
                 bind:value={uuid}
                 placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
                 class="w-full bg-zinc-900 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm font-mono
-                       placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 
+                       placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 
                        focus:border-indigo-500/50 transition-colors"
               />
             </div>
@@ -595,7 +595,7 @@
                 bind:value={password}
                 placeholder="••••••••"
                 class="w-full bg-zinc-900 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm
-                       placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 
+                       placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 
                        focus:border-indigo-500/50 transition-colors"
               />
             </div>
@@ -605,7 +605,7 @@
           <div class="flex items-center justify-between p-4 bg-zinc-900/50 rounded-xl border border-white/5">
             <div class="space-y-1">
               <p class="text-sm font-medium text-white">TLS Encryption</p>
-              <p class="text-xs text-zinc-500">Enable TLS/SSL for secure connection</p>
+              <p class="text-xs text-zinc-400">Enable TLS/SSL for secure connection</p>
             </div>
             <Toggle bind:checked={tls} />
           </div>
@@ -614,7 +614,7 @@
           {#if tls}
             <div class="space-y-2" transition:fly={{ y: -10, duration: 200 }}>
               <label for="gateway-sni" class="block text-sm font-medium text-zinc-400">
-                SNI <span class="text-zinc-600">(optional)</span>
+                SNI <span class="text-zinc-400">(optional)</span>
               </label>
               <input
                 id="gateway-sni"
@@ -622,7 +622,7 @@
                 bind:value={sni}
                 placeholder="Server Name Indication"
                 class="w-full bg-zinc-900 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm
-                       placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 
+                       placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 
                        focus:border-indigo-500/50 transition-colors"
               />
             </div>
@@ -639,7 +639,7 @@
             </div>
             <div class="space-y-1">
               <p class="text-sm font-medium text-zinc-300">Supported formats</p>
-              <p class="text-xs text-zinc-500">
+              <p class="text-xs text-zinc-400">
                 VLESS, VMess, Shadowsocks, Trojan, SOCKS5, HTTP/HTTPS, Hysteria2, TUIC
               </p>
             </div>
@@ -659,7 +659,7 @@
                 placeholder="https://example.com/subscription"
                 disabled={subscriptionLoading}
                 class="flex-1 bg-zinc-900 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm
-                       placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 
+                       placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 
                        focus:border-indigo-500/50 transition-colors disabled:opacity-50"
               />
               <button
@@ -740,7 +740,7 @@
                           {getProtocolLabel(proxy.protocol)}
                         </span>
                       </div>
-                      <p class="text-xs text-zinc-500 truncate mt-0.5">
+                      <p class="text-xs text-zinc-400 truncate mt-0.5">
                         {proxy.server}:{proxy.port}
                       </p>
                     </div>
@@ -750,7 +750,7 @@
 
               <!-- Selected count -->
               {#if selectedCount > 0}
-                <p class="text-xs text-zinc-500 text-center">
+                <p class="text-xs text-zinc-400 text-center">
                   {selectedCount} of {fetchedProxies.length} selected
                 </p>
               {/if}
@@ -759,23 +759,23 @@
             <!-- Empty state after fetch -->
             <div class="p-8 text-center">
               <div class="w-12 h-12 rounded-full bg-zinc-800 flex items-center justify-center mx-auto mb-3">
-                <svg class="w-6 h-6 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-6 h-6 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
                 </svg>
               </div>
               <p class="text-sm text-zinc-400">No proxies found</p>
-              <p class="text-xs text-zinc-600 mt-1">Try a different subscription URL</p>
+              <p class="text-xs text-zinc-400 mt-1">Try a different subscription URL</p>
             </div>
           {:else if !subscriptionLoading}
             <!-- Initial state -->
             <div class="p-8 text-center">
               <div class="w-12 h-12 rounded-full bg-zinc-800 flex items-center justify-center mx-auto mb-3">
-                <svg class="w-6 h-6 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="w-6 h-6 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
                 </svg>
               </div>
               <p class="text-sm text-zinc-400">Enter a subscription URL</p>
-              <p class="text-xs text-zinc-600 mt-1">Paste your subscription link and click Fetch</p>
+              <p class="text-xs text-zinc-400 mt-1">Paste your subscription link and click Fetch</p>
             </div>
           {/if}
 
@@ -789,7 +789,7 @@
               </div>
               <div class="space-y-1">
                 <p class="text-sm font-medium text-zinc-300">Subscription import</p>
-                <p class="text-xs text-zinc-500">
+                <p class="text-xs text-zinc-400">
                   Supports base64-encoded subscriptions with multiple proxy URLs
                 </p>
               </div>

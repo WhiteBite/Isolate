@@ -409,5 +409,110 @@
       "clear": "Clear",
       "export": "Export"
     }
+  },
+  "troubleshoot": {
+    "title": "Troubleshoot",
+    "subtitle": "Find and fix access issues",
+    "buttons": {
+      "reset": "Start Over",
+      "startTest": "Start Testing"
+    },
+    "steps": {
+      "select": "Select Problem",
+      "testing": "Testing",
+      "results": "Results"
+    },
+    "aiAssistant": {
+      "title": "AI Assistant",
+      "subtitle": "Automatic strategy selection",
+      "selectPrompt": "Select the service you're having trouble with. I'll analyze the situation and find the optimal bypass strategy.",
+      "selectedServicePrefix": "Great! You selected",
+      "selectedServiceSuffix": "Click \"Start Testing\" to find a working strategy.",
+      "testingPrefix": "Testing strategies for",
+      "testingNote": "This may take a few minutes",
+      "resultsReady": "Testing complete! Choose the recommended strategy or try other options."
+    },
+    "tips": {
+      "title": "Tips",
+      "closeVpn": "Close VPN and proxy before testing",
+      "runAsAdmin": "Make sure the app is running as administrator",
+      "tryVless": "If nothing helps — try VLESS proxy"
+    },
+    "systemStatus": {
+      "title": "System Status",
+      "windivert": "WinDivert",
+      "internet": "Internet",
+      "adminRights": "Admin Rights",
+      "ready": "Ready",
+      "connected": "Connected",
+      "available": "Available"
+    },
+    "advanced": {
+      "title": "Advanced Options",
+      "description": "Want to test all strategies at once or configure optimization parameters?",
+      "openOrchestra": "Open Optimization"
+    }
+  },
+  "plugins": {
+    "title": "Plugins",
+    "tabs": {
+      "installed": "Installed",
+      "marketplace": "Market"
+    },
+    "buttons": {
+      "openFolder": "Open Folder",
+      "refresh": "Refresh",
+      "enable": "Enable",
+      "disable": "Disable",
+      "delete": "Delete",
+      "install": "Install",
+      "installed": "Installed"
+    },
+    "search": {
+      "placeholder": "Search..."
+    },
+    "empty": {
+      "noPlugins": "No plugins",
+      "goToMarket": "Marketplace →",
+      "selectPlugin": "Select a plugin"
+    },
+    "details": {
+      "description": "Description",
+      "type": "Type",
+      "adds": "Adds",
+      "permissions": "Permissions",
+      "path": "Path",
+      "category": "Category",
+      "downloads": "Downloads"
+    },
+    "permissions": {
+      "http": "HTTP",
+      "httpTitle": "Network Access",
+      "httpDesc": "Loading data from the internet",
+      "httpDomains": "Domains",
+      "fs": "FS",
+      "fsTitle": "File System",
+      "fsDesc": "Reading and writing files",
+      "proc": "Proc",
+      "procTitle": "Process Execution",
+      "procDesc": "Running external programs",
+      "none": "No special permissions"
+    },
+    "deleteModal": {
+      "title": "Delete plugin?",
+      "willBeDeleted": "Will be deleted:",
+      "service": "Service",
+      "strategy": "Strategy",
+      "hostlist": "Hostlist",
+      "warning": "This action is irreversible. Plugin files will be deleted from disk.",
+      "cancel": "Cancel",
+      "confirm": "Delete"
+    },
+    "messages": {
+      "reloaded": "Reloaded",
+      "error": "Error",
+      "deleted": "Deleted",
+      "pathCopied": "Path copied"
+    }
   }
 }

@@ -34,7 +34,7 @@
   let flag = $derived(getProxyFlag(gateway.country, gateway.server));
   
   // Ping color
-  let pingColor = $derived(gateway.ping === null || gateway.ping === undefined ? 'text-zinc-500' 
+  let pingColor = $derived(gateway.ping === null || gateway.ping === undefined ? 'text-zinc-400' 
     : gateway.ping < 100 ? 'text-emerald-400' 
     : gateway.ping < 200 ? 'text-yellow-400' 
     : 'text-red-400');
@@ -151,7 +151,7 @@
   <!-- Name & Server -->
   <div class="flex-1 min-w-0 text-left">
     <p class="text-sm text-white truncate font-medium">{gateway.name}</p>
-    <p class="text-xs text-zinc-500 truncate font-mono">{gateway.server}:{gateway.port}</p>
+    <p class="text-xs text-zinc-400 truncate font-mono">{gateway.server}:{gateway.port}</p>
   </div>
   
   <!-- Protocol badge -->

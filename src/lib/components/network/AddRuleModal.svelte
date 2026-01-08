@@ -296,7 +296,7 @@
         <!-- Quick Templates -->
         <div class="space-y-3">
           <div class="flex items-center gap-2">
-            <svg class="w-4 h-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
             <span class="text-sm font-medium text-zinc-400">Quick Templates</span>
@@ -315,7 +315,7 @@
                 </span>
                 <div class="flex-1 min-w-0">
                   <p class="text-xs font-medium truncate">{template.name}</p>
-                  <p class="text-[10px] text-zinc-500 truncate font-mono">{template.sourceValue}</p>
+                  <p class="text-[10px] text-zinc-400 truncate font-mono">{template.sourceValue}</p>
                 </div>
                 {#if appliedTemplate === template.name}
                   <svg 
@@ -330,7 +330,7 @@
               </button>
             {/each}
           </div>
-          <p class="text-xs text-zinc-600">Click a template to fill the form below</p>
+          <p class="text-xs text-zinc-400">Click a template to fill the form below</p>
         </div>
 
         <!-- Divider -->
@@ -339,7 +339,7 @@
             <div class="w-full border-t border-white/5"></div>
           </div>
           <div class="relative flex justify-center">
-            <span class="px-3 bg-zinc-950 text-xs text-zinc-600">or create custom rule</span>
+            <span class="px-3 bg-zinc-950 text-xs text-zinc-400">or create custom rule</span>
           </div>
         </div>
 
@@ -352,7 +352,7 @@
             bind:value={name}
             placeholder="My Rule"
             class="w-full bg-zinc-900 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm
-                   placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 
+                   placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 
                    focus:border-indigo-500/50 transition-colors"
           />
         </div>
@@ -394,10 +394,10 @@
             bind:value={sourceValue}
             placeholder={currentPlaceholder}
             class="w-full bg-zinc-900 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm
-                   placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 
+                   placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 
                    focus:border-indigo-500/50 transition-colors font-mono"
           />
-          <p class="text-xs text-zinc-600">
+          <p class="text-xs text-zinc-400">
             {#if source === 'domain'}
               Use * for wildcards: *.youtube.com
             {:else if source === 'app'}
@@ -423,14 +423,14 @@
                          : 'bg-zinc-900/50 border border-white/5 hover:bg-zinc-800/50'}"
               >
                 <div class="w-8 h-8 rounded-lg flex items-center justify-center text-lg
-                            {action === option.value ? 'bg-indigo-500/20 text-indigo-300' : 'bg-zinc-800 text-zinc-500'}">
+                            {action === option.value ? 'bg-indigo-500/20 text-indigo-300' : 'bg-zinc-800 text-zinc-400'}">
                   {option.icon}
                 </div>
                 <div class="flex-1 min-w-0">
                   <p class="text-sm font-medium {action === option.value ? 'text-white' : 'text-zinc-300'}">
                     {option.label}
                   </p>
-                  <p class="text-xs text-zinc-500 truncate">{option.description}</p>
+                  <p class="text-xs text-zinc-400 truncate">{option.description}</p>
                 </div>
                 {#if action === option.value}
                   <svg class="w-5 h-5 text-indigo-400 shrink-0" fill="currentColor" viewBox="0 0 20 20">
@@ -479,7 +479,7 @@
           type="button"
           onclick={handleSubmit}
           disabled={!isValid}
-          class="w-full px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-800 disabled:text-zinc-600
+          class="w-full px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-800 disabled:text-zinc-400
                  text-white text-sm font-medium rounded-lg transition-colors 
                  focus:outline-none focus:ring-2 focus:ring-indigo-500/50 disabled:cursor-not-allowed"
         >

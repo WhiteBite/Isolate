@@ -82,8 +82,8 @@
       {/if}
     </div>
     <div class="flex items-center gap-2 mt-1">
-      <span class="text-sm text-zinc-500 truncate">{rule.domain}</span>
-      <span class="text-zinc-600">•</span>
+      <span class="text-sm text-zinc-400 truncate">{rule.domain}</span>
+      <span class="text-zinc-400">•</span>
       <ServiceStatusBadge status={rule.status} ping={rule.ping} />
     </div>
   </div>

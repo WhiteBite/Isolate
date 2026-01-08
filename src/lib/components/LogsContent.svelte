@@ -138,7 +138,7 @@
           bind:value={$logFilters.search}
           placeholder="Search logs..."
           class="pl-7 pr-2 py-1 text-xs bg-zinc-800/80 border border-white/5 rounded
-                 text-zinc-300 placeholder:text-zinc-600
+                 text-zinc-300 placeholder:text-zinc-400
                  focus:outline-none focus:border-white/10 w-40"
           aria-label="Search logs"
         />
@@ -202,7 +202,7 @@
     aria-relevant="additions"
   >
     {#if $filteredLogs.length === 0}
-      <div class="flex items-center justify-center h-full text-zinc-600">
+      <div class="flex items-center justify-center h-full text-zinc-400">
         <div class="text-center">
           <svg class="w-8 h-8 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
@@ -215,7 +215,7 @@
       {#each $filteredLogs as log (log.id)}
         <div class="flex items-start gap-3 px-4 py-1.5 hover:bg-zinc-900/50 border-b border-white/[0.02]" role="listitem">
           <!-- Timestamp -->
-          <span class="text-zinc-600 shrink-0 w-16" aria-label="Time">
+          <span class="text-zinc-400 shrink-0 w-16" aria-label="Time">
             {formatTime(log.timestamp)}
           </span>
 
@@ -243,7 +243,7 @@
   </div>
 
   <!-- Status Bar -->
-  <div class="flex items-center justify-between px-4 py-1 text-[10px] text-zinc-600 
+  <div class="flex items-center justify-between px-4 py-1 text-[10px] text-zinc-400 
               border-t border-white/5 bg-zinc-900/40 shrink-0"
        role="status"
        aria-live="polite">

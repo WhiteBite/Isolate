@@ -149,7 +149,7 @@
         {strategyName}
       </p>
     {:else if status === 'unprotected'}
-      <p class="text-xs text-zinc-600 mt-1">
+      <p class="text-xs text-zinc-400 mt-1">
         Click to enable
       </p>
     {/if}

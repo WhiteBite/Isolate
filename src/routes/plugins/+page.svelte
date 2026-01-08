@@ -7,6 +7,7 @@
   import { Spinner, BaseModal } from '$lib/components';
   import { installedPlugins, loadPluginsFromBackend, installPlugin, reloadAllPlugins } from '$lib/stores/plugins';
   import { mockMarketPlugins } from '$lib/mocks';
+  import { t } from '$lib/i18n';
 
   interface PluginManifest {
     id: string; name: string; version: string; author: string; description?: string; plugin_type: string;
@@ -74,12 +75,12 @@
 
   async function refresh() {
     if (reloading) return; reloading = true;
-    try { const r = await reloadAllPlugins(); toasts.success(`Перезагружено ${r.plugins_loaded}`); await load(); } catch { toasts.error('Ошибка'); }
+    try { const r = await reloadAllPlugins(); toasts.success(`${t('plugins.messages.reloaded')} ${r.plugins_loaded}`); await load(); } catch { toasts.error(t('plugins.messages.error')); }
     reloading = false;
   }
 
   async function openFolder() {
-    try { const inv = getInvoke(); if (inv) await inv('open_plugins_folder'); } catch { await navigator.clipboard.writeText(pluginsDir); toasts.info('Путь скопирован'); }
+    try { const inv = getInvoke(); if (inv) await inv('open_plugins_folder'); } catch { await navigator.clipboard.writeText(pluginsDir); toasts.info(t('plugins.messages.pathCopied')); }
   }
 
   async function toggle(p: LoadedPlugin) {
@@ -104,45 +105,45 @@
       const inv = getInvoke();
       if (inv) await inv('delete_plugin', { pluginId: pluginToDelete.manifest.id });
       await load();
-      toasts.success('Удалён');
+      toasts.success(t('plugins.messages.deleted'));
     } catch (e) {
       toasts.error(`${e}`);
     }
     closeDeleteModal();
   }
 
-  function inst(id: string) { const p = market.find(x => x.id === id); if (p && !p.inst) { p.inst = true; market = [...market]; installPlugin(p as any); toasts.success(`${p.name} установлен`); } }
+  function inst(id: string) { const p = market.find(x => x.id === id); if (p && !p.inst) { p.inst = true; market = [...market]; installPlugin(p as any); toasts.success(`${p.name} ${t('plugins.buttons.installed').toLowerCase()}`); } }
 </script>
 
 <div class="h-full flex">
   <div class="w-60 flex-shrink-0 border-r border-white/5 flex flex-col bg-black/20">
     <div class="p-2.5 border-b border-white/5">
       <div class="flex items-center justify-between mb-2">
-        <span class="text-xs font-semibold text-zinc-200">Plugins</span>
+        <span class="text-xs font-semibold text-zinc-200">{t('plugins.title')}</span>
         <div class="flex gap-0.5">
-          <button onclick={openFolder} title="Открыть папку" class="p-1 rounded text-zinc-400 hover:text-zinc-300 hover:bg-white/5"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></button>
-          <button onclick={refresh} disabled={reloading} title="Обновить" class="p-1 rounded text-zinc-400 hover:text-zinc-300 hover:bg-white/5 disabled:opacity-50"><svg class="w-3.5 h-3.5 {reloading ? 'animate-spin' : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></button>
+          <button onclick={openFolder} title={t('plugins.buttons.openFolder')} class="p-1 rounded text-zinc-400 hover:text-zinc-300 hover:bg-white/5"><svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></button>
+          <button onclick={refresh} disabled={reloading} title={t('plugins.buttons.refresh')} class="p-1 rounded text-zinc-400 hover:text-zinc-300 hover:bg-white/5 disabled:opacity-50"><svg class="w-3.5 h-3.5 {reloading ? 'animate-spin' : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></button>
         </div>
       </div>
       <div class="flex p-0.5 bg-white/5 rounded" role="tablist">
-        <button role="tab" aria-selected={activeTab === 'installed'} class="flex-1 px-2 py-0.5 text-[10px] font-medium rounded {activeTab === 'installed' ? 'bg-indigo-500/20 text-indigo-400' : 'text-zinc-400'}" onclick={() => setTab('installed')}>Installed ({localPlugins.length})</button>
-        <button role="tab" aria-selected={activeTab === 'marketplace'} class="flex-1 px-2 py-0.5 text-[10px] font-medium rounded {activeTab === 'marketplace' ? 'bg-indigo-500/20 text-indigo-400' : 'text-zinc-400'}" onclick={() => setTab('marketplace')}>Market</button>
+        <button role="tab" aria-selected={activeTab === 'installed'} class="flex-1 px-2 py-0.5 text-[10px] font-medium rounded {activeTab === 'installed' ? 'bg-indigo-500/20 text-indigo-400' : 'text-zinc-400'}" onclick={() => setTab('installed')}>{t('plugins.tabs.installed')} ({localPlugins.length})</button>
+        <button role="tab" aria-selected={activeTab === 'marketplace'} class="flex-1 px-2 py-0.5 text-[10px] font-medium rounded {activeTab === 'marketplace' ? 'bg-indigo-500/20 text-indigo-400' : 'text-zinc-400'}" onclick={() => setTab('marketplace')}>{t('plugins.tabs.marketplace')}</button>
       </div>
     </div>
     <div class="flex-1 overflow-y-auto">
       {#if loading}<div class="flex justify-center py-6"><Spinner size="sm" /></div>
       {:else if activeTab === 'installed'}
-        {#if localPlugins.length === 0}<div class="p-3 text-center text-[10px] text-zinc-600">Нет плагинов<br/><button onclick={() => setTab('marketplace')} class="text-indigo-400 mt-1">Marketplace →</button></div>
+        {#if localPlugins.length === 0}<div class="p-3 text-center text-[10px] text-zinc-400">{t('plugins.empty.noPlugins')}<br/><button onclick={() => setTab('marketplace')} class="text-indigo-400 mt-1">{t('plugins.empty.goToMarket')}</button></div>
         {:else}{#each localPlugins as p}<button class="w-full px-2.5 py-1.5 flex items-center gap-2 text-left border-b border-white/[0.02] {selectedId === p.manifest.id ? 'bg-white/5' : 'hover:bg-white/[0.02]'} {!p.enabled ? 'opacity-40' : ''}" onclick={() => selectedId = p.manifest.id}>
           <span class="text-sm">{p.manifest.service?.icon || '🧩'}</span>
-          <div class="flex-1 min-w-0"><div class="text-[11px] text-zinc-200 truncate">{p.manifest.name}</div><div class="text-[9px] text-zinc-400">{p.manifest.author}</div></div>
+          <div class="flex-1 min-w-0"><div class="text-[11px] text-zinc-200 truncate">{p.manifest.name}</div><div class="text-[10px] text-zinc-400">{p.manifest.author}</div></div>
           {#if p.error}<span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>{:else if p.enabled}<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>{/if}
         </button>{/each}{/if}
       {:else}
-        <div class="p-1.5 border-b border-white/5"><input type="text" placeholder="Поиск..." bind:value={searchQuery} class="w-full px-2 py-1 text-[10px] bg-white/5 border border-white/10 rounded text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-indigo-500/50" /></div>
+        <div class="p-1.5 border-b border-white/5"><input type="text" placeholder={t('plugins.search.placeholder')} bind:value={searchQuery} class="w-full px-2 py-1 text-[10px] bg-white/5 border border-white/10 rounded text-zinc-300 placeholder-zinc-400 focus:outline-none focus:border-indigo-500/50" /></div>
         {#each filtered as p}<button class="w-full px-2.5 py-1.5 flex items-center gap-2 text-left border-b border-white/[0.02] {selectedMarketId === p.id ? 'bg-white/5' : 'hover:bg-white/[0.02]'}" onclick={() => selectedMarketId = p.id}>
           <span class="text-sm">{p.icon}</span>
-          <div class="flex-1 min-w-0"><div class="text-[11px] text-zinc-200 truncate">{p.name}</div><div class="text-[9px] text-zinc-400 truncate">{p.desc}</div></div>
+          <div class="flex-1 min-w-0"><div class="text-[11px] text-zinc-200 truncate">{p.name}</div><div class="text-[10px] text-zinc-400 truncate">{p.desc}</div></div>
           {#if p.inst}<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>{/if}
         </button>{/each}
       {/if}
@@ -153,32 +154,32 @@
     {#if activeTab === 'installed' && selected}
       <div class="p-3 border-b border-white/5 flex items-center gap-2.5">
         <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-500/20 to-purple-500/20 flex items-center justify-center text-lg">{selected.manifest.service?.icon || '🧩'}</div>
-        <div class="flex-1 min-w-0"><div class="text-xs font-medium text-zinc-100">{selected.manifest.name}</div><div class="text-[9px] text-zinc-400">{selected.manifest.author} • v{selected.manifest.version}</div></div>
-        <button onclick={() => toggle(selected!)} class="px-2 py-1 text-[10px] font-medium rounded {selected.enabled ? 'bg-amber-500/10 text-amber-400' : 'bg-emerald-500/10 text-emerald-400'}">{selected.enabled ? 'Откл' : 'Вкл'}</button>
-        <button onclick={() => openDeleteModal(selected!)} class="px-2 py-1 text-[10px] font-medium rounded bg-red-500/10 text-red-400">Удалить</button>
+        <div class="flex-1 min-w-0"><div class="text-xs font-medium text-zinc-100">{selected.manifest.name}</div><div class="text-[10px] text-zinc-400">{selected.manifest.author} • v{selected.manifest.version}</div></div>
+        <button onclick={() => toggle(selected!)} class="px-2 py-1 text-[10px] font-medium rounded {selected.enabled ? 'bg-amber-500/10 text-amber-400' : 'bg-emerald-500/10 text-emerald-400'}">{selected.enabled ? t('plugins.buttons.disable') : t('plugins.buttons.enable')}</button>
+        <button onclick={() => openDeleteModal(selected!)} class="px-2 py-1 text-[10px] font-medium rounded bg-red-500/10 text-red-400">{t('plugins.buttons.delete')}</button>
       </div>
       <div class="flex-1 p-3 overflow-y-auto space-y-2.5 text-[11px]">
         {#if selected.error}<div class="p-2 bg-red-500/10 border border-red-500/20 rounded text-red-400 text-[10px]">{selected.error}</div>{/if}
-        {#if selected.manifest.description}<div><div class="text-[9px] text-zinc-400 mb-0.5">Описание</div><div class="text-zinc-300">{selected.manifest.description}</div></div>{/if}
-        <div><div class="text-[9px] text-zinc-400 mb-0.5">Тип</div><span class="px-1.5 py-0.5 bg-white/5 rounded text-zinc-400 text-[10px]">{selected.manifest.plugin_type}</span></div>
+        {#if selected.manifest.description}<div><div class="text-[10px] text-zinc-400 mb-0.5">{t('plugins.details.description')}</div><div class="text-zinc-300">{selected.manifest.description}</div></div>{/if}
+        <div><div class="text-[10px] text-zinc-400 mb-0.5">{t('plugins.details.type')}</div><span class="px-1.5 py-0.5 bg-white/5 rounded text-zinc-400 text-[10px]">{selected.manifest.plugin_type}</span></div>
         {#if selected.manifest.service || selected.manifest.strategy || selected.manifest.hostlist}
-          <div><div class="text-[9px] text-zinc-400 mb-1">Добавляет</div>
+          <div><div class="text-[10px] text-zinc-400 mb-1">{t('plugins.details.adds')}</div>
             {#if selected.manifest.service}<div class="flex items-center gap-1.5 px-2 py-1 bg-white/5 rounded mb-1"><span>{selected.manifest.service.icon}</span><span class="text-zinc-300">{selected.manifest.service.name}</span></div>{/if}
             {#if selected.manifest.strategy}<div class="flex items-center gap-1.5 px-2 py-1 bg-white/5 rounded mb-1"><span>⚡</span><span class="text-zinc-300">{selected.manifest.strategy.name}</span></div>{/if}
             {#if selected.manifest.hostlist}<div class="flex items-center gap-1.5 px-2 py-1 bg-white/5 rounded"><span>📋</span><span class="text-zinc-300">{selected.manifest.hostlist.name}</span></div>{/if}
           </div>
         {/if}
-        <div><div class="text-[9px] text-zinc-400 mb-1">Разрешения</div>
+        <div><div class="text-[10px] text-zinc-400 mb-1">{t('plugins.details.permissions')}</div>
           <div class="flex flex-wrap gap-1.5">
             {#if selected.manifest.permissions.http?.length}
               <div class="group relative">
-                <span class="px-1.5 py-0.5 bg-indigo-500/10 text-indigo-400 rounded text-[9px] cursor-help">🌐 HTTP</span>
-                <div class="absolute bottom-full left-0 mb-1.5 px-2 py-1.5 bg-zinc-800 border border-white/10 rounded shadow-lg text-[9px] text-zinc-300 whitespace-nowrap opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
-                  <div class="font-medium text-indigo-400 mb-0.5">Доступ к сети</div>
-                  <div class="text-zinc-400">Загрузка данных из интернета</div>
+                <span class="px-1.5 py-0.5 bg-indigo-500/10 text-indigo-400 rounded text-[10px] cursor-help">🌐 {t('plugins.permissions.http')}</span>
+                <div class="absolute bottom-full left-0 mb-1.5 px-2 py-1.5 bg-zinc-800 border border-white/10 rounded shadow-lg text-[10px] text-zinc-300 whitespace-nowrap opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
+                  <div class="font-medium text-indigo-400 mb-0.5">{t('plugins.permissions.httpTitle')}</div>
+                  <div class="text-zinc-400">{t('plugins.permissions.httpDesc')}</div>
                   {#if selected.manifest.permissions.http && selected.manifest.permissions.http.length > 0}
-                    <div class="mt-1 pt-1 border-t border-white/5 text-[8px] text-zinc-500">
-                      Домены: {selected.manifest.permissions.http.slice(0, 3).join(', ')}{selected.manifest.permissions.http.length > 3 ? '...' : ''}
+                    <div class="mt-1 pt-1 border-t border-white/5 text-[10px] text-zinc-400">
+                      {t('plugins.permissions.httpDomains')}: {selected.manifest.permissions.http.slice(0, 3).join(', ')}{selected.manifest.permissions.http.length > 3 ? '...' : ''}
                     </div>
                   {/if}
                   <div class="absolute top-full left-3 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-zinc-800"></div>
@@ -187,43 +188,43 @@
             {/if}
             {#if selected.manifest.permissions.filesystem}
               <div class="group relative">
-                <span class="px-1.5 py-0.5 bg-amber-500/10 text-amber-400 rounded text-[9px] cursor-help">📁 FS</span>
-                <div class="absolute bottom-full left-0 mb-1.5 px-2 py-1.5 bg-zinc-800 border border-white/10 rounded shadow-lg text-[9px] text-zinc-300 whitespace-nowrap opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
-                  <div class="font-medium text-amber-400 mb-0.5">Файловая система</div>
-                  <div class="text-zinc-400">Чтение и запись файлов</div>
+                <span class="px-1.5 py-0.5 bg-amber-500/10 text-amber-400 rounded text-[10px] cursor-help">📁 {t('plugins.permissions.fs')}</span>
+                <div class="absolute bottom-full left-0 mb-1.5 px-2 py-1.5 bg-zinc-800 border border-white/10 rounded shadow-lg text-[10px] text-zinc-300 whitespace-nowrap opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
+                  <div class="font-medium text-amber-400 mb-0.5">{t('plugins.permissions.fsTitle')}</div>
+                  <div class="text-zinc-400">{t('plugins.permissions.fsDesc')}</div>
                   <div class="absolute top-full left-3 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-zinc-800"></div>
                 </div>
               </div>
             {/if}
             {#if selected.manifest.permissions.process}
               <div class="group relative">
-                <span class="px-1.5 py-0.5 bg-red-500/10 text-red-400 rounded text-[9px] cursor-help">⚙️ Proc</span>
-                <div class="absolute bottom-full left-0 mb-1.5 px-2 py-1.5 bg-zinc-800 border border-white/10 rounded shadow-lg text-[9px] text-zinc-300 whitespace-nowrap opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
-                  <div class="font-medium text-red-400 mb-0.5">Запуск процессов</div>
-                  <div class="text-zinc-400">Выполнение внешних программ</div>
+                <span class="px-1.5 py-0.5 bg-red-500/10 text-red-400 rounded text-[10px] cursor-help">⚙️ {t('plugins.permissions.proc')}</span>
+                <div class="absolute bottom-full left-0 mb-1.5 px-2 py-1.5 bg-zinc-800 border border-white/10 rounded shadow-lg text-[10px] text-zinc-300 whitespace-nowrap opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10">
+                  <div class="font-medium text-red-400 mb-0.5">{t('plugins.permissions.procTitle')}</div>
+                  <div class="text-zinc-400">{t('plugins.permissions.procDesc')}</div>
                   <div class="absolute top-full left-3 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-zinc-800"></div>
                 </div>
               </div>
             {/if}
-            {#if !selected.manifest.permissions.http?.length && !selected.manifest.permissions.filesystem && !selected.manifest.permissions.process}<span class="text-zinc-600 text-[9px]">Нет особых разрешений</span>{/if}
+            {#if !selected.manifest.permissions.http?.length && !selected.manifest.permissions.filesystem && !selected.manifest.permissions.process}<span class="text-zinc-400 text-[10px]">{t('plugins.permissions.none')}</span>{/if}
           </div>
         </div>
-        <div><div class="text-[9px] text-zinc-400 mb-0.5">Путь</div><code class="block text-[8px] text-zinc-600 bg-white/5 px-1.5 py-1 rounded break-all">{selected.path}</code></div>
+        <div><div class="text-[10px] text-zinc-400 mb-0.5">{t('plugins.details.path')}</div><code class="block text-[10px] text-zinc-400 bg-white/5 px-1.5 py-1 rounded break-all">{selected.path}</code></div>
       </div>
     {:else if activeTab === 'marketplace' && selMarket}
       <div class="p-3 border-b border-white/5 flex items-center gap-2.5">
         <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-500/20 to-purple-500/20 flex items-center justify-center text-lg">{selMarket.icon}</div>
-        <div class="flex-1 min-w-0"><div class="text-xs font-medium text-zinc-100">{selMarket.name}</div><div class="text-[9px] text-zinc-400">{selMarket.author} • v{selMarket.ver}</div></div>
-        {#if selMarket.inst}<span class="px-2 py-1 text-[10px] font-medium rounded bg-emerald-500/10 text-emerald-400">Установлен</span>
-        {:else}<button onclick={() => inst(selMarket!.id)} class="px-2.5 py-1 text-[10px] font-medium rounded bg-indigo-500 text-white hover:bg-indigo-600">Установить</button>{/if}
+        <div class="flex-1 min-w-0"><div class="text-xs font-medium text-zinc-100">{selMarket.name}</div><div class="text-[10px] text-zinc-400">{selMarket.author} • v{selMarket.ver}</div></div>
+        {#if selMarket.inst}<span class="px-2 py-1 text-[10px] font-medium rounded bg-emerald-500/10 text-emerald-400">{t('plugins.buttons.installed')}</span>
+        {:else}<button onclick={() => inst(selMarket!.id)} class="px-2.5 py-1 text-[10px] font-medium rounded bg-indigo-500 text-white hover:bg-indigo-600">{t('plugins.buttons.install')}</button>{/if}
       </div>
       <div class="flex-1 p-3 overflow-y-auto space-y-2.5 text-[11px]">
-        <div><div class="text-[9px] text-zinc-400 mb-0.5">Описание</div><div class="text-zinc-300">{selMarket.desc}</div></div>
-        <div><div class="text-[9px] text-zinc-400 mb-0.5">Категория</div><span class="px-1.5 py-0.5 bg-white/5 rounded text-zinc-400 text-[10px] capitalize">{selMarket.cat}</span></div>
-        <div><div class="text-[9px] text-zinc-400 mb-0.5">Загрузки</div><span class="text-zinc-300">{selMarket.dl.toLocaleString()}</span></div>
+        <div><div class="text-[10px] text-zinc-400 mb-0.5">{t('plugins.details.description')}</div><div class="text-zinc-300">{selMarket.desc}</div></div>
+        <div><div class="text-[10px] text-zinc-400 mb-0.5">{t('plugins.details.category')}</div><span class="px-1.5 py-0.5 bg-white/5 rounded text-zinc-400 text-[10px] capitalize">{selMarket.cat}</span></div>
+        <div><div class="text-[10px] text-zinc-400 mb-0.5">{t('plugins.details.downloads')}</div><span class="text-zinc-300">{selMarket.dl.toLocaleString()}</span></div>
       </div>
     {:else}
-      <div class="flex-1 flex items-center justify-center"><div class="text-center opacity-40"><div class="text-2xl mb-1">🧩</div><div class="text-[10px] text-zinc-600">Выберите плагин</div></div></div>
+      <div class="flex-1 flex items-center justify-center"><div class="text-center opacity-40"><div class="text-2xl mb-1">🧩</div><div class="text-[10px] text-zinc-400">{t('plugins.empty.selectPlugin')}</div></div></div>
     {/if}
   </div>
 </div>
@@ -240,7 +241,7 @@
         </svg>
       </div>
       <div>
-        <h3 class="text-sm font-medium text-zinc-100">Удалить плагин?</h3>
+        <h3 class="text-sm font-medium text-zinc-100">{t('plugins.deleteModal.title')}</h3>
         {#if pluginToDelete}
           <p class="text-[11px] text-zinc-400">{pluginToDelete.manifest.name}</p>
         {/if}
@@ -250,24 +251,24 @@
     {#if pluginToDelete}
       {#if pluginToDelete.manifest.service || pluginToDelete.manifest.strategy || pluginToDelete.manifest.hostlist}
         <div class="mb-3 p-2.5 bg-white/5 rounded-lg border border-white/5">
-          <div class="text-[10px] text-zinc-400 mb-2">Будет удалено:</div>
+          <div class="text-[10px] text-zinc-400 mb-2">{t('plugins.deleteModal.willBeDeleted')}</div>
           <div class="space-y-1.5">
             {#if pluginToDelete.manifest.service}
               <div class="flex items-center gap-2 text-[11px]">
                 <span class="text-sm">{pluginToDelete.manifest.service.icon}</span>
-                <span class="text-zinc-300">Сервис: {pluginToDelete.manifest.service.name}</span>
+                <span class="text-zinc-300">{t('plugins.deleteModal.service')}: {pluginToDelete.manifest.service.name}</span>
               </div>
             {/if}
             {#if pluginToDelete.manifest.strategy}
               <div class="flex items-center gap-2 text-[11px]">
                 <span class="text-sm">⚡</span>
-                <span class="text-zinc-300">Стратегия: {pluginToDelete.manifest.strategy.name}</span>
+                <span class="text-zinc-300">{t('plugins.deleteModal.strategy')}: {pluginToDelete.manifest.strategy.name}</span>
               </div>
             {/if}
             {#if pluginToDelete.manifest.hostlist}
               <div class="flex items-center gap-2 text-[11px]">
                 <span class="text-sm">📋</span>
-                <span class="text-zinc-300">Hostlist: {pluginToDelete.manifest.hostlist.name}</span>
+                <span class="text-zinc-300">{t('plugins.deleteModal.hostlist')}: {pluginToDelete.manifest.hostlist.name}</span>
               </div>
             {/if}
           </div>
@@ -282,7 +283,7 @@
           <line x1="12" y1="9" x2="12" y2="13"/>
           <line x1="12" y1="17" x2="12.01" y2="17"/>
         </svg>
-        <p class="text-[10px] text-amber-400/80">Это действие необратимо. Файлы плагина будут удалены с диска.</p>
+        <p class="text-[10px] text-amber-400">{t('plugins.deleteModal.warning')}</p>
       </div>
     </div>
 
@@ -291,13 +292,13 @@
         onclick={closeDeleteModal}
         class="px-3 py-1.5 text-[11px] font-medium rounded-lg bg-white/5 text-zinc-300 hover:bg-white/10 transition-colors"
       >
-        Отмена
+        {t('plugins.deleteModal.cancel')}
       </button>
       <button
         onclick={confirmDelete}
         class="px-3 py-1.5 text-[11px] font-medium rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
       >
-        Удалить
+        {t('plugins.deleteModal.confirm')}
       </button>
     </div>
   </div>

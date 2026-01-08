@@ -97,7 +97,7 @@
     
     <!-- Line numbers overlay hint -->
     {#if !error}
-      <div class="absolute top-4 right-4 text-xs text-zinc-600">
+      <div class="absolute top-4 right-4 text-xs text-zinc-400">
         {value.split('\n').length} lines
       </div>
     {/if}

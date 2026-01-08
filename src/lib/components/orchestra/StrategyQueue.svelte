@@ -22,7 +22,7 @@
               : 'bg-zinc-800/30 border border-white/5 hover:bg-zinc-800/50'}"
         >
           <!-- Index -->
-          <div class="w-6 h-6 rounded-full bg-zinc-800 flex items-center justify-center text-xs text-zinc-500 font-mono">
+          <div class="w-6 h-6 rounded-full bg-zinc-800 flex items-center justify-center text-xs text-zinc-400 font-mono">
             {i + 1}
           </div>
 
@@ -36,10 +36,10 @@
             </div>
             <div class="flex items-center gap-2 mt-0.5">
               {#if item.score !== undefined}
-                <span class="text-xs text-zinc-500">{t('orchestra.queue.score')}: <span class="text-cyan-400">{item.score.toFixed(1)}</span></span>
+                <span class="text-xs text-zinc-400">{t('orchestra.queue.score')}: <span class="text-cyan-400">{item.score.toFixed(1)}</span></span>
               {/if}
               {#if item.latency !== undefined}
-                <span class="text-xs text-zinc-500">{t('orchestra.queue.latency')}: <span class="text-zinc-400">{item.latency.toFixed(0)}ms</span></span>
+                <span class="text-xs text-zinc-400">{t('orchestra.queue.latency')}: <span class="text-zinc-400">{item.latency.toFixed(0)}ms</span></span>
               {/if}
             </div>
           </div>
@@ -53,7 +53,7 @@
       {/each}
 
       {#if queue.length === 0}
-        <div class="flex flex-col items-center justify-center h-32 text-zinc-500">
+        <div class="flex flex-col items-center justify-center h-32 text-zinc-400">
           <span class="text-3xl mb-2">📭</span>
           <span class="text-sm">{t('orchestra.queue.empty')}</span>
         </div>

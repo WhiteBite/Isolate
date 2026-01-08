@@ -50,10 +50,10 @@
     <!-- Empty state -->
     <div class="flex-1 flex flex-col items-center justify-center p-4 rounded-lg bg-zinc-900/30 border border-white/5">
       <div class="flex items-center gap-2 mb-2">
-        <span class="text-zinc-500">💚</span>
+        <span class="text-zinc-400">💚</span>
         <span class="text-sm text-zinc-400">Нет данных о сервисах</span>
       </div>
-      <p class="text-[10px] text-zinc-600 text-center">
+      <p class="text-[10px] text-zinc-400 text-center">
         Нажмите «Scan All» для проверки доступности
       </p>
     </div>
@@ -95,7 +95,7 @@
               {service.ping}ms
             </span>
           {:else}
-            <span class="text-xs font-mono text-zinc-600 min-w-[45px] text-right">
+            <span class="text-xs font-mono text-zinc-400 min-w-[45px] text-right">
               --
             </span>
           {/if}

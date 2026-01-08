@@ -168,7 +168,7 @@
           <div class="space-y-3">
             <!-- Group Header -->
             <div class="flex items-center gap-2">
-              <svg class="w-4 h-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg class="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d={group.icon} />
               </svg>
               <h3 class="text-xs font-semibold text-zinc-400 uppercase tracking-wider">{group.title}</h3>
@@ -182,7 +182,7 @@
                   <div class="flex items-center gap-1">
                     {#each shortcut.keys as key, i}
                       {#if i > 0}
-                        <span class="text-zinc-600 text-[10px]">+</span>
+                        <span class="text-zinc-400 text-[10px]">+</span>
                       {/if}
                       <kbd class="min-w-[24px] px-1.5 py-0.5 text-[11px] font-medium text-zinc-300 bg-zinc-700/80 rounded border border-zinc-600/50 text-center shadow-sm">
                         {key}
@@ -198,7 +198,7 @@
 
       <!-- Footer Hint -->
       <div class="mt-6 pt-4 border-t border-white/5 text-center">
-        <span class="text-xs text-zinc-500">
+        <span class="text-xs text-zinc-400">
           Release <kbd class="px-1.5 py-0.5 mx-1 text-[10px] bg-zinc-800 rounded border border-zinc-700/50 text-zinc-400">Ctrl</kbd> to close
         </span>
       </div>

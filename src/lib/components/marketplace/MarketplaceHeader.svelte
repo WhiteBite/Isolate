@@ -29,7 +29,7 @@
           <polyline points="20 6 9 17 4 12"/>
         </svg>
         <span class="font-medium">{installedCount}</span>
-        <span class="text-emerald-400/70">installed</span>
+        <span class="text-emerald-400">installed</span>
       </span>
     </div>
     

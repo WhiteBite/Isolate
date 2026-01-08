@@ -62,7 +62,7 @@
     </div>
     
     <!-- Mode description -->
-    <p class="text-xs text-zinc-500 px-1">
+    <p class="text-xs text-zinc-400 px-1">
       {mode === 'turbo' ? t('orchestra.controls.mode.turboDesc') : t('orchestra.controls.mode.deepDesc')}
     </p>
 
@@ -86,7 +86,7 @@
           class="flex-1 px-4 py-3 rounded-xl font-semibold text-sm
             {selectedServicesCount > 0 
               ? 'bg-gradient-to-r from-cyan-500 to-indigo-500 text-white hover:from-cyan-400 hover:to-indigo-400 shadow-lg shadow-cyan-500/20'
-              : 'bg-zinc-800/50 text-zinc-600 cursor-not-allowed'}
+              : 'bg-zinc-800/50 text-zinc-400 cursor-not-allowed'}
             transition-all"
         >
           ▶ {t('orchestra.controls.start')}
@@ -98,7 +98,7 @@
           class="flex-1 px-4 py-3 rounded-xl font-semibold text-sm
             {canPause 
               ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 hover:bg-amber-500/30' 
-              : 'bg-zinc-800/50 text-zinc-600 cursor-not-allowed'}"
+              : 'bg-zinc-800/50 text-zinc-400 cursor-not-allowed'}"
         >
           ⏸ {t('orchestra.controls.pause')}
         </button>
@@ -108,7 +108,7 @@
           class="flex-1 px-4 py-3 rounded-xl font-semibold text-sm
             {canStop 
               ? 'bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30' 
-              : 'bg-zinc-800/50 text-zinc-600 cursor-not-allowed'}"
+              : 'bg-zinc-800/50 text-zinc-400 cursor-not-allowed'}"
         >
           ⏹ {t('orchestra.controls.stop')}
         </button>

@@ -82,9 +82,9 @@
     <div class="flex items-center gap-2">
       <!-- Country flag or protocol icon -->
       {#if activeGateway.country}
-        <span class="text-xs uppercase font-mono text-zinc-500">{activeGateway.country}</span>
+        <span class="text-xs uppercase font-mono text-zinc-400">{activeGateway.country}</span>
       {:else}
-        <span class="text-xs uppercase font-mono text-zinc-500">{activeGateway.protocol}</span>
+        <span class="text-xs uppercase font-mono text-zinc-400">{activeGateway.protocol}</span>
       {/if}
       
       <!-- Gateway name -->
@@ -100,6 +100,6 @@
       {/if}
     </div>
   {:else if modeText && connectionState !== 'disconnected'}
-    <span class="text-xs text-zinc-500">via {modeText}</span>
+    <span class="text-xs text-zinc-400">via {modeText}</span>
   {/if}
 </div>

@@ -82,7 +82,7 @@
         <div class="w-2 h-2 rounded-full bg-zinc-500"></div>
         <span class="text-sm text-zinc-400">Ожидание данных</span>
       </div>
-      <p class="text-[10px] text-zinc-600 text-center">
+      <p class="text-[10px] text-zinc-400 text-center">
         Статистика появится после включения защиты
       </p>
     </div>
@@ -99,7 +99,7 @@
         </div>
         <div class="flex items-baseline gap-1">
           <span class="text-2xl font-bold text-white font-mono">{stats.activeConnections}</span>
-          <span class="text-[10px] text-zinc-500">/ {stats.peakConnections} peak</span>
+          <span class="text-[10px] text-zinc-400">/ {stats.peakConnections} peak</span>
         </div>
       </div>
       
@@ -127,7 +127,7 @@
             />
           </svg>
         </div>
-        <div class="flex justify-between text-[9px] text-zinc-600 mt-1">
+        <div class="flex justify-between text-[10px] text-zinc-400 mt-1">
           <span>5 min ago</span>
           <span>now</span>
         </div>
@@ -142,7 +142,7 @@
           <svg class="w-3 h-3 text-neon-cyan" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M12 3v18M5 12l7 7 7-7"/>
           </svg>
-          <span class="text-[9px] uppercase tracking-wider text-zinc-500">Received</span>
+          <span class="text-[10px] uppercase tracking-wider text-zinc-400">Received</span>
         </div>
         <span class="text-sm font-bold text-white font-mono">{formatBytes(stats.totalBytesIn)}</span>
       </div>
@@ -153,7 +153,7 @@
           <svg class="w-3 h-3 text-indigo-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M12 21V3M5 10l7-7 7 7"/>
           </svg>
-          <span class="text-[9px] uppercase tracking-wider text-zinc-500">Sent</span>
+          <span class="text-[10px] uppercase tracking-wider text-zinc-400">Sent</span>
         </div>
         <span class="text-sm font-bold text-white font-mono">{formatBytes(stats.totalBytesOut)}</span>
       </div>
@@ -164,14 +164,14 @@
       <div class="flex items-center justify-between px-1 pt-1 text-[10px]">
         <div class="flex items-center gap-3">
           <div class="flex items-center gap-1">
-            <svg class="w-3 h-3 text-zinc-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg class="w-3 h-3 text-zinc-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="10"/>
               <path d="M12 6v6l4 2"/>
             </svg>
             <span class="text-zinc-400">Avg: {formatDuration(stats.avgDuration)}</span>
           </div>
           <div class="flex items-center gap-1">
-            <svg class="w-3 h-3 text-zinc-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg class="w-3 h-3 text-zinc-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
             </svg>
             <span class="text-zinc-400">{stats.connectionsPerMinute.toFixed(1)}/min</span>
@@ -179,7 +179,7 @@
         </div>
         <div class="flex items-center gap-1">
           <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span class="text-zinc-500">Updated {timeSinceUpdate()}</span>
+          <span class="text-zinc-400">Updated {timeSinceUpdate()}</span>
         </div>
       </div>
     {/if}

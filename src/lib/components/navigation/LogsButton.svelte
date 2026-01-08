@@ -40,7 +40,7 @@
     <span class="text-sm font-medium whitespace-nowrap overflow-hidden flex-1 text-left">Logs</span>
     
     <!-- Keyboard shortcut hint -->
-    <kbd class="px-1.5 py-0.5 text-[10px] bg-zinc-800 rounded border border-white/5 text-zinc-500">
+    <kbd class="px-1.5 py-0.5 text-[10px] bg-zinc-800 rounded border border-white/5 text-zinc-400">
       Ctrl+`
     </kbd>
   {/if}
@@ -49,7 +49,7 @@
   {#if collapsed}
     <div class="absolute left-full ml-2 px-2 py-1 bg-zinc-800 text-zinc-200 text-xs rounded-md opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-150 whitespace-nowrap z-50 pointer-events-none shadow-lg border border-white/10">
       Logs
-      <span class="ml-1 text-zinc-500">Ctrl+`</span>
+      <span class="ml-1 text-zinc-400">Ctrl+`</span>
     </div>
   {/if}
 </button>

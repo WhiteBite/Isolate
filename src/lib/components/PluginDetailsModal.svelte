@@ -134,7 +134,7 @@
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-2 flex-wrap">
             <h2 id="plugin-details-title" class="text-xl font-bold text-zinc-100">{plugin.name}</h2>
-            <span class="text-sm text-zinc-500">v{plugin.version}</span>
+            <span class="text-sm text-zinc-400">v{plugin.version}</span>
           </div>
           
           <div class="flex items-center gap-2 mt-2 flex-wrap">
@@ -150,7 +150,7 @@
             </span>
           </div>
           
-          <div class="flex items-center gap-3 mt-2 text-sm text-zinc-500">
+          <div class="flex items-center gap-3 mt-2 text-sm text-zinc-400">
             <span>by {plugin.author}</span>
             {#if plugin.downloads && plugin.downloads > 0}
               <span>•</span>
@@ -229,7 +229,7 @@
                     <div class="flex items-center gap-2">
                       <span class="font-medium text-zinc-200">{item.count} {item.label}</span>
                     </div>
-                    <p class="text-xs text-zinc-500">{item.description}</p>
+                    <p class="text-xs text-zinc-400">{item.description}</p>
                   </div>
                 </div>
               {/each}
@@ -273,7 +273,7 @@
                   </svg>
                   <span class="font-medium text-zinc-200">HTTP Access</span>
                 </div>
-                <p class="text-xs text-zinc-500 mb-2">Plugin can make requests to the following domains:</p>
+                <p class="text-xs text-zinc-400 mb-2">Plugin can make requests to the following domains:</p>
                 <div class="flex flex-wrap gap-1">
                   {#each plugin.permissions.http as domain}
                     <span class="px-2 py-0.5 text-xs bg-zinc-700 text-zinc-300 rounded-md font-mono">
@@ -295,7 +295,7 @@
                   </svg>
                   <span class="font-medium text-zinc-200">Storage</span>
                 </div>
-                <p class="text-xs text-zinc-500">Plugin can save data locally</p>
+                <p class="text-xs text-zinc-400">Plugin can save data locally</p>
               </div>
             {/if}
 
@@ -308,7 +308,7 @@
                   </svg>
                   <span class="font-medium text-zinc-200">Events</span>
                 </div>
-                <p class="text-xs text-zinc-500 mb-2">Plugin can send/receive events:</p>
+                <p class="text-xs text-zinc-400 mb-2">Plugin can send/receive events:</p>
                 <div class="flex flex-wrap gap-1">
                   {#each plugin.permissions.events as event}
                     <span class="px-2 py-0.5 text-xs bg-zinc-700 text-zinc-300 rounded-md font-mono">
@@ -329,7 +329,7 @@
                   </svg>
                   <span class="font-medium text-zinc-200">Timeout</span>
                 </div>
-                <p class="text-xs text-zinc-500">Maximum execution time: <span class="text-zinc-300">{plugin.permissions.timeout} ms</span></p>
+                <p class="text-xs text-zinc-400">Maximum execution time: <span class="text-zinc-300">{plugin.permissions.timeout} ms</span></p>
               </div>
             {/if}
 
@@ -351,12 +351,12 @@
                   </svg>
                   <span class="font-medium text-zinc-200">Memory Limit</span>
                 </div>
-                <p class="text-xs text-zinc-500">Memory limit: <span class="text-zinc-300">{(plugin.permissions.memory / 1024 / 1024).toFixed(0)} MB</span></p>
+                <p class="text-xs text-zinc-400">Memory limit: <span class="text-zinc-300">{(plugin.permissions.memory / 1024 / 1024).toFixed(0)} MB</span></p>
               </div>
             {/if}
           </div>
         {:else}
-          <div class="text-center py-8 text-zinc-500">
+          <div class="text-center py-8 text-zinc-400">
             <svg class="w-12 h-12 mx-auto mb-3 opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
             </svg>
@@ -375,7 +375,7 @@
             {/each}
           </div>
         {:else}
-          <div class="text-center py-8 text-zinc-500">
+          <div class="text-center py-8 text-zinc-400">
             <p>Changelog not available</p>
           </div>
         {/if}
@@ -384,7 +384,7 @@
 
     <!-- Footer -->
     <div class="p-4 border-t border-white/5 bg-zinc-800/30 flex items-center justify-between">
-      <div class="text-xs text-zinc-500">
+      <div class="text-xs text-zinc-400">
         {#if plugin.installed}
           <span class="flex items-center gap-1 text-emerald-400">
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

@@ -66,7 +66,7 @@
             </svg>
             <span class="text-xs font-medium">Plugin Error</span>
           </div>
-          <p class="text-[10px] text-red-400/70 mt-1.5 font-mono">
+          <p class="text-[10px] text-red-400 mt-1.5 font-mono">
             {widget.widgetDef.name}: {componentErrors.get(widgetId)}
           </p>
           <button 

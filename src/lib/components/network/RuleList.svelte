@@ -243,7 +243,7 @@
       </div>
       <div>
         <h3 class="text-sm font-semibold text-white">Traffic Rules</h3>
-        <p class="text-xs text-zinc-500">{rules.length} rule{rules.length !== 1 ? 's' : ''}</p>
+        <p class="text-xs text-zinc-400">{rules.length} rule{rules.length !== 1 ? 's' : ''}</p>
       </div>
     </div>
     <button
@@ -341,13 +341,13 @@
       <div class="text-center py-12">
         <div class="w-16 h-16 mx-auto mb-4 rounded-2xl bg-zinc-900/60 border border-white/5 
                     flex items-center justify-center">
-          <svg class="w-8 h-8 text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-8 h-8 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" 
                   d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
           </svg>
         </div>
         <h4 class="text-base font-semibold text-white mb-1">No rules yet</h4>
-        <p class="text-sm text-zinc-500 mb-4 max-w-xs mx-auto">
+        <p class="text-sm text-zinc-400 mb-4 max-w-xs mx-auto">
           Create rules to control how traffic flows through your network
         </p>
         <button
@@ -402,7 +402,7 @@
 
       <!-- Keyboard shortcuts hint -->
       <div id="keyboard-help" class="mt-3 px-2 py-1.5 bg-zinc-900/30 rounded-lg border border-white/5">
-        <p class="text-xs text-zinc-500">
+        <p class="text-xs text-zinc-400">
           <span class="text-zinc-400">Keyboard:</span> 
           ↑↓ navigate • Ctrl+↑↓ reorder • Home/End jump • Space select • Ctrl+A select all • Enter edit • Delete remove • T toggle • Esc clear
         </p>
@@ -410,7 +410,7 @@
 
       <!-- Flow legend -->
       <div class="mt-4 pt-4 border-t border-white/5">
-        <div class="flex flex-wrap items-center gap-3 text-xs text-zinc-500">
+        <div class="flex flex-wrap items-center gap-3 text-xs text-zinc-400">
           <span class="flex items-center gap-1.5">
             <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
             Direct

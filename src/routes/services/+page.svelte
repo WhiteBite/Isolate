@@ -473,7 +473,7 @@
         </svg>
       </div>
       <h3 class="text-lg font-semibold text-zinc-100 mb-2">Failed to Load Services</h3>
-      <p class="text-sm text-red-300/80 mb-6">{loadError}</p>
+      <p class="text-sm text-red-300 mb-6">{loadError}</p>
       <button
         onclick={async () => {
           retrying = true;

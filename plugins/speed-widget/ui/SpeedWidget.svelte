@@ -115,7 +115,7 @@
       disabled={isRunning}
       class="px-3 py-1.5 text-xs font-medium rounded-lg transition-all
         {isRunning 
-          ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed' 
+          ? 'bg-zinc-800 text-zinc-400 cursor-not-allowed' 
           : 'bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30 border border-cyan-500/30'}"
     >
       {isRunning ? 'Testing...' : 'Run Test'}
@@ -126,43 +126,43 @@
   <div class="grid grid-cols-3 gap-4">
     <!-- Download -->
     <div class="text-center">
-      <div class="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Download</div>
+      <div class="text-[10px] text-zinc-400 uppercase tracking-wider mb-1">Download</div>
       <div class="text-2xl font-bold {getSpeedColor(downloadSpeed)}">
         {downloadSpeed > 0 ? formatSpeed(downloadSpeed) : '—'}
       </div>
       <div class="flex items-center justify-center gap-1 mt-1">
-        <svg class="w-3 h-3 text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg class="w-3 h-3 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
         </svg>
-        <span class="text-[10px] text-zinc-500">↓</span>
+        <span class="text-[10px] text-zinc-400">↓</span>
       </div>
     </div>
     
     <!-- Upload -->
     <div class="text-center">
-      <div class="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Upload</div>
+      <div class="text-[10px] text-zinc-400 uppercase tracking-wider mb-1">Upload</div>
       <div class="text-2xl font-bold {getSpeedColor(uploadSpeed)}">
         {uploadSpeed > 0 ? formatSpeed(uploadSpeed) : '—'}
       </div>
       <div class="flex items-center justify-center gap-1 mt-1">
-        <svg class="w-3 h-3 text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg class="w-3 h-3 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18" />
         </svg>
-        <span class="text-[10px] text-zinc-500">↑</span>
+        <span class="text-[10px] text-zinc-400">↑</span>
       </div>
     </div>
     
     <!-- Ping -->
     <div class="text-center">
-      <div class="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Ping</div>
+      <div class="text-[10px] text-zinc-400 uppercase tracking-wider mb-1">Ping</div>
       <div class="text-2xl font-bold {getPingColor(ping)}">
         {ping > 0 ? `${ping}ms` : '—'}
       </div>
       <div class="flex items-center justify-center gap-1 mt-1">
-        <svg class="w-3 h-3 text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg class="w-3 h-3 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
         </svg>
-        <span class="text-[10px] text-zinc-500">ms</span>
+        <span class="text-[10px] text-zinc-400">ms</span>
       </div>
     </div>
   </div>
@@ -173,14 +173,14 @@
       <div class="h-1 bg-zinc-800 rounded-full overflow-hidden">
         <div class="h-full bg-gradient-to-r from-cyan-500 to-emerald-500 animate-pulse" style="width: 100%"></div>
       </div>
-      <p class="text-[10px] text-zinc-500 text-center mt-2">Running speed test...</p>
+      <p class="text-[10px] text-zinc-400 text-center mt-2">Running speed test...</p>
     </div>
   {/if}
   
   <!-- Last update -->
   {#if lastUpdate && !isRunning}
     <div class="mt-4 pt-3 border-t border-white/5">
-      <p class="text-[10px] text-zinc-500 text-center">
+      <p class="text-[10px] text-zinc-400 text-center">
         Last tested: {lastUpdate.toLocaleTimeString()}
       </p>
     </div>

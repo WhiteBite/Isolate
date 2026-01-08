@@ -28,7 +28,7 @@
     disabled={disabled}
     class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 {mode === 'system' 
       ? 'bg-zinc-800 text-white shadow-sm' 
-      : 'bg-transparent text-zinc-500 hover:text-zinc-300 hover:bg-white/5'} {disabled ? 'opacity-50 cursor-not-allowed' : ''}"
+      : 'bg-transparent text-zinc-400 hover:text-zinc-300 hover:bg-white/5'} {disabled ? 'opacity-50 cursor-not-allowed' : ''}"
   >
     <span class="text-base">🌍</span>
     <span>System Proxy</span>
@@ -43,7 +43,7 @@
     disabled={disabled}
     class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 {mode === 'tun' 
       ? 'bg-zinc-800 text-white shadow-sm' 
-      : 'bg-transparent text-zinc-500 hover:text-zinc-300 hover:bg-white/5'} {disabled ? 'opacity-50 cursor-not-allowed' : ''}"
+      : 'bg-transparent text-zinc-400 hover:text-zinc-300 hover:bg-white/5'} {disabled ? 'opacity-50 cursor-not-allowed' : ''}"
   >
     <span class="text-base">🛡️</span>
     <span>TUN Driver</span>

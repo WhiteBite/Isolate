@@ -269,7 +269,7 @@
                 onblur={handleDnsChange}
                 placeholder="Enter DNS address (e.g., 9.9.9.9)"
                 class="w-full bg-zinc-900 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm
-                       placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 
+                       placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 
                        focus:border-indigo-500/50 transition-colors"
               />
             </div>
@@ -281,7 +281,7 @@
           <div class="flex items-center justify-between">
             <div class="space-y-1">
               <p class="text-sm font-medium text-white">System DNS</p>
-              <p class="text-xs text-zinc-500">Apply DNS settings to Windows network adapters</p>
+              <p class="text-xs text-zinc-400">Apply DNS settings to Windows network adapters</p>
             </div>
             <span class="px-2 py-0.5 text-[10px] font-medium bg-amber-500/10 text-amber-400 rounded border border-amber-500/20">
               Admin
@@ -296,7 +296,7 @@
               disabled={loadingApplyDns || dnsServer === 'system'}
               class="flex-1 px-3 py-2 text-sm font-medium rounded-lg transition-all
                      {dnsServer === 'system' 
-                       ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed' 
+                       ? 'bg-zinc-800 text-zinc-400 cursor-not-allowed' 
                        : 'bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 border border-indigo-500/20'}
                      {loadingApplyDns ? 'opacity-50' : ''}"
             >
@@ -337,7 +337,7 @@
           </div>
           
           {#if dnsServer === 'system'}
-            <p class="text-xs text-zinc-500 italic">
+            <p class="text-xs text-zinc-400 italic">
               Select a DNS server above to enable "Apply to System"
             </p>
           {/if}
@@ -347,7 +347,7 @@
         <div class="flex items-center justify-between p-4 bg-zinc-900/50 rounded-xl border border-white/5">
           <div class="space-y-1">
             <p class="text-sm font-medium text-white">Block QUIC</p>
-            <p class="text-xs text-zinc-500">Block UDP/443 to force TCP connections</p>
+            <p class="text-xs text-zinc-400">Block UDP/443 to force TCP connections</p>
           </div>
           <button
             type="button"
@@ -370,7 +370,7 @@
           </summary>
           
           <div class="p-4 pt-0 space-y-4 border-t border-red-500/10">
-            <p class="text-xs text-zinc-500 mt-3">
+            <p class="text-xs text-zinc-400 mt-3">
               These settings can affect system stability. Change only if you know what you're doing.
             </p>
 
@@ -393,7 +393,7 @@
 
               <!-- Mode Description -->
               <div class="p-3 bg-zinc-900/30 rounded-lg border border-white/5">
-                <p class="text-xs text-zinc-500">
+                <p class="text-xs text-zinc-400">
                   {#if windivertMode === 'normal'}
                     Standard packet filtering mode. Recommended for most users.
                   {:else if windivertMode === 'autottl'}
@@ -417,7 +417,7 @@
             </div>
             <div class="space-y-1">
               <p class="text-sm font-medium text-indigo-300">Need help?</p>
-              <p class="text-xs text-zinc-500">
+              <p class="text-xs text-zinc-400">
                 These settings are for advanced users. Default values work best for most scenarios.
               </p>
             </div>

@@ -422,7 +422,7 @@
 
     <!-- Footer -->
     <div class="mt-6 text-center">
-      <p class="text-xs text-zinc-600">
+      <p class="text-xs text-zinc-400">
         Isolate v1.0 • Your data stays on your device
       </p>
     </div>

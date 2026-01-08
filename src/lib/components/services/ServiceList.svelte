@@ -96,7 +96,7 @@
         value={searchQuery}
         oninput={(e) => onsearchchange(e.currentTarget.value)}
         class="w-full pl-10 pr-4 py-2 bg-zinc-800/60 border border-white/5 rounded-xl
-               text-sm text-zinc-100 placeholder-zinc-500
+               text-sm text-zinc-100 placeholder-zinc-400
                focus:outline-none focus:border-indigo-500/30 focus:ring-1 focus:ring-indigo-500/20
                transition-all duration-200"
       />
@@ -181,12 +181,12 @@
   <div class="flex-1 overflow-y-auto p-2 space-y-1">
     {#if services.length === 0}
       <div class="flex flex-col items-center justify-center py-12 text-center">
-        <svg class="w-12 h-12 text-zinc-600 mb-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <svg class="w-12 h-12 text-zinc-400 mb-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <circle cx="11" cy="11" r="8"/>
           <path d="m21 21-4.35-4.35"/>
         </svg>
         <p class="text-sm text-zinc-400">No services found</p>
-        <p class="text-xs text-zinc-600 mt-1">Try adjusting your search or filter</p>
+        <p class="text-xs text-zinc-400 mt-1">Try adjusting your search or filter</p>
       </div>
     {:else}
       {#each services as service (service.id)}

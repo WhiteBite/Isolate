@@ -196,7 +196,7 @@
               bind:value={name}
               placeholder="My Proxy Server"
               class="w-full bg-zinc-900 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm
-                     placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-amber-500/50 
+                     placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 
                      focus:border-amber-500/50 transition-colors"
             />
           </div>
@@ -228,7 +228,7 @@
                 bind:value={server}
                 placeholder="example.com"
                 class="w-full bg-zinc-900 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm
-                       placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-amber-500/50 
+                       placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 
                        focus:border-amber-500/50 transition-colors"
               />
             </div>
@@ -241,7 +241,7 @@
                 min="1"
                 max="65535"
                 class="w-full bg-zinc-900 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm
-                       placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-amber-500/50 
+                       placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 
                        focus:border-amber-500/50 transition-colors"
               />
             </div>
@@ -257,7 +257,7 @@
                 bind:value={uuid}
                 placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
                 class="w-full bg-zinc-900 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm font-mono
-                       placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-amber-500/50 
+                       placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 
                        focus:border-amber-500/50 transition-colors"
               />
             </div>
@@ -273,7 +273,7 @@
                 bind:value={password}
                 placeholder="••••••••"
                 class="w-full bg-zinc-900 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm
-                       placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-amber-500/50 
+                       placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 
                        focus:border-amber-500/50 transition-colors"
               />
             </div>
@@ -283,7 +283,7 @@
           <div class="flex items-center justify-between p-4 bg-zinc-900/50 rounded-xl border border-white/5">
             <div class="space-y-1">
               <p class="text-sm font-medium text-white">TLS Encryption</p>
-              <p class="text-xs text-zinc-500">Enable TLS/SSL for secure connection</p>
+              <p class="text-xs text-zinc-400">Enable TLS/SSL for secure connection</p>
             </div>
             <Toggle bind:checked={tls} />
           </div>
@@ -292,7 +292,7 @@
           {#if tls}
             <div class="space-y-2" transition:fly={{ y: -10, duration: 200 }}>
               <label for="edit-gateway-sni" class="block text-sm font-medium text-zinc-400">
-                SNI <span class="text-zinc-600">(optional)</span>
+                SNI <span class="text-zinc-400">(optional)</span>
               </label>
               <input
                 id="edit-gateway-sni"
@@ -300,7 +300,7 @@
                 bind:value={sni}
                 placeholder="Server Name Indication"
                 class="w-full bg-zinc-900 border border-white/10 rounded-lg px-3 py-2.5 text-white text-sm
-                       placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-amber-500/50 
+                       placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 
                        focus:border-amber-500/50 transition-colors"
               />
             </div>
@@ -317,7 +317,7 @@
             </div>
             <div class="space-y-1">
               <p class="text-sm font-medium text-zinc-300">Gateway ID</p>
-              <p class="text-xs text-zinc-500 font-mono">{gateway.id}</p>
+              <p class="text-xs text-zinc-400 font-mono">{gateway.id}</p>
             </div>
           </div>
         </div>

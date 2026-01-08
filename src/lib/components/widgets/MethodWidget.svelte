@@ -79,7 +79,7 @@
   <!-- Connection path -->
   <div class="mt-3 pt-3 border-t border-white/5 relative z-10">
     <div class="flex items-center gap-2 text-xs">
-      <span class="text-zinc-600">via</span>
+      <span class="text-zinc-400">via</span>
       {#if method === 'direct'}
         <span class="text-zinc-400">Direct Connection</span>
       {:else if method === 'proxy' && proxyName}

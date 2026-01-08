@@ -229,7 +229,7 @@
       <span class="text-zinc-400">{author}</span>
     </span>
     {#if downloads > 0}
-      <span class="text-zinc-600">•</span>
+      <span class="text-zinc-400">•</span>
       <span class="flex items-center gap-1">
         <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
@@ -238,12 +238,12 @@
       </span>
     {/if}
     {#if rating > 0}
-      <span class="text-zinc-600">•</span>
+      <span class="text-zinc-400">•</span>
       <span class="flex items-center gap-1">
         <svg class="w-3 h-3 text-amber-400" viewBox="0 0 24 24" fill="currentColor">
           <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
         </svg>
-        <span class="text-amber-400/80 tabular-nums">{rating.toFixed(1)}</span>
+        <span class="text-amber-400 tabular-nums">{rating.toFixed(1)}</span>
       </span>
     {/if}
     {#each contributionItems as item}
@@ -265,7 +265,7 @@
         </button>
       {/if}
       {#if level === 3 && sourceUrl && onViewSource}
-        <button onclick={onViewSource} class="p-1.5 rounded-lg text-amber-500/70 hover:text-amber-400 hover:bg-amber-500/10 transition-all" title="View Source">
+        <button onclick={onViewSource} class="p-1.5 rounded-lg text-amber-500 hover:text-amber-400 hover:bg-amber-500/10 transition-all" title="View Source">
           <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
           </svg>
@@ -280,7 +280,7 @@
         </button>
       {/if}
       {#if installed && onReload}
-        <button onclick={handleReload} disabled={reloadingPlugin} class="p-1.5 rounded-lg transition-all {reloadingPlugin ? 'text-zinc-600 cursor-wait' : 'text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800'}" title="Reload">
+        <button onclick={handleReload} disabled={reloadingPlugin} class="p-1.5 rounded-lg transition-all {reloadingPlugin ? 'text-zinc-400 cursor-wait' : 'text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800'}" title="Reload">
           {#if reloadingPlugin}
             <svg class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="10" stroke-opacity="0.25"/><path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"/>

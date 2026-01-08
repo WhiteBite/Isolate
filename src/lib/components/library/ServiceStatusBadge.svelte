@@ -51,7 +51,7 @@
   <span>{statusConfig.label}</span>
   
   {#if showPing && ping !== undefined && status === 'accessible'}
-    <span class="text-zinc-500">•</span>
+    <span class="text-zinc-400">•</span>
     <span class="text-zinc-400">{ping}ms</span>
   {/if}
 </div>

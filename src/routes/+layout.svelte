@@ -8,6 +8,7 @@
   import { logs } from '$lib/stores/logs';
   import { themeStore } from '$lib/stores/theme';
   import { hotkeysStore, matchesHotkey, type HotkeysState } from '$lib/stores/hotkeys';
+  import { aiPilotStore } from '$lib/stores/aiPilot.svelte';
   import { initLocale, t } from '$lib/i18n';
   import { 
     ToastContainer, 
@@ -68,7 +69,19 @@
     if (browser) {
       const cleanup = themeStore.init();
       initLocale(); // Initialize i18n
-      return cleanup;
+      
+      // Initialize AI Pilot store
+      aiPilotStore.init().catch(err => {
+        console.error('[Layout] Failed to initialize AI Pilot:', err);
+      });
+      
+      return () => {
+        if (cleanup) cleanup();
+        // Cleanup AI Pilot store
+        aiPilotStore.destroy().catch(err => {
+          console.error('[Layout] Failed to cleanup AI Pilot:', err);
+        });
+      };
     }
   });
 

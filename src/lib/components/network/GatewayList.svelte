@@ -290,7 +290,7 @@
       </div>
       
       <!-- Hint -->
-      <p class="text-xs text-zinc-600 mt-4">
+      <p class="text-xs text-zinc-400 mt-4">
         Скопируйте ссылку vless:// или ss:// и нажмите «Импортировать»
       </p>
     </div>
@@ -308,7 +308,7 @@
       onclick={() => toggleGroup(country)}
     >
       <svg 
-        class="w-4 h-4 text-zinc-500 transition-transform duration-200 {isCollapsed ? '' : 'rotate-90'}" 
+        class="w-4 h-4 text-zinc-400 transition-transform duration-200 {isCollapsed ? '' : 'rotate-90'}" 
         fill="none" 
         stroke="currentColor" 
         viewBox="0 0 24 24"
@@ -317,7 +317,7 @@
       </svg>
       <span class="text-base">{flag}</span>
       <span class="text-sm font-medium text-zinc-300">{name}</span>
-      <span class="text-xs text-zinc-500 bg-zinc-800 px-1.5 py-0.5 rounded ml-auto">
+      <span class="text-xs text-zinc-400 bg-zinc-800 px-1.5 py-0.5 rounded ml-auto">
         {proxies.length}
       </span>
     </button>
@@ -347,7 +347,7 @@
     <div class="flex items-center gap-2">
       <h2 class="text-sm font-semibold text-white">Gateways</h2>
       {#if gateways.length > 0}
-        <span class="text-xs text-zinc-500 bg-zinc-800 px-1.5 py-0.5 rounded">
+        <span class="text-xs text-zinc-400 bg-zinc-800 px-1.5 py-0.5 rounded">
           {gateways.length}
         </span>
       {/if}

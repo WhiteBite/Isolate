@@ -29,7 +29,7 @@
                    : 'bg-zinc-700 scale-100'}"
       ></div>
       <span class="text-[10px] font-medium transition-colors
-                   {step === currentStep ? 'text-indigo-400' : step < currentStep ? 'text-emerald-400' : 'text-zinc-600'}">
+                   {step === currentStep ? 'text-indigo-400' : step < currentStep ? 'text-emerald-400' : 'text-zinc-400'}">
         {stepTitles[step - 1]}
       </span>
     </button>

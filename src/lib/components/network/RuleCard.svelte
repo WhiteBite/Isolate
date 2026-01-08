@@ -278,7 +278,7 @@
 
   <!-- Drag handle -->
   <div 
-    class="flex-shrink-0 cursor-grab active:cursor-grabbing p-1 rounded text-zinc-600 
+    class="flex-shrink-0 cursor-grab active:cursor-grabbing p-1 rounded text-zinc-400 
            hover:text-zinc-400 hover:bg-zinc-800/60 transition-all duration-200
            {isDragging ? 'cursor-grabbing text-indigo-400' : ''}"
     title="Drag to reorder (or use Ctrl+↑/↓)"
@@ -303,7 +303,7 @@
   </div>
   
   <!-- Arrow -->
-  <svg class="w-5 h-5 text-zinc-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+  <svg class="w-5 h-5 text-zinc-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
   </svg>
   

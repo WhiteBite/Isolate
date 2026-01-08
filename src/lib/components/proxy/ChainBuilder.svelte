@@ -107,13 +107,13 @@
     {#if localChain.length === 0}
       <div class="flex flex-col items-center justify-center py-8 text-center">
         <div class="w-12 h-12 mb-3 rounded-full bg-white/5 flex items-center justify-center">
-          <svg class="w-6 h-6 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-6 h-6 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" 
                   d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
           </svg>
         </div>
         <p class="text-sm text-zinc-400 mb-1">No chain configured</p>
-        <p class="text-xs text-zinc-500">Add proxies to create a multi-hop chain</p>
+        <p class="text-xs text-zinc-400">Add proxies to create a multi-hop chain</p>
       </div>
     {:else}
       <div class="flex items-center gap-2 flex-wrap">
@@ -125,7 +125,7 @@
         
         {#each chainProxies as proxy, index (proxy.id)}
           <!-- Arrow -->
-          <svg class="w-4 h-4 text-zinc-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-4 h-4 text-zinc-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
           </svg>
           
@@ -139,12 +139,12 @@
                    hover:border-indigo-500/30 cursor-move transition-colors
                    {dragIndex === index ? 'opacity-50' : ''}"
           >
-            <span class="text-xs text-zinc-500 font-mono">{index + 1}</span>
+            <span class="text-xs text-zinc-400 font-mono">{index + 1}</span>
             <span class="text-sm text-white">{proxy.name}</span>
-            <span class="text-xs text-zinc-500 uppercase">{proxy.protocol}</span>
+            <span class="text-xs text-zinc-400 uppercase">{proxy.protocol}</span>
             <button
               onclick={() => removeFromChain(index)}
-              class="ml-1 p-0.5 rounded text-zinc-500 hover:text-red-400 hover:bg-red-500/10 
+              class="ml-1 p-0.5 rounded text-zinc-400 hover:text-red-400 hover:bg-red-500/10 
                      opacity-0 group-hover:opacity-100 transition-all"
             >
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -155,7 +155,7 @@
         {/each}
         
         <!-- Arrow to destination -->
-        <svg class="w-4 h-4 text-zinc-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="w-4 h-4 text-zinc-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
         </svg>
         
@@ -174,7 +174,7 @@
   <!-- Available proxies to add -->
   {#if availableProxies.length > 0}
     <div class="px-4 pb-4">
-      <p class="text-xs text-zinc-500 mb-2">Click to add to chain:</p>
+      <p class="text-xs text-zinc-400 mb-2">Click to add to chain:</p>
       <div class="flex flex-wrap gap-2">
         {#each availableProxies.slice(0, 6) as proxy (proxy.id)}
           <button
@@ -187,7 +187,7 @@
           </button>
         {/each}
         {#if availableProxies.length > 6}
-          <span class="px-2.5 py-1.5 text-xs text-zinc-500">
+          <span class="px-2.5 py-1.5 text-xs text-zinc-400">
             +{availableProxies.length - 6} more
           </span>
         {/if}

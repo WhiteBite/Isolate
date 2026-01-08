@@ -186,7 +186,7 @@
                     {setting.label}
                   </label>
                   {#if setting.description}
-                    <p class="text-sm text-zinc-500 mt-0.5">{setting.description}</p>
+                    <p class="text-sm text-zinc-400 mt-0.5">{setting.description}</p>
                   {/if}
                 </div>
                 <button
@@ -212,7 +212,7 @@
                   {setting.label}
                 </label>
                 {#if setting.description}
-                  <p class="text-sm text-zinc-500 mb-2">{setting.description}</p>
+                  <p class="text-sm text-zinc-400 mb-2">{setting.description}</p>
                 {/if}
                 <select
                   id={setting.id}
@@ -234,7 +234,7 @@
                   {setting.label}
                 </label>
                 {#if setting.description}
-                  <p class="text-sm text-zinc-500 mb-2">{setting.description}</p>
+                  <p class="text-sm text-zinc-400 mb-2">{setting.description}</p>
                 {/if}
                 <div class="flex items-center gap-3">
                   <input
@@ -257,7 +257,7 @@
                            text-zinc-100 focus:outline-none focus:border-indigo-500/50"
                   />
                   {#if setting.min !== undefined || setting.max !== undefined}
-                    <span class="text-xs text-zinc-500 whitespace-nowrap">
+                    <span class="text-xs text-zinc-400 whitespace-nowrap">
                       {setting.min ?? '∞'} – {setting.max ?? '∞'}
                     </span>
                   {/if}
@@ -271,7 +271,7 @@
                   {setting.label}
                 </label>
                 {#if setting.description}
-                  <p class="text-sm text-zinc-500 mb-2">{setting.description}</p>
+                  <p class="text-sm text-zinc-400 mb-2">{setting.description}</p>
                 {/if}
                 <input
                   id={setting.id}
@@ -280,7 +280,7 @@
                   placeholder={setting.placeholder}
                   oninput={(e) => updateSetting(setting.id, e.currentTarget.value)}
                   class="w-full px-3 py-2 bg-zinc-900 border border-white/10 rounded-lg
-                         text-zinc-100 placeholder-zinc-600
+                         text-zinc-100 placeholder-zinc-400
                          focus:outline-none focus:border-indigo-500/50"
                 />
               </div>

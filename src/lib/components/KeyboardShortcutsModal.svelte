@@ -82,14 +82,14 @@
           </div>
           <div>
             <h2 id="shortcuts-title" class="text-lg font-semibold text-white">Keyboard Shortcuts</h2>
-            <p class="text-sm text-zinc-500">Quick actions to navigate faster</p>
+            <p class="text-sm text-zinc-400">Quick actions to navigate faster</p>
           </div>
         </div>
         
         <!-- Close button -->
         <button
           onclick={handleClose}
-          class="absolute top-4 right-4 p-2 text-zinc-500 hover:text-white rounded-lg hover:bg-white/5 transition-colors"
+          class="absolute top-4 right-4 p-2 text-zinc-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors"
           aria-label="Close"
         >
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -104,10 +104,10 @@
           <div>
             <!-- Group Header -->
             <div class="flex items-center gap-2 mb-3">
-              <svg class="w-4 h-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg class="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 {@html group.icon}
               </svg>
-              <h3 class="text-xs font-medium text-zinc-500 uppercase tracking-wider">{group.title}</h3>
+              <h3 class="text-xs font-medium text-zinc-400 uppercase tracking-wider">{group.title}</h3>
             </div>
             
             <!-- Shortcuts List -->
@@ -118,7 +118,7 @@
                   <div class="flex items-center gap-1">
                     {#each shortcut.keys as key, i}
                       {#if i > 0}
-                        <span class="text-zinc-600 text-xs">+</span>
+                        <span class="text-zinc-400 text-xs">+</span>
                       {/if}
                       <kbd class="min-w-[28px] px-2 py-1 text-xs font-medium text-zinc-400 bg-zinc-800/80 rounded border border-zinc-700/50 text-center shadow-sm">
                         {key}
@@ -134,7 +134,7 @@
 
       <!-- Footer -->
       <div class="px-6 py-4 border-t border-[#2a2f4a]/50 bg-zinc-900/30">
-        <div class="flex items-center justify-between text-xs text-zinc-500">
+        <div class="flex items-center justify-between text-xs text-zinc-400">
           <span>Press <kbd class="px-1.5 py-0.5 bg-zinc-800 rounded border border-zinc-700/50 text-zinc-400">?</kbd> anytime to show this help</span>
           <span class="flex items-center gap-1">
             <kbd class="px-1.5 py-0.5 bg-zinc-800 rounded border border-zinc-700/50 text-zinc-400">Esc</kbd>

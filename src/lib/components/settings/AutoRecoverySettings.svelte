@@ -279,7 +279,7 @@
           <!-- Selected backups with drag-n-drop -->
           {#if selectedBackups.length > 0}
             <div class="mb-4 space-y-2">
-              <p class="text-xs text-zinc-500 uppercase tracking-wider">Priority Order</p>
+              <p class="text-xs text-zinc-400 uppercase tracking-wider">Priority Order</p>
               {#each selectedBackups as backup, index}
                 <div
                   draggable="true"
@@ -288,15 +288,15 @@
                   ondragend={handleDragEnd}
                   class="flex items-center gap-3 p-3 bg-zinc-900/50 rounded-lg border border-white/10 cursor-move hover:border-indigo-500/30 transition-colors {draggedIndex === index ? 'opacity-50' : ''}"
                 >
-                  <span class="text-zinc-500 font-mono text-sm w-6">{index + 1}.</span>
-                  <svg class="w-4 h-4 text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <span class="text-zinc-400 font-mono text-sm w-6">{index + 1}.</span>
+                  <svg class="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"/>
                   </svg>
                   <span class="text-lg">{getStrategyIcon(backup.family)}</span>
                   <span class="text-text-primary flex-1">{backup.name}</span>
                   <button
                     onclick={() => handleBackupToggle(backup.id)}
-                    class="p-1 text-zinc-500 hover:text-red-400 transition-colors"
+                    class="p-1 text-zinc-400 hover:text-red-400 transition-colors"
                     title="Remove from backups"
                   >
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -310,7 +310,7 @@
 
           <!-- Available strategies to add -->
           <div class="space-y-2">
-            <p class="text-xs text-zinc-500 uppercase tracking-wider">Available Strategies</p>
+            <p class="text-xs text-zinc-400 uppercase tracking-wider">Available Strategies</p>
             {#each availableForBackup as strategy}
               {#if !backupStrategyIds.includes(strategy.id)}
                 <button
@@ -327,7 +327,7 @@
               {/if}
             {/each}
             {#if availableForBackup.filter(s => !backupStrategyIds.includes(s.id)).length === 0}
-              <p class="text-zinc-600 text-sm text-center py-2">No more strategies available</p>
+              <p class="text-zinc-400 text-sm text-center py-2">No more strategies available</p>
             {/if}
           </div>
         </div>
@@ -409,7 +409,7 @@
           <button
             onclick={handleTestFailover}
             disabled={testing || !primaryStrategyId || backupStrategyIds.length === 0}
-            class="px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 disabled:bg-zinc-800/50 disabled:text-zinc-600 text-text-primary font-medium rounded-lg transition-colors flex items-center gap-2"
+            class="px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 disabled:bg-zinc-800/50 disabled:text-zinc-400 text-text-primary font-medium rounded-lg transition-colors flex items-center gap-2"
           >
             {#if testing}
               <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">

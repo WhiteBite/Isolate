@@ -129,7 +129,7 @@
         <span class="{pingColor} text-sm font-medium tabular-nums">{ping}ms</span>
       </div>
     {:else}
-      <span class="text-zinc-600 text-sm">—</span>
+      <span class="text-zinc-400 text-sm">—</span>
     {/if}
   </div>
 

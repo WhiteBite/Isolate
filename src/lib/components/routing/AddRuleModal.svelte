@@ -248,7 +248,7 @@
         bind:value={formName}
         placeholder="e.g., YouTube Direct"
         class="w-full px-4 py-3 bg-zinc-800/60 border border-white/10 rounded-xl
-               text-white placeholder-zinc-500
+               text-white placeholder-zinc-400
                focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/20
                transition-all duration-200"
       />
@@ -290,7 +290,7 @@
           bind:value={formSourceValue}
           placeholder={formSource === 'domain' ? 'e.g., youtube.com or *.google.com' : 'e.g., chrome.exe'}
           class="w-full px-4 py-3 bg-zinc-800/60 border rounded-xl
-                 text-white placeholder-zinc-500 font-mono
+                 text-white placeholder-zinc-400 font-mono
                  focus:outline-none focus:ring-1 transition-all duration-200
                  {formValidationError && formSourceValue.trim() 
                    ? 'border-red-500/50 focus:border-red-500/50 focus:ring-red-500/20' 
@@ -409,7 +409,7 @@
         <span class="font-mono text-white">
           {formSource === 'all' ? 'All Traffic' : (formSourceValue || '...')}
         </span>
-        <svg class="w-4 h-4 text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
         </svg>
         <span class="px-2 py-1 rounded-lg text-xs font-medium

@@ -73,8 +73,8 @@
         <span class="text-xl font-bold text-white font-mono">{currentLatency}</span>
         <span class="text-[10px] text-zinc-400">ms</span>
       {:else}
-        <span class="text-xl font-bold text-zinc-600 font-mono">--</span>
-        <span class="text-[10px] text-zinc-600">ms</span>
+        <span class="text-xl font-bold text-zinc-400 font-mono">--</span>
+        <span class="text-[10px] text-zinc-400">ms</span>
       {/if}
     </div>
   </div>
@@ -85,8 +85,8 @@
       <PingChart data={history} {maxPoints} height={56} color={chartColor} />
     {:else}
       <div class="h-full flex flex-col items-center justify-center gap-1">
-        <span class="text-xs text-zinc-500">Нет данных</span>
-        <span class="text-[10px] text-zinc-600">Запустите сканирование сервисов</span>
+        <span class="text-xs text-zinc-400">Нет данных</span>
+        <span class="text-[10px] text-zinc-400">Запустите сканирование сервисов</span>
       </div>
     {/if}
   </div>
@@ -98,12 +98,12 @@
         <span>Avg: <span class="text-zinc-400 font-mono">{avgLatency}ms</span></span>
       {/if}
       {#if minLatency !== undefined}
-        <span>Min: <span class="text-emerald-400/70 font-mono">{minLatency}ms</span></span>
+        <span>Min: <span class="text-emerald-400 font-mono">{minLatency}ms</span></span>
       {/if}
       {#if maxLatency !== undefined}
-        <span>Max: <span class="text-red-400/70 font-mono">{maxLatency}ms</span></span>
+        <span>Max: <span class="text-red-400 font-mono">{maxLatency}ms</span></span>
       {/if}
     </div>
-    <span class="text-zinc-600">{history.length} samples</span>
+    <span class="text-zinc-400">{history.length} samples</span>
   </div>
 </div>

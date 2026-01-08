@@ -134,12 +134,12 @@
   // Get status color
   function getStatusColor(status: ProxyTestState['status']): string {
     switch (status) {
-      case 'pending': return 'text-zinc-500';
+      case 'pending': return 'text-zinc-400';
       case 'testing': return 'text-blue-400 animate-pulse';
       case 'success': return 'text-emerald-400';
       case 'failed': return 'text-red-400';
-      case 'cancelled': return 'text-zinc-600';
-      default: return 'text-zinc-500';
+      case 'cancelled': return 'text-zinc-400';
+      default: return 'text-zinc-400';
     }
   }
 </script>
@@ -155,7 +155,7 @@
         class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200
                {canTest 
                  ? 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 border border-blue-500/30' 
-                 : 'bg-zinc-800/50 text-zinc-600 cursor-not-allowed border border-zinc-700/30'}"
+                 : 'bg-zinc-800/50 text-zinc-400 cursor-not-allowed border border-zinc-700/30'}"
       >
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
@@ -194,7 +194,7 @@
     {/if}
     
     <!-- Concurrency indicator -->
-    <span class="text-xs text-zinc-500 ml-auto">
+    <span class="text-xs text-zinc-400 ml-auto">
       Max {concurrency} parallel
     </span>
   </div>
@@ -228,7 +228,7 @@
             </span>
           {/if}
         </div>
-        <span class="text-zinc-500 font-mono">
+        <span class="text-zinc-400 font-mono">
           {progressPercent}%
         </span>
       </div>
@@ -260,7 +260,7 @@
                   {formatLatency(result.latency)}
                 </span>
               {:else if result.status === 'failed'}
-                <span class="text-xs text-red-400/70 truncate max-w-32" title={result.error}>
+                <span class="text-xs text-red-400 truncate max-w-32" title={result.error}>
                   {result.error || 'Failed'}
                 </span>
               {:else if result.status === 'testing'}
@@ -268,7 +268,7 @@
                   Testing...
                 </span>
               {:else if result.status === 'cancelled'}
-                <span class="text-xs text-zinc-600">
+                <span class="text-xs text-zinc-400">
                   Cancelled
                 </span>
               {/if}

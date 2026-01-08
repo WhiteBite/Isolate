@@ -82,7 +82,7 @@
           style="width: {setupProgress}%"
         ></div>
       </div>
-      <p class="text-center text-zinc-500 text-sm font-mono mt-2">{Math.round(setupProgress)}%</p>
+      <p class="text-center text-zinc-400 text-sm font-mono mt-2">{Math.round(setupProgress)}%</p>
     </div>
     
     <!-- Tasks List -->
@@ -115,12 +115,12 @@
             <span class="text-sm font-medium block
                          {task.status === 'done' ? 'text-emerald-400' : 
                           task.status === 'error' ? 'text-red-400' :
-                          task.status === 'running' ? 'text-white' : 'text-zinc-500'}">
+                          task.status === 'running' ? 'text-white' : 'text-zinc-400'}">
               {task.label}
             </span>
             {#if task.id === 'download' && task.status === 'running' && downloadProgress}
               <div class="mt-1">
-                <div class="flex items-center justify-between text-xs text-zinc-500 mb-1">
+                <div class="flex items-center justify-between text-xs text-zinc-400 mb-1">
                   <span>{downloadProgress.name}</span>
                   <span>{downloadProgress.percent}%</span>
                 </div>
@@ -133,7 +133,7 @@
               </div>
             {/if}
             {#if task.error}
-              <span class="text-xs text-red-400/70 block mt-0.5 truncate">{task.error}</span>
+              <span class="text-xs text-red-400 block mt-0.5 truncate">{task.error}</span>
             {/if}
           </div>
         </div>
@@ -154,7 +154,7 @@
       
       <!-- Summary -->
       <div class="p-4 rounded-xl bg-zinc-800/30 border border-white/5 text-left max-w-sm mx-auto mb-6">
-        <div class="text-xs text-zinc-500 uppercase tracking-wider mb-2">Your Settings</div>
+        <div class="text-xs text-zinc-400 uppercase tracking-wider mb-2">Your Settings</div>
         <div class="space-y-2 text-sm">
           <div class="flex justify-between">
             <span class="text-zinc-400">Services:</span>
@@ -189,7 +189,7 @@
                   </li>
                 {/each}
               </ul>
-              <p class="text-zinc-500 text-xs mt-2">
+              <p class="text-zinc-400 text-xs mt-2">
                 Check Diagnostics page for details
               </p>
             </div>

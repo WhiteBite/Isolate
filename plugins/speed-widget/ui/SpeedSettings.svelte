@@ -61,7 +61,7 @@
 <div class="speed-settings space-y-6">
   <div>
     <h3 class="text-sm font-medium text-white mb-4">Speed Monitor Settings</h3>
-    <p class="text-xs text-zinc-500 mb-6">
+    <p class="text-xs text-zinc-400 mb-6">
       Configure how the speed monitor widget behaves.
     </p>
   </div>
@@ -70,7 +70,7 @@
   <div class="flex items-center justify-between p-3 bg-zinc-900/40 rounded-lg border border-white/5">
     <div>
       <div class="text-sm text-white">Auto Test</div>
-      <div class="text-xs text-zinc-500 mt-0.5">Automatically run speed tests periodically</div>
+      <div class="text-xs text-zinc-400 mt-0.5">Automatically run speed tests periodically</div>
     </div>
     <button
       onclick={() => autoTest = !autoTest}
@@ -89,7 +89,7 @@
     <div class="flex items-center justify-between mb-3">
       <div>
         <div class="text-sm text-white">Test Interval</div>
-        <div class="text-xs text-zinc-500 mt-0.5">How often to run automatic tests</div>
+        <div class="text-xs text-zinc-400 mt-0.5">How often to run automatic tests</div>
       </div>
       <span class="text-sm text-cyan-400 font-medium">{testInterval} min</span>
     </div>
@@ -109,7 +109,7 @@
         [&::-webkit-slider-thumb]:rounded-full
         [&::-webkit-slider-thumb]:cursor-pointer"
     />
-    <div class="flex justify-between text-[10px] text-zinc-600 mt-1">
+    <div class="flex justify-between text-[10px] text-zinc-400 mt-1">
       <span>5 min</span>
       <span>120 min</span>
     </div>
@@ -118,7 +118,7 @@
   <!-- Test Server -->
   <div class="p-3 bg-zinc-900/40 rounded-lg border border-white/5">
     <div class="text-sm text-white mb-2">Test Server</div>
-    <div class="text-xs text-zinc-500 mb-3">Select the server to use for speed tests</div>
+    <div class="text-xs text-zinc-400 mb-3">Select the server to use for speed tests</div>
     <div class="grid grid-cols-2 gap-2">
       {#each [
         { id: 'cloudflare', name: 'Cloudflare', icon: '☁️' },
@@ -144,7 +144,7 @@
   <div class="flex items-center justify-between p-3 bg-zinc-900/40 rounded-lg border border-white/5">
     <div>
       <div class="text-sm text-white">Notifications</div>
-      <div class="text-xs text-zinc-500 mt-0.5">Show notifications when tests complete</div>
+      <div class="text-xs text-zinc-400 mt-0.5">Show notifications when tests complete</div>
     </div>
     <button
       onclick={() => showNotifications = !showNotifications}

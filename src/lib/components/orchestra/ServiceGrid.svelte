@@ -35,7 +35,7 @@
       </button>
     {/each}
   </div>
-  <div class="mt-2 pt-2 border-t border-white/5 text-xs text-zinc-500 text-center">
+  <div class="mt-2 pt-2 border-t border-white/5 text-xs text-zinc-400 text-center">
     {t('orchestra.services.selected')}: {selectedServices.size}
   </div>
 </BentoWidget>

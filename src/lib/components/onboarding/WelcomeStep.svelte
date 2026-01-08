@@ -19,7 +19,7 @@
       </div>
       <div>
         <div class="text-sm font-medium text-white">Quick Setup</div>
-        <div class="text-xs text-zinc-500">Automatic method selection</div>
+        <div class="text-xs text-zinc-400">Automatic method selection</div>
       </div>
     </div>
     <div class="flex items-center gap-3 p-3 rounded-xl bg-zinc-800/40 border border-white/5">
@@ -28,7 +28,7 @@
       </div>
       <div>
         <div class="text-sm font-medium text-white">Security</div>
-        <div class="text-xs text-zinc-500">No logs or telemetry</div>
+        <div class="text-xs text-zinc-400">No logs or telemetry</div>
       </div>
     </div>
     <div class="flex items-center gap-3 p-3 rounded-xl bg-zinc-800/40 border border-white/5">
@@ -37,7 +37,7 @@
       </div>
       <div>
         <div class="text-sm font-medium text-white">Targeted Bypass</div>
-        <div class="text-xs text-zinc-500">Only the services you need</div>
+        <div class="text-xs text-zinc-400">Only the services you need</div>
       </div>
     </div>
   </div>

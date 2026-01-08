@@ -196,13 +196,13 @@
     <div class="flex items-center justify-between px-1 pt-1">
       <div class="flex items-center gap-1.5">
         {#if stats.isSimulated}
-          <span class="px-1.5 py-0.5 text-[9px] uppercase tracking-wider bg-amber-500/20 text-amber-400 rounded font-medium">Demo</span>
+          <span class="px-1.5 py-0.5 text-[10px] uppercase tracking-wider bg-amber-500/20 text-amber-400 rounded font-medium">Demo</span>
         {:else}
           <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
         {/if}
         <span class="text-[10px] text-zinc-400">{stats.activeConnections} active</span>
       </div>
-      <div class="text-[10px] text-zinc-600">
+      <div class="text-[10px] text-zinc-400">
         ↓ {formatBytes(stats.totalDownload)} / ↑ {formatBytes(stats.totalUpload)}
       </div>
     </div>

@@ -33,7 +33,8 @@ export default {
                 text: {
                     primary: '#F4F4F5',
                     secondary: '#A1A1AA',
-                    muted: '#71717A',
+                    muted: '#A1A1AA',
+                    placeholder: '#A1A1AA',
                 },
             },
             fontFamily: {

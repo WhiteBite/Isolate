@@ -150,6 +150,6 @@
 <!-- Divider -->
 <div class="flex items-center gap-4 mb-6">
   <div class="flex-1 h-px bg-gradient-to-r from-transparent via-zinc-700 to-transparent"></div>
-  <span class="text-xs text-zinc-600 font-medium">ALL PLUGINS</span>
+  <span class="text-xs text-zinc-400 font-medium">ALL PLUGINS</span>
   <div class="flex-1 h-px bg-gradient-to-r from-transparent via-zinc-700 to-transparent"></div>
 </div>

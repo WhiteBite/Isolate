@@ -56,7 +56,7 @@
     { value: 'error', label: t('logs.levels.errors'), color: 'text-red-400' },
     { value: 'warn', label: t('logs.levels.warnings'), color: 'text-amber-400' },
     { value: 'info', label: t('logs.levels.info'), color: 'text-cyan-400' },
-    { value: 'debug', label: t('logs.levels.debug'), color: 'text-zinc-500' },
+    { value: 'debug', label: t('logs.levels.debug'), color: 'text-zinc-400' },
     { value: 'success', label: t('logs.levels.success'), color: 'text-emerald-400' }
   ];
 
@@ -214,7 +214,7 @@
   <div class="flex items-center justify-between">
     <div>
       <h1 class="text-3xl font-bold text-white">{t('logs.title')}</h1>
-      <p class="text-zinc-500 mt-1">{t('logs.subtitle')}</p>
+      <p class="text-zinc-400 mt-1">{t('logs.subtitle')}</p>
     </div>
     
     <div class="flex items-center gap-3">
@@ -259,7 +259,7 @@
     <div class="flex flex-wrap items-center gap-4">
       <!-- Level Filter -->
       <div class="flex items-center gap-2">
-        <label for="log-level" class="text-zinc-500 text-sm">{t('logs.level')}:</label>
+        <label for="log-level" class="text-zinc-400 text-sm">{t('logs.level')}:</label>
         <select
           id="log-level"
           bind:value={levelFilter}
@@ -274,7 +274,7 @@
 
       <!-- Source Filter -->
       <div class="flex items-center gap-2">
-        <label for="log-module" class="text-zinc-500 text-sm">{t('logs.module')}:</label>
+        <label for="log-module" class="text-zinc-400 text-sm">{t('logs.module')}:</label>
         <select
           id="log-module"
           bind:value={sourceFilter}
@@ -291,7 +291,7 @@
       <!-- Search -->
       <div class="flex-1 min-w-[200px]">
         <div class="relative">
-          <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
           <input
@@ -299,7 +299,7 @@
             bind:value={searchQuery}
             placeholder={t('common.search')}
             class="w-full bg-black/20 border border-white/10 text-white rounded-lg pl-10 pr-4 py-2 text-sm 
-                   focus:border-indigo-500 focus:outline-none placeholder-zinc-500 transition-colors"
+                   focus:border-indigo-500 focus:outline-none placeholder-zinc-400 transition-colors"
           />
         </div>
       </div>
@@ -324,7 +324,7 @@
     class="flex-1 bg-black/30 backdrop-blur-sm rounded-2xl border border-white/5 overflow-hidden"
   >
     {#if filteredLogsValue.length === 0}
-      <div class="flex flex-col items-center justify-center h-full text-zinc-500">
+      <div class="flex flex-col items-center justify-center h-full text-zinc-400">
         <div class="w-20 h-20 rounded-2xl bg-zinc-800/30 border border-white/5 flex items-center justify-center mb-4">
           <svg class="w-10 h-10 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -349,7 +349,7 @@
                 style="height: {ITEM_HEIGHT}px;"
               >
                 <!-- Timestamp -->
-                <span class="text-zinc-600 shrink-0 tabular-nums">
+                <span class="text-zinc-400 shrink-0 tabular-nums">
                   {formatTimestamp(log.timestamp)}
                 </span>
                 
@@ -360,7 +360,7 @@
                 </span>
                 
                 <!-- Source -->
-                <span class="text-cyan-400/70 shrink-0">
+                <span class="text-cyan-400 shrink-0">
                   [{log.source}]
                 </span>
                 
@@ -379,7 +379,7 @@
         {#each filteredLogsValue as log (log.id)}
           <div class="flex items-start gap-3 py-1.5 px-3 rounded-lg hover:bg-white/5 transition-colors">
             <!-- Timestamp -->
-            <span class="text-zinc-600 shrink-0 tabular-nums">
+            <span class="text-zinc-400 shrink-0 tabular-nums">
               {formatTimestamp(log.timestamp)}
             </span>
             
@@ -390,7 +390,7 @@
             </span>
             
             <!-- Source -->
-            <span class="text-cyan-400/70 shrink-0">
+            <span class="text-cyan-400 shrink-0">
               [{log.source}]
             </span>
             
@@ -405,11 +405,11 @@
   </div>
 
   <!-- Status Bar -->
-  <div class="flex items-center justify-between text-sm text-zinc-500">
+  <div class="flex items-center justify-between text-sm text-zinc-400">
     <span>
       {filteredLogsValue.length} {t('common.of')} {logsValue.length} {t('common.entries')}
       {#if useVirtualization}
-        <span class="text-zinc-600 ml-2">({t('logs.virtualized')})</span>
+        <span class="text-zinc-400 ml-2">({t('logs.virtualized')})</span>
       {/if}
     </span>
     <div class="flex items-center gap-4">

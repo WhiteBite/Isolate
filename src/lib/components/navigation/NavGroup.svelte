@@ -14,7 +14,7 @@
 <div class="nav-group" role="group" aria-label={group.label}>
   <!-- Group Label (hidden when collapsed) -->
   {#if !collapsed}
-    <div class="px-3 py-1.5 text-[10px] font-semibold text-zinc-500 uppercase tracking-widest">
+    <div class="px-3 py-1.5 text-[10px] font-semibold text-zinc-400 uppercase tracking-widest">
       {group.label}
     </div>
   {:else if showDivider}

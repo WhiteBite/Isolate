@@ -22,10 +22,10 @@
   <div class="h-full flex flex-col">
     <!-- Log header -->
     <div class="flex items-center justify-between mb-3">
-      <span class="text-xs text-zinc-500">{logLines.length} {t('orchestra.log.entries')}</span>
+      <span class="text-xs text-zinc-400">{logLines.length} {t('orchestra.log.entries')}</span>
       <button
         onclick={onClear}
-        class="px-2 py-1 text-xs text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50 rounded transition-colors"
+        class="px-2 py-1 text-xs text-zinc-400 hover:text-zinc-300 hover:bg-zinc-800/50 rounded transition-colors"
       >
         {t('orchestra.log.clear')}
       </button>
@@ -40,7 +40,7 @@
       {/each}
 
       {#if logLines.length === 0}
-        <div class="text-zinc-600 italic">{t('orchestra.log.waiting')}</div>
+        <div class="text-zinc-400 italic">{t('orchestra.log.waiting')}</div>
       {/if}
     </div>
   </div>

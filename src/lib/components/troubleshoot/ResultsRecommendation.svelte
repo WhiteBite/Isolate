@@ -82,7 +82,7 @@
           <h3 class="text-2xl font-bold text-white">
             {troubleshootStore.bestStrategy.name}
           </h3>
-          <p class="text-green-400/80 text-sm mt-1">
+          <p class="text-green-400 text-sm mt-1">
             Лучшая производительность для вашего подключения
           </p>
         </div>
@@ -165,7 +165,7 @@
           установлена стратегия <span class="font-medium">{troubleshootStore.bestStrategy.name}</span>.
         </p>
         {#if existingMethod && existingMethod.strategyName}
-          <p class="text-amber-400/80">
+          <p class="text-amber-400">
             Текущая стратегия: <span class="font-medium">{existingMethod.strategyName}</span> → 
             <span class="font-medium text-green-400">{troubleshootStore.bestStrategy.name}</span>
           </p>
@@ -268,7 +268,7 @@
   <!-- Help text for no results -->
   {#if !hasResults}
     <div class="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
-      <p class="text-sm text-amber-400/90">
+      <p class="text-sm text-amber-400">
         <strong>Совет:</strong> Попробуйте использовать VLESS прокси или проверьте 
         подключение к интернету. Если проблема сохраняется — обратитесь в поддержку.
       </p>

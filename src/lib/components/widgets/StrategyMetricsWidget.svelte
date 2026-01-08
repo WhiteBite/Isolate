@@ -114,11 +114,11 @@
   {:else if !hasMetrics}
     <!-- No active strategy -->
     <div class="flex-1 flex flex-col items-center justify-center text-center p-4">
-      <svg class="w-8 h-8 text-zinc-600 mb-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <svg class="w-8 h-8 text-zinc-400 mb-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
         <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
       </svg>
-      <span class="text-xs text-zinc-500">No active strategy</span>
-      <span class="text-[10px] text-zinc-600 mt-1">Start a strategy to see metrics</span>
+      <span class="text-xs text-zinc-400">No active strategy</span>
+      <span class="text-[10px] text-zinc-400 mt-1">Start a strategy to see metrics</span>
     </div>
   {:else}
     <!-- Metrics display -->
@@ -192,7 +192,7 @@
             </div>
           {/if}
         </div>
-        <div class="text-[10px] text-zinc-600 truncate max-w-[120px]" title={metrics?.strategy_id}>
+        <div class="text-[10px] text-zinc-400 truncate max-w-[120px]" title={metrics?.strategy_id}>
           {metrics?.strategy_id ?? '—'}
         </div>
       </div>

@@ -49,7 +49,7 @@
           bind:value={name}
           placeholder="e.g. My Service"
           class="w-full px-4 py-2.5 bg-zinc-800/60 border border-white/10 rounded-xl
-                 text-zinc-100 placeholder-zinc-500
+                 text-zinc-100 placeholder-zinc-400
                  focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/20"
         />
       </div>
@@ -62,7 +62,7 @@
           bind:value={url}
           placeholder="https://example.com"
           class="w-full px-4 py-2.5 bg-zinc-800/60 border border-white/10 rounded-xl
-                 text-zinc-100 placeholder-zinc-500
+                 text-zinc-100 placeholder-zinc-400
                  focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/20"
         />
       </div>

@@ -60,7 +60,7 @@
             <span class="text-2xl">{service.icon}</span>
             <div class="flex-1 min-w-0">
               <div class="text-sm font-medium text-white truncate">{service.name}</div>
-              <div class="text-xs text-zinc-500">{service.description}</div>
+              <div class="text-xs text-zinc-400">{service.description}</div>
             </div>
             <div class="w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all
                         {selectedServices.has(service.id) 

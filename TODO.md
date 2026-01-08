@@ -23,7 +23,7 @@
 
 ## 1. Глобальная навигация и информационная архитектура
 
-- [ ] [P1][UX][UI] Завершить миграцию на `SidebarNew.svelte` и новую структуру разделов.
+- [x] [P1][UX][UI] Завершить миграцию на `SidebarNew.svelte` и новую структуру разделов. ✅ Реализовано
   - Файлы: `src/routes/+layout.svelte`, `src/lib/components/SidebarNew.svelte`, `src/lib/stores/navigation.svelte.ts`.
   - Критерий: в рантайме существует только одна реализация sidebar, структура как в TODO_REDESIGN (Main / Tools / System).
 - [x] [P1][UX] Убрать дублирование списка плагинов: сейчас в сайдбаре одновременно есть секция "Plugins" и длинный список отдельных плагинов. ✅ Реализовано
@@ -180,7 +180,7 @@
 
 - [ ] [P1][UX][A11y] Пройтись по всем основным страницам (Dashboard, Services/Library, Network, Orchestra/Troubleshooter, Plugins, Settings) и проверить контраст в тёмной теме.
   - Критерий: все ключевые тексты соответствуют WCAG AA.
-- [ ] [P1][UX] Выровнять поведение модалок по всему приложению (BaseModal):
+- [x] [P1][UX] Выровнять поведение модалок по всему приложению (BaseModal): ✅ Реализовано
   - единые анимации;
   - Esc закрывает, если нет критичных действий;
   - все destructive‑действия требуют явного подтверждения.
@@ -241,7 +241,7 @@
 ## 13. Troubleshooter & AI Pilot — связка с Library и backend
 
 - [ ] [P1][BE] В `apply_troubleshoot_result` сохранять привязку `service_id → strategy_id` в хранилище (Library), а не только запускать стратегию.
-- [ ] [P1][FE][ARCH] Связать `troubleshootStore` с `library.svelte.ts`:
+- [x] [P1][FE][ARCH] Связать `troubleshootStore` с `library.svelte.ts`: ✅ Реализовано
   - после успешного применения стратегии обновлять соответствующее правило в Library;
   - при открытии Troubleshooter подтягивать метод доступа из Library, если он уже задан.
 - [x] [P1][BE] Реализовать команды AI Pilot: ✅ Уже реализовано

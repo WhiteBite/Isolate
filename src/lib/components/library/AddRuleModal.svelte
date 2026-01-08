@@ -50,7 +50,7 @@
           type="text"
           placeholder="example.com"
           class="w-full px-4 py-2.5 bg-zinc-800 border border-zinc-700 rounded-lg
-                 text-white placeholder-zinc-500
+                 text-white placeholder-zinc-400
                  focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600
                  transition-colors duration-150"
           bind:value={domain}
@@ -68,7 +68,7 @@
           type="text"
           placeholder="My Service"
           class="w-full px-4 py-2.5 bg-zinc-800 border border-zinc-700 rounded-lg
-                 text-white placeholder-zinc-500
+                 text-white placeholder-zinc-400
                  focus:outline-none focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600
                  transition-colors duration-150"
           bind:value={name}

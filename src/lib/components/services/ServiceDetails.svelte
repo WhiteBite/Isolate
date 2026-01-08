@@ -183,7 +183,7 @@
                 <span class="text-2xl font-bold {getPingColor(service.ping)}">{service.ping}</span>
                 <span class="text-sm text-zinc-400">ms</span>
               {:else}
-                <span class="text-2xl font-bold text-zinc-600">—</span>
+                <span class="text-2xl font-bold text-zinc-400">—</span>
               {/if}
             </div>
           </div>
@@ -285,7 +285,7 @@
           </div>
           
           {#if recentLogs.length === 0}
-            <div class="flex items-center justify-center py-6 text-zinc-600">
+            <div class="flex items-center justify-center py-6 text-zinc-400">
               <div class="text-center">
                 <svg class="w-6 h-6 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
@@ -299,10 +299,10 @@
             <div class="space-y-1 font-mono text-[11px]">
               {#each recentLogs as log (log.id)}
                 <div class="flex items-start gap-2 px-2 py-1.5 rounded-lg bg-zinc-900/50 hover:bg-zinc-800/50 transition-colors">
-                  <span class="text-zinc-600 shrink-0">
+                  <span class="text-zinc-400 shrink-0">
                     {log.timestamp.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                   </span>
-                  <span class="shrink-0 px-1 py-0.5 text-[9px] uppercase font-semibold rounded
+                  <span class="shrink-0 px-1 py-0.5 text-[10px] uppercase font-semibold rounded
                               {log.level === 'error' ? 'bg-red-500/10 text-red-400' : 
                                log.level === 'warn' ? 'bg-amber-500/10 text-amber-400' : 
                                log.level === 'success' ? 'bg-emerald-500/10 text-emerald-400' : 
@@ -322,7 +322,7 @@
               {/each}
             </div>
             {#if selectedLogsCount > 10}
-              <p class="text-[10px] text-zinc-600 text-center mt-3">
+              <p class="text-[10px] text-zinc-400 text-center mt-3">
                 Showing last 10 of {selectedLogsCount} logs
               </p>
             {/if}
@@ -399,7 +399,7 @@
           
           <ServiceLogs source={service.id} maxHeight={400} />
           
-          <p class="text-xs text-zinc-600 text-center">
+          <p class="text-xs text-zinc-400 text-center">
             Logs are filtered by service ID. Check the service to generate new log entries.
           </p>
         </div>
@@ -409,7 +409,7 @@
     <!-- Empty State -->
     <div class="h-full flex flex-col items-center justify-center text-center p-6">
       <div class="w-20 h-20 rounded-2xl bg-zinc-900/40 border border-white/5 flex items-center justify-center mb-4">
-        <svg class="w-10 h-10 text-zinc-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <svg class="w-10 h-10 text-zinc-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/>
           <rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
           <line x1="6" y1="6" x2="6.01" y2="6"/>

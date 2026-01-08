@@ -73,7 +73,7 @@
         <span class="text-2xl opacity-50">🌐</span>
         <div class="flex-1">
           <p class="text-white font-medium">Skip / Other Provider</p>
-          <p class="text-zinc-500 text-sm">I'll choose strategies manually</p>
+          <p class="text-zinc-400 text-sm">I'll choose strategies manually</p>
         </div>
         {#if selectedId === null}
           <svg class="w-5 h-5 text-indigo-400" fill="currentColor" viewBox="0 0 20 20">
@@ -95,7 +95,7 @@
             <span class="text-3xl">{getProviderIcon(provider.id)}</span>
             <div class="flex-1">
               <p class="text-white font-medium">{provider.name}</p>
-              <p class="text-zinc-500 text-sm">{provider.description}</p>
+              <p class="text-zinc-400 text-sm">{provider.description}</p>
             </div>
             <div class="text-right">
               <span class="px-2 py-1 bg-white/5 rounded text-xs text-zinc-400">
@@ -112,7 +112,7 @@
       </div>
 
       {#if providers.length === 0}
-        <div class="text-center py-8 text-zinc-500">
+        <div class="text-center py-8 text-zinc-400">
           <p>No providers available</p>
           <p class="text-sm mt-1">You can configure this later in Settings</p>
         </div>

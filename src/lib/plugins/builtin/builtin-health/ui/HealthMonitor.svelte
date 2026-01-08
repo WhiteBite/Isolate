@@ -110,7 +110,7 @@
   }
   
   function getPingColor(ping: number | undefined): string {
-    if (ping === undefined) return 'text-zinc-600';
+    if (ping === undefined) return 'text-zinc-400';
     if (ping < 50) return 'text-emerald-400';
     if (ping < 100) return 'text-amber-400';
     return 'text-red-400';
@@ -160,7 +160,7 @@
         </div>
       {/each}
     {:else if services.length === 0}
-      <div class="flex items-center justify-center h-full text-xs text-zinc-600">
+      <div class="flex items-center justify-center h-full text-xs text-zinc-400">
         No services configured
       </div>
     {:else}
@@ -180,7 +180,7 @@
       {/each}
       
       {#if services.length > 4}
-        <div class="text-center text-[10px] text-zinc-600 pt-1">
+        <div class="text-center text-[10px] text-zinc-400 pt-1">
           +{services.length - 4} more
         </div>
       {/if}
@@ -190,7 +190,7 @@
   <!-- Footer -->
   {#if lastCheck}
     <div class="mt-2 pt-2 border-t border-glass-border">
-      <span class="text-[10px] text-zinc-600">
+      <span class="text-[10px] text-zinc-400">
         Last check: {lastCheck.toLocaleTimeString()}
       </span>
     </div>

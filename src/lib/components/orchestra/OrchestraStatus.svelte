@@ -41,7 +41,7 @@
             <Spinner size="sm" />
           {/if}
         </div>
-        <p class="text-sm text-zinc-500 mt-1">
+        <p class="text-sm text-zinc-400 mt-1">
           {#if state.currentItem}
             {t('orchestra.status.testing')}: {state.currentItem}
           {:else if state.bestStrategy}
@@ -56,7 +56,7 @@
     <!-- Timer -->
     <div class="text-right">
       <div class="text-2xl font-mono text-zinc-300">{formattedTime}</div>
-      <p class="text-xs text-zinc-500 mt-1">{t('orchestra.progress.elapsed')}</p>
+      <p class="text-xs text-zinc-400 mt-1">{t('orchestra.progress.elapsed')}</p>
     </div>
   </div>
 </BentoWidget>

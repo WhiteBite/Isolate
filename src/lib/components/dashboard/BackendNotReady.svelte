@@ -117,7 +117,7 @@
   </div>
 
   <!-- Help text -->
-  <p class="text-xs text-zinc-500 mt-6 text-center">
+  <p class="text-xs text-zinc-400 mt-6 text-center">
     Если проблема повторяется, проверьте логи или перезапустите приложение
   </p>
 </div>

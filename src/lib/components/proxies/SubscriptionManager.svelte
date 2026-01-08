@@ -262,12 +262,12 @@
   {#if subscriptions.length === 0}
     <div class="flex flex-col items-center justify-center py-8 text-center">
       <div class="w-12 h-12 rounded-full bg-zinc-800/60 flex items-center justify-center mb-3">
-        <svg class="w-6 h-6 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="w-6 h-6 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
         </svg>
       </div>
       <p class="text-sm text-zinc-400 mb-1">No subscriptions</p>
-      <p class="text-xs text-zinc-500">Add a subscription URL to import proxies automatically</p>
+      <p class="text-xs text-zinc-400">Add a subscription URL to import proxies automatically</p>
     </div>
   {:else}
     <div class="space-y-2">
@@ -281,7 +281,7 @@
                   type="button"
                   onclick={() => handleToggleSubscription(subscription.id)}
                   class="w-4 h-4 rounded flex items-center justify-center transition-colors
-                         {subscription.enabled ? 'bg-violet-500 text-white' : 'bg-zinc-700 text-zinc-500'}"
+                         {subscription.enabled ? 'bg-violet-500 text-white' : 'bg-zinc-700 text-zinc-400'}"
                 >
                   {#if subscription.enabled}
                     <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -291,13 +291,13 @@
                 </button>
                 <span class="text-sm font-medium text-white truncate">{subscription.name}</span>
                 {#if subscription.autoUpdate}
-                  <span class="px-1.5 py-0.5 text-[9px] uppercase tracking-wider bg-emerald-500/10 text-emerald-400 rounded border border-emerald-500/20">
+                  <span class="px-1.5 py-0.5 text-[10px] uppercase tracking-wider bg-emerald-500/10 text-emerald-400 rounded border border-emerald-500/20">
                     Auto
                   </span>
                 {/if}
               </div>
               
-              <div class="flex items-center gap-3 text-xs text-zinc-500">
+              <div class="flex items-center gap-3 text-xs text-zinc-400">
                 <span class="flex items-center gap-1">
                   <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
@@ -367,7 +367,7 @@
           bind:value={newUrl}
           placeholder="https://example.com/sub?token=xxx"
           class="w-full px-3 py-2.5 bg-zinc-900/50 border border-white/10 rounded-xl
-                 text-white placeholder-zinc-500 text-sm
+                 text-white placeholder-zinc-400 text-sm
                  focus:outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20
                  transition-all"
         />
@@ -376,7 +376,7 @@
       <!-- Name Input -->
       <div>
         <label for="sub-name" class="block text-sm font-medium text-zinc-300 mb-1.5">
-          Name <span class="text-zinc-500">(optional)</span>
+          Name <span class="text-zinc-400">(optional)</span>
         </label>
         <input
           id="sub-name"
@@ -384,7 +384,7 @@
           bind:value={newName}
           placeholder="My Subscription"
           class="w-full px-3 py-2.5 bg-zinc-900/50 border border-white/10 rounded-xl
-                 text-white placeholder-zinc-500 text-sm
+                 text-white placeholder-zinc-400 text-sm
                  focus:outline-none focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/20
                  transition-all"
         />
@@ -394,7 +394,7 @@
       <div class="flex items-center justify-between p-3 bg-zinc-900/30 rounded-xl border border-white/5">
         <div>
           <p class="text-sm font-medium text-white">Auto Update</p>
-          <p class="text-xs text-zinc-500">Automatically refresh proxies</p>
+          <p class="text-xs text-zinc-400">Automatically refresh proxies</p>
         </div>
         <button
           type="button"

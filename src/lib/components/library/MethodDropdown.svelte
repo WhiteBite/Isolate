@@ -123,7 +123,7 @@
       aria-label="Выбор метода доступа"
     >
       {#if groupedMethods().basic.length > 0}
-        <div class="px-3 py-1.5 text-xs font-medium text-zinc-500 uppercase tracking-wider">
+        <div class="px-3 py-1.5 text-xs font-medium text-zinc-400 uppercase tracking-wider">
           Базовые
         </div>
         {#each groupedMethods().basic as method}
@@ -149,7 +149,7 @@
 
       {#if groupedMethods().strategies.length > 0}
         <div class="border-t border-zinc-700 mt-1 pt-1">
-          <div class="px-3 py-1.5 text-xs font-medium text-zinc-500 uppercase tracking-wider">
+          <div class="px-3 py-1.5 text-xs font-medium text-zinc-400 uppercase tracking-wider">
             Стратегии
           </div>
           {#each groupedMethods().strategies as method}
@@ -177,7 +177,7 @@
 
       {#if groupedMethods().proxies.length > 0}
         <div class="border-t border-zinc-700 mt-1 pt-1">
-          <div class="px-3 py-1.5 text-xs font-medium text-zinc-500 uppercase tracking-wider">
+          <div class="px-3 py-1.5 text-xs font-medium text-zinc-400 uppercase tracking-wider">
             Прокси
           </div>
           {#each groupedMethods().proxies as method}

@@ -108,13 +108,13 @@
   <div class="flex items-center justify-between gap-4">
     <!-- Download -->
     <div class="flex-1 text-center">
-      <div class="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Download</div>
+      <div class="text-[10px] uppercase tracking-wider text-zinc-400 mb-1">Download</div>
       <div class="flex items-baseline justify-center gap-1">
         <span class="text-2xl font-bold text-cyan-400 tabular-nums transition-all duration-300"
               class:animate-pulse={currentPhase === 'download'}>
           {formatSpeed(downloadSpeed)}
         </span>
-        <span class="text-xs text-zinc-500">Mbps</span>
+        <span class="text-xs text-zinc-400">Mbps</span>
       </div>
     </div>
     
@@ -161,30 +161,30 @@
     
     <!-- Upload -->
     <div class="flex-1 text-center">
-      <div class="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Upload</div>
+      <div class="text-[10px] uppercase tracking-wider text-zinc-400 mb-1">Upload</div>
       <div class="flex items-baseline justify-center gap-1">
         <span class="text-2xl font-bold text-purple-400 tabular-nums transition-all duration-300"
               class:animate-pulse={currentPhase === 'upload'}>
           {formatSpeed(uploadSpeed)}
         </span>
-        <span class="text-xs text-zinc-500">Mbps</span>
+        <span class="text-xs text-zinc-400">Mbps</span>
       </div>
     </div>
   </div>
   
   <!-- Status -->
-  <div class="text-center text-xs text-zinc-500">
+  <div class="text-center text-xs text-zinc-400">
     {statusText}
   </div>
   
   <!-- History -->
   {#if history.length > 0}
     <div class="mt-auto pt-3 border-t border-white/5">
-      <div class="text-[10px] uppercase tracking-wider text-zinc-600 mb-2">History</div>
+      <div class="text-[10px] uppercase tracking-wider text-zinc-400 mb-2">History</div>
       <div class="flex gap-2 overflow-x-auto pb-1">
         {#each history.slice().reverse() as result}
           <div class="flex-shrink-0 px-2 py-1 rounded bg-white/5 text-[10px]">
-            <div class="text-zinc-500">{formatTime(result.timestamp)}</div>
+            <div class="text-zinc-400">{formatTime(result.timestamp)}</div>
             <div class="flex gap-2 mt-0.5">
               <span class="text-cyan-400">↓{result.download}</span>
               <span class="text-purple-400">↑{result.upload}</span>

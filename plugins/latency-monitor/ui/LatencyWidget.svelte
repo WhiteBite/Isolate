@@ -231,12 +231,12 @@
     <div class="text-center">
       <div class="text-4xl font-bold tabular-nums {getPingColor(currentPing)} transition-colors">
         {currentPing}
-        <span class="text-lg font-normal text-zinc-500">ms</span>
+        <span class="text-lg font-normal text-zinc-400">ms</span>
       </div>
       {#if isMonitoring}
         <div class="flex items-center justify-center gap-1 mt-1">
           <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-          <span class="text-[10px] text-zinc-500">Monitoring</span>
+          <span class="text-[10px] text-zinc-400">Monitoring</span>
         </div>
       {/if}
     </div>
@@ -249,7 +249,7 @@
       class="w-full h-full"
     />
     {#if pingData.length === 0}
-      <div class="absolute inset-0 flex items-center justify-center text-zinc-600 text-xs">
+      <div class="absolute inset-0 flex items-center justify-center text-zinc-400 text-xs">
         Click "Start" to begin monitoring
       </div>
     {/if}
@@ -258,15 +258,15 @@
   <!-- Stats -->
   <div class="grid grid-cols-3 gap-2 pt-2 border-t border-white/5">
     <div class="text-center">
-      <div class="text-[10px] uppercase tracking-wider text-zinc-600">Min</div>
+      <div class="text-[10px] uppercase tracking-wider text-zinc-400">Min</div>
       <div class="text-sm font-medium text-green-400 tabular-nums">{minPing}ms</div>
     </div>
     <div class="text-center">
-      <div class="text-[10px] uppercase tracking-wider text-zinc-600">Avg</div>
+      <div class="text-[10px] uppercase tracking-wider text-zinc-400">Avg</div>
       <div class="text-sm font-medium text-yellow-400 tabular-nums">{avgPing}ms</div>
     </div>
     <div class="text-center">
-      <div class="text-[10px] uppercase tracking-wider text-zinc-600">Max</div>
+      <div class="text-[10px] uppercase tracking-wider text-zinc-400">Max</div>
       <div class="text-sm font-medium text-red-400 tabular-nums">{maxPing}ms</div>
     </div>
   </div>

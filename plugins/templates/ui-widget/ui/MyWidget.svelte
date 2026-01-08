@@ -134,7 +134,7 @@
       disabled={loading}
       class="px-3 py-1.5 text-xs font-medium rounded-lg transition-all
         {loading 
-          ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed' 
+          ? 'bg-zinc-800 text-zinc-400 cursor-not-allowed' 
           : 'bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30 border border-cyan-500/30'}"
     >
       {loading ? 'Loading...' : 'Refresh'}
@@ -146,7 +146,7 @@
     <div class="text-4xl font-bold {getValueColor(value)}">
       {value}
     </div>
-    <div class="text-xs text-zinc-500 mt-1">
+    <div class="text-xs text-zinc-400 mt-1">
       Current Value
     </div>
   </div>
@@ -166,7 +166,7 @@
   <!-- Footer -->
   {#if lastUpdate && !loading}
     <div class="mt-4 pt-3 border-t border-white/5">
-      <p class="text-[10px] text-zinc-500 text-center">
+      <p class="text-[10px] text-zinc-400 text-center">
         Last updated: {formatTime(lastUpdate)}
       </p>
     </div>

@@ -192,7 +192,7 @@
               bind:value={newProcessName}
               onkeydown={handleKeydown}
               placeholder="Имя процесса (например: cs2.exe)"
-              class="flex-1 px-4 py-2.5 bg-zinc-900/50 border border-white/10 rounded-lg text-text-primary placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50 transition-colors"
+              class="flex-1 px-4 py-2.5 bg-zinc-900/50 border border-white/10 rounded-lg text-text-primary placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50 transition-colors"
             />
             <button
               onclick={handleAddGame}
@@ -210,14 +210,14 @@
             bind:value={newGameName}
             onkeydown={handleKeydown}
             placeholder="Название игры (опционально)"
-            class="w-full px-4 py-2.5 bg-zinc-900/50 border border-white/10 rounded-lg text-text-primary placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50 transition-colors"
+            class="w-full px-4 py-2.5 bg-zinc-900/50 border border-white/10 rounded-lg text-text-primary placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50 transition-colors"
           />
         </div>
 
         <!-- Custom games list -->
         {#if customGames.length > 0}
           <div class="space-y-2">
-            <p class="text-xs text-zinc-500 uppercase tracking-wider mb-2">Пользовательские игры</p>
+            <p class="text-xs text-zinc-400 uppercase tracking-wider mb-2">Пользовательские игры</p>
             {#each customGames as game}
               <div class="flex items-center justify-between p-3 bg-zinc-900/50 rounded-lg border border-white/10">
                 <div class="flex items-center gap-3">
@@ -229,7 +229,7 @@
                 </div>
                 <button
                   onclick={() => handleRemoveGame(game.processName)}
-                  class="p-2 text-zinc-500 hover:text-red-400 transition-colors"
+                  class="p-2 text-zinc-400 hover:text-red-400 transition-colors"
                   title="Удалить"
                 >
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -240,7 +240,7 @@
             {/each}
           </div>
         {:else}
-          <div class="text-center py-4 text-zinc-500">
+          <div class="text-center py-4 text-zinc-400">
             <p class="text-sm">Нет пользовательских игр</p>
             <p class="text-xs mt-1">Встроенный список включает популярные игры</p>
           </div>

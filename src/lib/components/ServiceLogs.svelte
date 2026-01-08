@@ -155,7 +155,7 @@
     style="max-height: {maxHeight}px;"
   >
     {#if $sourceLogs.length === 0}
-      <div class="flex items-center justify-center py-8 text-zinc-600">
+      <div class="flex items-center justify-center py-8 text-zinc-400">
         <div class="text-center">
           <svg class="w-6 h-6 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
@@ -168,12 +168,12 @@
       {#each $sourceLogs as log (log.id)}
         <div class="flex items-start gap-2 px-3 py-1 hover:bg-zinc-900/50 border-b border-white/[0.02]">
           <!-- Timestamp -->
-          <span class="text-zinc-600 shrink-0 w-14">
+          <span class="text-zinc-400 shrink-0 w-14">
             {formatTime(log.timestamp)}
           </span>
 
           <!-- Level Badge -->
-          <span class="shrink-0 px-1 py-0.5 text-[9px] uppercase font-semibold rounded
+          <span class="shrink-0 px-1 py-0.5 text-[10px] uppercase font-semibold rounded
                       {levelBgColors[log.level]} {levelColors[log.level]}">
             {log.level.slice(0, 3)}
           </span>

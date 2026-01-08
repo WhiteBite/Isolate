@@ -1,6 +1,6 @@
 <script lang="ts">
   import { browser } from '$app/environment';
-  import { connectionStats, type ConnectionHistoryPoint } from '$lib/stores/connectionStats';
+  import { connectionStats, type ConnectionHistoryPoint } from '$lib/stores/connectionStats.svelte';
 
   interface Props {
     compact?: boolean;

@@ -5,5 +5,5 @@ export * from './pluginSlots';
 export * from './layout';
 export * from './theme';
 export * from './hotkeys';
-export * from './connectionStats';
+export * from './connectionStats.svelte';
 export * from './providers';

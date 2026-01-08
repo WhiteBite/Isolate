@@ -17,7 +17,7 @@
     KeyboardOverlay
   } from '$lib/components';
   import { lazyComponents, preloadAllLazyComponents } from '$lib/utils/lazyComponent';
-  import { waitForBackend, isTauriEnv } from '$lib/hooks/useBackendReady';
+  import { waitForBackend, isTauriEnv } from '$lib/hooks/useBackendReady.svelte';
   import type { Component } from 'svelte';
   
   let { children } = $props();

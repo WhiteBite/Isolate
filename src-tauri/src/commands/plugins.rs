@@ -1,10 +1,12 @@
 //! Plugin-related Tauri commands
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use tauri::State;
 use tracing::{info, warn};
 
 use crate::core::errors::{IsolateError, TypedResultExt};
+use crate::core::paths::get_app_data_dir;
 use crate::state::AppState;
 use crate::plugins::js_loader;
 use crate::plugins::manifest::{LoadedPluginInfo, PluginManifest, ServiceDefinition};
@@ -13,6 +15,48 @@ use crate::plugins::checker::{check_service_endpoints, ServiceStatus as PluginSe
 // ============================================================================
 // Plugin Commands (JS Plugins)
 // ============================================================================
+
+/// Plugin state stored in plugins_state.json (mirrors scripts.rs structure)
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
+struct PluginsStateConfig {
+    #[serde(default)]
+    plugins: HashMap<String, PluginStateEntry>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct PluginStateEntry {
+    enabled: bool,
+}
+
+/// Load saved plugin states from plugins_state.json
+async fn load_saved_plugin_states() -> HashMap<String, bool> {
+    let config_path = get_app_data_dir().join("plugins_state.json");
+    
+    if !tokio::fs::try_exists(&config_path).await.unwrap_or(false) {
+        return HashMap::new();
+    }
+    
+    match tokio::fs::read_to_string(&config_path).await {
+        Ok(content) => {
+            match serde_json::from_str::<PluginsStateConfig>(&content) {
+                Ok(config) => {
+                    config.plugins
+                        .into_iter()
+                        .map(|(id, state)| (id, state.enabled))
+                        .collect()
+                }
+                Err(e) => {
+                    warn!(error = %e, "Failed to parse plugins_state.json");
+                    HashMap::new()
+                }
+            }
+        }
+        Err(e) => {
+            warn!(error = %e, "Failed to read plugins_state.json");
+            HashMap::new()
+        }
+    }
+}
 
 /// Get plugins directory path
 #[tauri::command]
@@ -43,10 +87,30 @@ pub async fn load_plugin_manifest(path: String) -> Result<PluginManifest, Isolat
 }
 
 /// Get all plugins with their info
+/// 
+/// Returns plugins with their enabled state synchronized from plugins_state.json.
+/// This ensures frontend receives the correct enabled state without needing
+/// a separate call to get_all_plugin_states.
 #[tauri::command]
 pub async fn get_all_plugins_cmd(state: State<'_, Arc<AppState>>) -> Result<Vec<LoadedPluginInfo>, IsolateError> {
     info!("Getting all plugins");
-    Ok(js_loader::get_all_plugins_async(&state.plugins_dir).await)
+    
+    // Load plugins from disk
+    let mut plugins = js_loader::get_all_plugins_async(&state.plugins_dir).await;
+    
+    // Load saved states
+    let saved_states = load_saved_plugin_states().await;
+    
+    // Apply saved states to plugins
+    for plugin in &mut plugins {
+        if let Some(&saved_enabled) = saved_states.get(&plugin.manifest.id) {
+            plugin.enabled = saved_enabled;
+        }
+        // If no saved state, keep the default (true for valid plugins, false for errored)
+    }
+    
+    info!(count = plugins.len(), saved_states = saved_states.len(), "Plugins loaded with saved states");
+    Ok(plugins)
 }
 
 /// Get all services from service-checker plugins
@@ -94,6 +158,7 @@ pub async fn check_all_plugin_services(state: State<'_, Arc<AppState>>) -> Resul
 use crate::plugins::{
     RegisteredStrategy, StrategyFamily as PluginStrategyFamily,
 };
+use crate::plugins::sandbox::{SandboxViolation, VIOLATION_STORE};
 
 /// Get all strategies from plugins
 #[tauri::command]
@@ -456,4 +521,32 @@ async fn reload_services_internal(state: &State<'_, Arc<AppState>>) -> Result<us
             Ok(0)
         }
     }
+}
+
+// ============================================================================
+// Plugin Sandbox Violations Commands
+// ============================================================================
+
+/// Get sandbox violations for a specific plugin
+/// 
+/// Returns the list of security violations recorded for the plugin,
+/// sorted by timestamp (newest first). Maximum 100 violations per plugin.
+#[tauri::command]
+pub async fn get_plugin_violations(plugin_id: String) -> Result<Vec<SandboxViolation>, IsolateError> {
+    info!(plugin_id = %plugin_id, "Getting plugin violations");
+    Ok(VIOLATION_STORE.get_violations(&plugin_id))
+}
+
+/// Get violation count for a specific plugin
+#[tauri::command]
+pub async fn get_plugin_violation_count(plugin_id: String) -> Result<usize, IsolateError> {
+    Ok(VIOLATION_STORE.count(&plugin_id))
+}
+
+/// Clear violations for a specific plugin
+#[tauri::command]
+pub async fn clear_plugin_violations(plugin_id: String) -> Result<(), IsolateError> {
+    info!(plugin_id = %plugin_id, "Clearing plugin violations");
+    VIOLATION_STORE.clear(&plugin_id);
+    Ok(())
 }

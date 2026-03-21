@@ -67,7 +67,7 @@ describe('toast store', () => {
         id,
         type: 'error',
         message,
-        duration: 8000,
+        duration: 10000,
         count: 1
       });
     });
@@ -89,7 +89,7 @@ describe('toast store', () => {
         id,
         type: 'warning',
         message,
-        duration: 5000,
+        duration: 6000,
         count: 1
       });
     });
@@ -111,7 +111,7 @@ describe('toast store', () => {
         id,
         type: 'info',
         message,
-        duration: 4000,
+        duration: 5000,
         count: 1
       });
     });
@@ -491,5 +491,101 @@ describe('toast store', () => {
     it('форматирует сообщение со счётчиком для count>1', () => {
       expect(formatToastMessage('Error', 5)).toBe('Error (×5)');
     });
+  });
+});
+
+
+describe('лимит одновременных toast', () => {
+  beforeEach(() => {
+    toasts.clear();
+  });
+
+  it('ограничивает количество toast до MAX_VISIBLE_TOASTS', () => {
+    // Создаём 7 toast (больше лимита в 5)
+    for (let i = 0; i < 7; i++) {
+      toasts.info(`Toast ${i}`, { noDedupe: true });
+    }
+
+    const currentToasts = get(toasts);
+    expect(currentToasts.length).toBeLessThanOrEqual(5);
+  });
+
+  it('сохраняет более важные toast при превышении лимита', () => {
+    // Создаём 3 info toast
+    toasts.info('Info 1', { noDedupe: true });
+    toasts.info('Info 2', { noDedupe: true });
+    toasts.info('Info 3', { noDedupe: true });
+    
+    // Создаём 3 error toast (более важные)
+    toasts.error('Error 1', { noDedupe: true });
+    toasts.error('Error 2', { noDedupe: true });
+    toasts.error('Error 3', { noDedupe: true });
+
+    const currentToasts = get(toasts);
+    
+    // Должно быть максимум 5 toast
+    expect(currentToasts.length).toBeLessThanOrEqual(5);
+    
+    // Все error toast должны остаться (они важнее)
+    const errorToasts = currentToasts.filter(t => t.type === 'error');
+    expect(errorToasts.length).toBe(3);
+  });
+
+  it('toast имеют правильные приоритеты', () => {
+    const successId = toasts.success('Success', { noDedupe: true });
+    const infoId = toasts.info('Info', { noDedupe: true });
+    const warningId = toasts.warning('Warning', { noDedupe: true });
+    const errorId = toasts.error('Error', { noDedupe: true });
+
+    const currentToasts = get(toasts);
+    
+    const success = currentToasts.find(t => t.id === successId);
+    const info = currentToasts.find(t => t.id === infoId);
+    const warning = currentToasts.find(t => t.id === warningId);
+    const error = currentToasts.find(t => t.id === errorId);
+
+    expect(error!.priority).toBeGreaterThan(warning!.priority);
+    expect(warning!.priority).toBeGreaterThan(info!.priority);
+    expect(info!.priority).toBeGreaterThan(success!.priority);
+  });
+});
+
+describe('progress() метод', () => {
+  beforeEach(() => {
+    toasts.clear();
+  });
+
+  it('создаёт новый progress toast', () => {
+    const id = toasts.progress(null, 'Загрузка файла', 0);
+    
+    const currentToasts = get(toasts);
+    expect(currentToasts).toHaveLength(1);
+    expect(currentToasts[0]).toMatchObject({
+      id,
+      type: 'progress',
+      message: 'Загрузка файла',
+      progress: 0,
+      duration: 0
+    });
+  });
+
+  it('обновляет существующий progress toast', () => {
+    const id = toasts.progress(null, 'Загрузка', 0);
+    
+    toasts.progress(id, 'Загрузка', 50);
+    
+    const currentToasts = get(toasts);
+    expect(currentToasts).toHaveLength(1);
+    expect(currentToasts[0].progress).toBe(50);
+  });
+
+  it('progressToast является алиасом для progress', () => {
+    const id1 = toasts.progress(null, 'Test 1', 25);
+    const id2 = toasts.progressToast(null, 'Test 2', 75);
+    
+    const currentToasts = get(toasts);
+    expect(currentToasts).toHaveLength(2);
+    expect(currentToasts[0].progress).toBe(25);
+    expect(currentToasts[1].progress).toBe(75);
   });
 });

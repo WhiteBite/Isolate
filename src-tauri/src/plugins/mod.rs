@@ -16,11 +16,13 @@
 //! - `js_loader`: Plugin discovery and manifest loading
 //! - `lua_runtime`: Sandboxed Lua 5.4 runtime for script execution
 //! - `script_executor`: High-level script execution with timeout and permissions
+//! - `sandbox`: Security enforcement and violation logging
 
 pub mod hostlist_registry;
 pub mod js_loader;
 pub mod lua_runtime;
 pub mod manifest;
+pub mod sandbox;
 pub mod script_executor;
 pub mod strategy_registry;
 
@@ -55,6 +57,12 @@ pub use strategy_registry::{
 pub use lua_runtime::{CheckResult, LuaRuntime, PluginStorage, ScriptPermissions};
 pub use script_executor::{
     create_script_executor, ScriptError, ScriptExecutor, SharedScriptExecutor,
+};
+
+// Re-export sandbox security module
+pub use sandbox::{
+    is_command_allowed, is_url_allowed, validate_command, validate_http_url,
+    ExecutionMonitor, SandboxLogger, SandboxViolation, ViolationType, ALLOWED_COMMANDS,
 };
 
 // Re-export checker functionality from core

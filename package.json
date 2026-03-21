@@ -16,6 +16,7 @@
         "test:e2e:headed": "playwright test --headed",
         "test:e2e:debug": "playwright test --debug",
         "test:e2e:report": "playwright show-report",
+        "test:a11y": "playwright test tests/e2e/a11y.spec.ts",
         "test:e2e:tauri": "wdio run ./wdio.conf.ts",
         "test:e2e:tauri:watch": "wdio run ./wdio.conf.ts --watch",
         "tauri": "tauri",
@@ -24,6 +25,7 @@
         "download-binaries:force": "pwsh -ExecutionPolicy Bypass -File scripts/download-binaries.ps1 -Force"
     },
     "devDependencies": {
+        "@axe-core/playwright": "^4.11.0",
         "@playwright/test": "^1.48.0",
         "@sveltejs/adapter-static": "^3.0.0",
         "@sveltejs/kit": "^2.0.0",

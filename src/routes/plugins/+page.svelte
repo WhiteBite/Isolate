@@ -5,9 +5,10 @@
   import { waitForBackend } from '$lib/utils/backend';
   import { toasts } from '$lib/stores/toast';
   import { Spinner, BaseModal } from '$lib/components';
-  import { installedPlugins, loadPluginsFromBackend, installPlugin, reloadAllPlugins, setPluginEnabled } from '$lib/stores/plugins';
+  import { installedPlugins, loadPluginsFromBackend, installPlugin, reloadAllPlugins, setPluginEnabled, initPluginsStore, type PluginInfo } from '$lib/stores/plugins';
   import { mockMarketPlugins } from '$lib/mocks';
   import { t } from '$lib/i18n';
+  import { listen } from '@tauri-apps/api/event';
 
   interface PluginManifest {
     id: string; name: string; version: string; author: string; description?: string; plugin_type: string;
@@ -18,6 +19,15 @@
   }
   interface LoadedPlugin { manifest: PluginManifest; enabled: boolean; path: string; error?: string; }
   interface MarketPlugin { id: string; name: string; desc: string; author: string; ver: string; icon: string; dl: number; inst: boolean; cat: string; }
+  
+  // Sandbox violation types
+  interface SandboxViolation {
+    plugin_id: string;
+    violation_type: 'timeout' | 'memory_limit' | 'http_domain_blocked' | 'command_blocked' | 'filesystem_blocked' | 'process_blocked';
+    description: string;
+    context?: string;
+    timestamp: number;
+  }
 
   let activeTab = $derived($page.url.searchParams.get('tab') || 'installed');
   let localPlugins = $state<LoadedPlugin[]>([]);
@@ -28,6 +38,11 @@
   let selectedId = $state<string | null>(null);
   let selectedMarketId = $state<string | null>(null);
   let searchQuery = $state('');
+  let eventUnlisten: (() => void) | null = null;
+  
+  // Violations state
+  let violations = $state<SandboxViolation[]>([]);
+  let loadingViolations = $state(false);
 
   // Support for ?selected= query param (from redirect)
   $effect(() => {
@@ -38,6 +53,38 @@
         selectedId = selectedFromUrl;
       }
     }
+  });
+
+  // Load violations when selected plugin changes
+  $effect(() => {
+    if (selectedId) {
+      loadViolations(selectedId);
+    } else {
+      violations = [];
+    }
+  });
+
+  // Sync with global installedPlugins store
+  $effect(() => {
+    const unsubscribe = installedPlugins.subscribe((storePlugins: PluginInfo[]) => {
+      // Update local plugins enabled state from store
+      if (storePlugins.length > 0 && localPlugins.length > 0) {
+        let needsUpdate = false;
+        const updated = localPlugins.map(lp => {
+          const storePlugin = storePlugins.find(sp => sp.id === lp.manifest.id);
+          if (storePlugin && storePlugin.enabled !== lp.enabled) {
+            needsUpdate = true;
+            return { ...lp, enabled: storePlugin.enabled };
+          }
+          return lp;
+        });
+        if (needsUpdate) {
+          localPlugins = updated;
+        }
+      }
+    });
+    
+    return () => unsubscribe();
   });
 
   // Delete confirmation modal state
@@ -53,8 +100,39 @@
   function getInvoke() { const t = (window as any).__TAURI__; return t?.core?.invoke; }
   function setTab(t: string) { goto(`/plugins?tab=${t}`, { replaceState: true, noScroll: true }); }
 
-  import { onMount } from 'svelte';
-  onMount(() => { if (!initialized) { initialized = true; load(); } });
+  import { onMount, onDestroy } from 'svelte';
+  
+  onMount(() => { 
+    if (!initialized) { 
+      initialized = true; 
+      load(); 
+      setupEventListener();
+    } 
+  });
+  
+  onDestroy(() => {
+    if (eventUnlisten) {
+      eventUnlisten();
+      eventUnlisten = null;
+    }
+  });
+  
+  async function setupEventListener() {
+    if (typeof window !== 'undefined' && '__TAURI__' in window) {
+      try {
+        eventUnlisten = await listen<{ plugin_id: string; enabled: boolean }>('plugin:state_changed', (event) => {
+          // Update local state when backend emits state change
+          const idx = localPlugins.findIndex(p => p.manifest.id === event.payload.plugin_id);
+          if (idx >= 0 && localPlugins[idx].enabled !== event.payload.enabled) {
+            localPlugins[idx] = { ...localPlugins[idx], enabled: event.payload.enabled };
+            localPlugins = [...localPlugins];
+          }
+        });
+      } catch (e) {
+        console.warn('Failed to setup plugin state event listener:', e);
+      }
+    }
+  }
 
   async function load() {
     loading = true;
@@ -63,11 +141,12 @@
       if (!ready) { loading = false; return; }
       const inv = getInvoke();
       if (!inv) { loading = false; return; }
+      // get_all_plugins_cmd now returns plugins with correct enabled states
       const loaded: LoadedPlugin[] = await inv('get_all_plugins_cmd');
       pluginsDir = await inv('get_plugins_dir');
-      try { const st: Record<string, boolean> = await inv('get_all_plugin_states'); for (const p of loaded) if (p.manifest.id in st) p.enabled = st[p.manifest.id]; } catch {}
       localPlugins = loaded;
       if (loaded.length > 0 && !selectedId) selectedId = loaded[0].manifest.id;
+      // Also update global store to keep in sync
       await loadPluginsFromBackend();
     } catch (e) { console.error(e); }
     loading = false;
@@ -89,10 +168,12 @@
       const newEnabled = !localPlugins[i].enabled;
       
       try {
-        // Call the synchronized method
+        // Call the synchronized method - this updates both backend and global store
+        // Backend will emit 'plugin:state_changed' event which updates local state
         await setPluginEnabled(p.manifest.id, newEnabled);
         
-        // Update local state
+        // Update local state immediately for responsive UI
+        // (event listener will also update, but this ensures immediate feedback)
         localPlugins[i] = { ...localPlugins[i], enabled: newEnabled };
         localPlugins = [...localPlugins];
         
@@ -127,6 +208,62 @@
   }
 
   function inst(id: string) { const p = market.find(x => x.id === id); if (p && !p.inst) { p.inst = true; market = [...market]; installPlugin(p as any); toasts.success(`${p.name} ${t('plugins.buttons.installed').toLowerCase()}`); } }
+
+  async function loadViolations(pluginId: string) {
+    loadingViolations = true;
+    try {
+      const inv = getInvoke();
+      if (inv) {
+        violations = await inv('get_plugin_violations', { pluginId });
+      }
+    } catch (e) {
+      console.error('Failed to load violations:', e);
+      violations = [];
+    }
+    loadingViolations = false;
+  }
+
+  async function clearViolations(pluginId: string) {
+    try {
+      const inv = getInvoke();
+      if (inv) {
+        await inv('clear_plugin_violations', { pluginId });
+        violations = [];
+        toasts.success('Violations cleared');
+      }
+    } catch (e) {
+      toasts.error(`Failed to clear violations: ${e}`);
+    }
+  }
+
+  function formatViolationTime(timestamp: number): string {
+    const date = new Date(timestamp);
+    return date.toLocaleString();
+  }
+
+  function getViolationIcon(type: string): string {
+    switch (type) {
+      case 'timeout': return '⏱️';
+      case 'memory_limit': return '💾';
+      case 'http_domain_blocked': return '🌐';
+      case 'command_blocked': return '🚫';
+      case 'filesystem_blocked': return '📁';
+      case 'process_blocked': return '⚙️';
+      default: return '⚠️';
+    }
+  }
+
+  function getViolationLabel(type: string): string {
+    switch (type) {
+      case 'timeout': return 'Timeout';
+      case 'memory_limit': return 'Memory Limit';
+      case 'http_domain_blocked': return 'HTTP Blocked';
+      case 'command_blocked': return 'Command Blocked';
+      case 'filesystem_blocked': return 'Filesystem Blocked';
+      case 'process_blocked': return 'Process Blocked';
+      default: return type;
+    }
+  }
 </script>
 
 <div class="h-full flex">
@@ -224,6 +361,52 @@
           </div>
         </div>
         <div><div class="text-[10px] text-zinc-400 mb-0.5">{t('plugins.details.path')}</div><code class="block text-[10px] text-zinc-400 bg-white/5 px-1.5 py-1 rounded break-all">{selected.path}</code></div>
+        
+        <!-- Security Violations Section -->
+        {#if violations.length > 0}
+          <div class="mt-3 pt-3 border-t border-white/5">
+            <div class="flex items-center justify-between mb-2">
+              <div class="flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                  <line x1="12" y1="9" x2="12" y2="13"/>
+                  <line x1="12" y1="17" x2="12.01" y2="17"/>
+                </svg>
+                <span class="text-[10px] font-medium text-amber-400">Security Violations ({violations.length})</span>
+              </div>
+              <button 
+                onclick={() => clearViolations(selected!.manifest.id)}
+                class="text-[9px] text-zinc-400 hover:text-zinc-300 px-1.5 py-0.5 rounded hover:bg-white/5"
+              >
+                Clear
+              </button>
+            </div>
+            <div class="space-y-1.5 max-h-40 overflow-y-auto">
+              {#each violations.slice(0, 10) as v}
+                <div class="p-2 bg-amber-500/5 border border-amber-500/10 rounded">
+                  <div class="flex items-start gap-2">
+                    <span class="text-sm flex-shrink-0">{getViolationIcon(v.violation_type)}</span>
+                    <div class="flex-1 min-w-0">
+                      <div class="flex items-center gap-1.5 mb-0.5">
+                        <span class="text-[10px] font-medium text-amber-400">{getViolationLabel(v.violation_type)}</span>
+                        <span class="text-[9px] text-zinc-500">{formatViolationTime(v.timestamp)}</span>
+                      </div>
+                      <div class="text-[10px] text-zinc-400 break-words">{v.description}</div>
+                      {#if v.context}
+                        <div class="text-[9px] text-zinc-500 mt-0.5 font-mono truncate" title={v.context}>{v.context}</div>
+                      {/if}
+                    </div>
+                  </div>
+                </div>
+              {/each}
+              {#if violations.length > 10}
+                <div class="text-[9px] text-zinc-500 text-center py-1">
+                  +{violations.length - 10} more violations (check logs for details)
+                </div>
+              {/if}
+            </div>
+          </div>
+        {/if}
       </div>
     {:else if activeTab === 'marketplace' && selMarket}
       <div class="p-3 border-b border-white/5 flex items-center gap-2.5">

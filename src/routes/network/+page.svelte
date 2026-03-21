@@ -5,8 +5,10 @@
   import { 
     CaptureMode,
     ConnectionStatus,
+    ActiveChainStatus,
     GatewayList, 
-    RuleList, 
+    RuleList,
+    TrafficRulesGrouped,
     AdvancedDrawer,
     AddGatewayModal,
     AddRuleModal,
@@ -28,6 +30,7 @@
     importProxyUrl
   } from '$lib/api';
   import { mockGateways, mockNetworkRules } from '$lib/mocks';
+  import { proxyChainStore } from '$lib/stores/proxyChain.svelte';
   
   // State
   let captureMode = $state<'system' | 'tun'>('system');
@@ -95,6 +98,9 @@
     
     const isTauri = '__TAURI__' in window || '__TAURI_INTERNALS__' in window;
     isDemoMode = !isTauri;
+    
+    // Initialize proxy chain store
+    await proxyChainStore.init();
     
     if (!isTauri) {
       // Demo mode: mock data for browser preview
@@ -821,6 +827,8 @@
     </div>
     
     <div class="flex items-center gap-3">
+      <ActiveChainStatus />
+      
       <ConnectionStatus
         {tunRunning}
         {systemProxySet}
@@ -873,7 +881,7 @@
     
     <!-- Right Column: Rules (~60%) -->
     <div class="flex-1 flex flex-col overflow-hidden p-4">
-      <RuleList
+      <TrafficRulesGrouped
         {rules}
         {gateways}
         {loading}

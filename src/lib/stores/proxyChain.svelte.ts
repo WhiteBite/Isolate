@@ -76,6 +76,14 @@ export interface ImportResult {
 // Frontend Types
 // ============================================================================
 
+/**
+ * Active chain info with activation timestamp
+ */
+export interface ActiveChainInfo {
+  chain: BackendProxyChain;
+  activatedAt: number; // Unix timestamp ms
+}
+
 export interface ChainBlock {
   id: string;
   type: 'dpi' | 'proxy' | 'internet';
@@ -330,6 +338,7 @@ class ProxyChainStore {
   // Backend state
   savedChains = $state<BackendProxyChain[]>([]);
   activeChainId = $state<string | null>(null);
+  activeChainInfo = $state<ActiveChainInfo | null>(null);
   loading = $state(false);
   error = $state<string | null>(null);
   
@@ -380,6 +389,15 @@ class ProxyChainStore {
           this.activeChainId = event.payload.chain_id;
           this.updateChainActiveStatus(event.payload.chain_id, true);
           
+          // Update activeChainInfo with timestamp
+          const chain = this.savedChains.find(c => c.id === event.payload.chain_id);
+          if (chain) {
+            this.activeChainInfo = {
+              chain,
+              activatedAt: Date.now(),
+            };
+          }
+          
           // Emit to eventBus for other components
           eventBus.emit('proxy:chain_activated', {
             chain_id: event.payload.chain_id,
@@ -396,6 +414,7 @@ class ProxyChainStore {
           console.log('[ProxyChain] Chain stopped event:', event.payload);
           if (this.activeChainId === event.payload.chain_id) {
             this.activeChainId = null;
+            this.activeChainInfo = null;
           }
           this.updateChainActiveStatus(event.payload.chain_id, false);
           
@@ -439,6 +458,16 @@ class ProxyChainStore {
       // Найти активную цепочку
       const activeChain = this.savedChains.find(c => c.is_active);
       this.activeChainId = activeChain?.id ?? null;
+      
+      // Initialize activeChainInfo if there's an active chain
+      if (activeChain) {
+        this.activeChainInfo = {
+          chain: activeChain,
+          activatedAt: activeChain.created_at, // Use created_at as fallback
+        };
+      } else {
+        this.activeChainInfo = null;
+      }
       
       console.log('[ProxyChain] Loaded chains:', this.savedChains.length);
     } catch (e) {
@@ -528,6 +557,15 @@ class ProxyChainStore {
       this.activeChainId = chainId;
       this.updateChainActiveStatus(chainId, true);
       
+      // Update activeChainInfo
+      const chain = this.savedChains.find(c => c.id === chainId);
+      if (chain) {
+        this.activeChainInfo = {
+          chain,
+          activatedAt: Date.now(),
+        };
+      }
+      
       console.log('[ProxyChain] Chain applied:', chainId);
       return true;
     } catch (e) {
@@ -554,6 +592,7 @@ class ProxyChainStore {
       
       // Обновляем локальное состояние (событие тоже обновит)
       this.activeChainId = null;
+      this.activeChainInfo = null;
       this.updateChainActiveStatus(targetId, false);
       
       console.log('[ProxyChain] Chain stopped:', targetId);

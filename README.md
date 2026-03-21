@@ -97,6 +97,18 @@ pnpm tauri build
 
 Для продвинутых пользователей доступен импорт VLESS-прокси и ручная настройка параметров.
 
+## Roadmap
+
+Key development directions:
+
+- 🎨 **Dashboard & UX** — Real-time traffic stats, improved onboarding, accessibility (WCAG AA)
+- 🔌 **Plugin Ecosystem** — Marketplace, permissions system, third-party strategy packs
+- 🎮 **Game Mode** — Auto-detection of games, profile switching, optimized latency
+- 🤖 **AI Pilot** — Background optimization, automatic strategy selection
+- 🛡️ **Advanced DPI** — New bypass techniques, dynamic fingerprints, combo modes
+
+See [TODO.md](TODO.md) for the full backlog and detailed tasks.
+
 ## Разработка
 
 ```

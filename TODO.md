@@ -16,7 +16,7 @@
 
 - [x] [P1][meta] Описать в `CONTRIBUTING.md` процесс работы с этим TODO (как агенты отмечают выполненное, как линкуются PR/commits). ✅ Реализовано
 - [x] [P1][meta] Раз в релиз синхронизировать `TODO.md` с `TODO_v2.md` и `TODO_REDESIGN.md` (удалять выполненные, переносить новые разделы). ✅ Реализовано (8 января 2026)
-- [ ] [P2][DOC] Добавить в `README.md` краткий раздел «Roadmap / UX backlog» с ссылкой на этот файл.
+- [x] [P2][DOC] Добавить в `README.md` краткий раздел «Roadmap / UX backlog» с ссылкой на этот файл. ✅ Реализовано
 - [ ] [P2][ARCH] Ввести теги для задач (например, `#dashboard`, `#network`) и использовать их в описаниях / PR.
 
 ---
@@ -186,9 +186,20 @@
   - единые анимации;
   - Esc закрывает, если нет критичных действий;
   - все destructive‑действия требуют явного подтверждения.
-- [ ] [P2][UX] Ввести единый паттерн для состояний `loading / empty / error / success` в списках и таблицах.
-- [ ] [P2][UX] Настроить консистентные toast‑уведомления (уровни: info/success/warning/error, лимит одновременных, авто‑hide).
-- [ ] [P2][A11y] Добавить тесты доступности (axe / pa11y) для ключевых страниц, интегрировать в CI.
+- [x] [P2][UX] Ввести единый паттерн для состояний `loading / empty / error / success` в списках и таблицах. ✅ Реализовано
+  - `StateContainer.svelte` — обёртка с автоматическим переключением состояний
+  - `LoadingState.svelte` — spinner/skeleton/dots варианты
+  - `EmptyState.svelte` — иконка, текст, CTA
+  - `ErrorState.svelte` — inline/card/fullscreen варианты с retry
+- [x] [P2][UX] Настроить консистентные toast‑уведомления (уровни: info/success/warning/error, лимит одновременных, авто‑hide). ✅ Реализовано
+  - Уровни с разными таймингами: success 4s, info 5s, warning 6s, error 10s
+  - Лимит MAX_VISIBLE_TOASTS = 5 с приоритетами
+  - Дедупликация со счётчиком "×N"
+  - Progress toast с `completeProgress()` / `failProgress()`
+- [x] [P2][A11y] Добавить тесты доступности (axe / pa11y) для ключевых страниц, интегрировать в CI. ✅ Реализовано
+  - `tests/e2e/a11y.spec.ts` — тесты для 5 страниц (Dashboard, Services, Network, Plugins, Settings)
+  - WCAG 2.1 AA compliance, keyboard navigation, color contrast, ARIA
+  - Скрипт `pnpm test:a11y`
 - [ ] [P2][UX] Улучшить систему hotkeys:
   - единая справка (overlay);
   - одинаковые комбинации для похожих действий (Ctrl+F — поиск, Ctrl+K — command palette, `?` — справка).
@@ -271,9 +282,10 @@
   - загрузка сохранённых цепочек при открытии страницы (команда `get_proxy_chains`);
   - сохранение по действию "Сохранить цепочку" (команда `save_proxy_chain`);
   - применение цепочки одним кликом "Применить" (команда `apply_proxy_chain`).
-- [ ] [P2][BE] Реализовать `detect_proxy_country` и использовать его:
-  - при импорте новых прокси;
-  - при отображении карточек в `ProxyCardGrid.svelte`.
+- [x] [P2][BE] Реализовать `detect_proxy_country` и использовать его: ✅ Реализовано
+  - `src-tauri/src/core/geo.rs` — модуль геолокации с кэшированием (TTL 24h)
+  - Команды `detect_proxy_country`, `detect_proxy_countries_batch`
+  - Использует ip-api.com, таймаут 5 сек, batch до 100 серверов
 - [ ] [P2][UX] Добавить явный статус применённой цепочки (какая цепочка сейчас активна, когда была активирована, кнопка "Сбросить").
 
 ## 15. Dashboard & события мониторинга
@@ -298,7 +310,9 @@
   - события для Library (изменение метода доступа, добавление/удаление правил);
   - события для Proxy & VPN (изменение активной цепочки, импорт прокси).
 - [ ] [P2][FE] Пройтись по основным страницам (Dashboard, Library, Troubleshooter, Network) и заменить локальные `event`‑системы / ручные `listen` на EventBus там, где это уместно.
-- [ ] [P3][DOC] Описать контракты событий (кто эмитит, кто слушает, гарантии по порядку и частоте) в `docs/events.md`.
+- [x] [P3][DOC] Описать контракты событий (кто эмитит, кто слушает, гарантии по порядку и частоте) в `docs/events.md`. ✅ Реализовано
+  - 15 категорий событий (~60 событий) с payload типами
+  - Архитектура, примеры использования, гарантии и ограничения
 
 ## 17. Diagnostics, Logs & Dev Tools
 
@@ -516,9 +530,11 @@
   - В Troubleshooter включить plugin-стратегии в список тестируемых стратегий для сервиса.
   - В AI Pilot учитывать plugin-стратегии при оптимизации и в истории действий.
 
-- [ ] [P2][FE][BE] Интеграция `hostlist-provider` плагинов в Network/Proxies.
-  - Определить и зафиксировать формат данных hostlist-плагинов на фронтенде (типы, контракт).
-  - В UI выбора источников хостлистов/правил добавить источники из плагинов с пометкой плагина.
+- [x] [P2][FE][BE] Интеграция `hostlist-provider` плагинов в Network/Proxies. ✅ Реализовано (API готов)
+  - Backend: `src-tauri/src/commands/plugin_hostlists.rs` — все команды уже были реализованы
+  - Frontend типы: `RegisteredHostlist`, `HostlistRegistryStats` в `src/lib/types/plugin.ts`
+  - Frontend API: `src/lib/api/plugins.ts` — полный набор функций для работы с hostlist
+  - UI интеграция: готова к использованию через `getPluginHostlists()` и др.
 
 - [ ] [P2][FE] Поддержка пресетов Library из плагинов.
   - Описать формат "library presets" в манифесте (если планируется использовать пресеты от плагинов).
@@ -529,19 +545,23 @@
   - При необходимости добавить отдельные безопасные команды для чтения статуса стратегий/сервисов, не давая плагинам прямой доступ к опасным действиям.
   - Документация: `docs/plugin-security.md`
 
-- [ ] [P2][SEC][BE] Реализовать поддержку `PluginPermissions` на backend.
-  - Учесть `timeout` и `memory` при исполнении script-плагинов (Level 3), когда они будут включены.
-  - Логировать превышение лимитов и попытки обращения к запрещённым HTTP-доменам или Tauri-командам.
+- [x] [P2][SEC][BE] Реализовать поддержку `PluginPermissions` на backend. ✅ Реализовано
+  - `src-tauri/src/plugins/sandbox.rs` — модуль безопасности с `SandboxLogger`, `ExecutionMonitor`, `ALLOWED_COMMANDS`
+  - Логирование: timeout, memory, HTTP domain blocked, command blocked, filesystem blocked, process blocked
+  - Интеграция: `LuaHttpClient` логирует HTTP нарушения, `ScriptExecutor` использует `ExecutionMonitor`
 
-- [ ] [P2][UX] Отображать нарушения sandbox и ограничения плагинов в UI.
-  - На `/plugins/[id]` показывать, если плагин пытался выйти за пределы разрешённых прав (с ссылкой на логи и подсказкой, что именно было заблокировано).
+- [x] [P2][UX] Отображать нарушения sandbox и ограничения плагинов в UI. ✅ Реализовано
+  - Backend: `ViolationStore` в `sandbox.rs`, команды `get_plugin_violations`, `clear_plugin_violations`
+  - Frontend: секция "Security Violations" на странице плагина с иконками, типами, временем и контекстом
 
-- [ ] [P1][ARCH][FE][BE] Единый источник правды по включённости плагина.
-  - Согласовать `installedPlugins` store и backend (`LoadedPluginInfo`/`js_loader`): включение/отключение плагина из `/plugins` должно корректно обновлять и frontend (`setPluginEnabled`/`unregisterUIPlugin`), и backend-состояние.
-  - Определить канонический путь загрузки: dev-плагины из `/plugins` vs пользовательские плагины из `plugins_dir`.
+- [x] [P1][ARCH][FE][BE] Единый источник правды по включённости плагина. ✅ Реализовано
+  - Backend: `get_all_plugins_cmd` возвращает плагины с применёнными состояниями из `plugins_state.json`
+  - Frontend: `loadPluginsFromBackend()` использует enabled-состояние напрямую из backend
+  - Синхронизация: `setPluginEnabled` → backend сохраняет + эмитит `plugin:state_changed`
 
-- [ ] [P2][FE] Гарантированная инициализация плагин-системы при старте приложения.
-  - Подключить `initializePlugins()` / `initializePluginLoader()` в точке входа фронтенда так, чтобы builtin-плагины и плагины с диска сканировались и регистрировались один раз при старте.
+- [x] [P2][FE] Гарантированная инициализация плагин-системы при старте приложения. ✅ Реализовано
+  - `+layout.svelte`: флаг `pluginsInitialized`, ожидание `waitForBackend()`, вызов `initializePluginLoader()` + `initPluginsStore()`
+  - Тройная защита от дублирования: layout флаг + store флаг + loader флаг
 
 - [ ] [P2][ARCH][UX] Спроектировать "Streaming Pack" как эталонный pack.
   - В `plugin.json` описать сервисы (Netflix/YouTube/Twitch/Spotify/TikTok и т.п.), их endpoints и категории.

@@ -1,4 +1,7 @@
-import { writable } from 'svelte/store';
+import { writable, derived } from 'svelte/store';
+
+/** Максимальное количество одновременно отображаемых toast */
+export const MAX_VISIBLE_TOASTS = 5;
 
 export interface Toast {
   id: string;
@@ -11,6 +14,10 @@ export interface Toast {
   progress?: number;
   /** Ключ для дедупликации (по умолчанию = message) */
   dedupeKey?: string;
+  /** Timestamp создания для сортировки */
+  createdAt: number;
+  /** Приоритет (error > warning > progress > info > success) */
+  priority: number;
 }
 
 /** Опции для создания toast */
@@ -21,6 +28,15 @@ export interface ToastOptions {
   /** Отключить дедупликацию для этого toast */
   noDedupe?: boolean;
 }
+
+/** Приоритеты типов toast (выше = важнее) */
+const TYPE_PRIORITY: Record<Toast['type'], number> = {
+  error: 5,
+  warning: 4,
+  progress: 3,
+  info: 2,
+  success: 1
+};
 
 function createToastStore() {
   const { subscribe, update, set } = writable<Toast[]>([]);
@@ -92,6 +108,45 @@ function createToastStore() {
     }
   }
 
+  /**
+   * Сортирует toasts по приоритету и времени создания
+   * Более важные и новые — выше
+   */
+  function sortToasts(toasts: Toast[]): Toast[] {
+    return [...toasts].sort((a, b) => {
+      // Сначала по приоритету (выше = важнее)
+      if (a.priority !== b.priority) {
+        return b.priority - a.priority;
+      }
+      // Затем по времени (новее = выше)
+      return b.createdAt - a.createdAt;
+    });
+  }
+
+  /**
+   * Применяет лимит на количество toast
+   * Удаляет наименее важные/старые toast если превышен лимит
+   */
+  function applyLimit(toasts: Toast[], dismiss: (id: string) => void): Toast[] {
+    if (toasts.length <= MAX_VISIBLE_TOASTS) {
+      return toasts;
+    }
+
+    const sorted = sortToasts(toasts);
+    const toKeep = sorted.slice(0, MAX_VISIBLE_TOASTS);
+    const toRemove = sorted.slice(MAX_VISIBLE_TOASTS);
+
+    // Очищаем таймауты и dedupeMap для удаляемых
+    for (const toast of toRemove) {
+      clearToastTimeout(toast.id);
+      if (toast.dedupeKey) {
+        dedupeMap.delete(toast.dedupeKey);
+      }
+    }
+
+    return toKeep;
+  }
+
   const store = {
     subscribe,
     
@@ -113,7 +168,7 @@ function createToastStore() {
             return toasts.map(t => {
               if (t.id === existingId) {
                 newCount = t.count + 1;
-                return { ...t, count: newCount };
+                return { ...t, count: newCount, createdAt: Date.now() };
               }
               return t;
             });
@@ -135,7 +190,9 @@ function createToastStore() {
         message,
         duration,
         count: 1,
-        dedupeKey: key
+        dedupeKey: key,
+        createdAt: Date.now(),
+        priority: TYPE_PRIORITY[type]
       };
       
       if (!noDedupe) {
@@ -144,7 +201,10 @@ function createToastStore() {
       
       logToast(type, message, 1);
       
-      update(toasts => [...toasts, toast]);
+      update(toasts => {
+        const newToasts = [...toasts, toast];
+        return applyLimit(newToasts, this.dismiss.bind(this));
+      });
       
       // Auto-remove after duration
       setToastTimeout(id, duration, this.dismiss.bind(this));
@@ -161,11 +221,11 @@ function createToastStore() {
     },
     
     /**
-     * Показать error toast
+     * Показать error toast (дольше отображается)
      */
     error(message: string, options: ToastOptions | number = {}): string {
       const opts = typeof options === 'number' ? { duration: options } : options;
-      return this.show('error', message, { duration: 8000, ...opts });
+      return this.show('error', message, { duration: 10000, ...opts });
     },
     
     /**
@@ -173,7 +233,7 @@ function createToastStore() {
      */
     warning(message: string, options: ToastOptions | number = {}): string {
       const opts = typeof options === 'number' ? { duration: options } : options;
-      return this.show('warning', message, { duration: 5000, ...opts });
+      return this.show('warning', message, { duration: 6000, ...opts });
     },
     
     /**
@@ -181,7 +241,7 @@ function createToastStore() {
      */
     info(message: string, options: ToastOptions | number = {}): string {
       const opts = typeof options === 'number' ? { duration: options } : options;
-      return this.show('info', message, { duration: 4000, ...opts });
+      return this.show('info', message, { duration: 5000, ...opts });
     },
     
     /**
@@ -225,7 +285,7 @@ function createToastStore() {
      * @param progress - Прогресс 0-100
      * @returns ID toast
      */
-    progressToast(id: string | null, message: string, progress: number): string {
+    progress(id: string | null, message: string, progress: number): string {
       const clampedProgress = Math.max(0, Math.min(100, progress));
       
       // Если есть существующий toast, обновляем его
@@ -254,14 +314,27 @@ function createToastStore() {
         duration: 0, // Progress toast не закрывается автоматически
         count: 1,
         progress: clampedProgress,
-        dedupeKey: `progress-${newId}` // Уникальный ключ, без дедупликации
+        dedupeKey: `progress-${newId}`, // Уникальный ключ, без дедупликации
+        createdAt: Date.now(),
+        priority: TYPE_PRIORITY['progress']
       };
       
       console.info(`[Toast] ⏳ ${message} (${clampedProgress}%)`);
       
-      update(toasts => [...toasts, toast]);
+      update(toasts => {
+        const newToasts = [...toasts, toast];
+        return applyLimit(newToasts, this.dismiss.bind(this));
+      });
       
       return newId;
+    },
+    
+    /**
+     * Алиас для progress (обратная совместимость)
+     * @deprecated Используйте progress() вместо progressToast()
+     */
+    progressToast(id: string | null, message: string, progress: number): string {
+      return this.progress(id, message, progress);
     },
     
     /**

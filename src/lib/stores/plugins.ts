@@ -274,18 +274,9 @@ export async function loadPluginsFromBackend(): Promise<PluginInfo[]> {
       return [];
     }
     
-    // Try to get plugins from backend
+    // Get plugins from backend - enabled states are already applied by backend
     const backendPlugins = await invoke<BackendPluginInfo[]>('get_all_plugins_cmd');
     logger.log('Plugins', 'Raw backend data:', JSON.stringify(backendPlugins, null, 2));
-    
-    // Load saved plugin states
-    let savedStates: Record<string, boolean> = {};
-    try {
-      savedStates = await invoke<Record<string, boolean>>('get_all_plugin_states');
-      logger.log('Plugins', `Loaded ${Object.keys(savedStates).length} saved plugin states`);
-    } catch (error) {
-      logger.warn('Plugins', 'Failed to load saved plugin states:', error);
-    }
     
     // Map backend structure to frontend PluginInfo
     // Filter out plugins with errors or invalid data
@@ -322,10 +313,8 @@ export async function loadPluginsFromBackend(): Promise<PluginInfo[]> {
         // Get icon from service.icon or use default
         const icon = bp.manifest.service?.icon || getDefaultIcon(pluginType);
         
-        // Use saved state if available, otherwise use manifest enabled state
-        const enabled = savedStates[bp.manifest.id] !== undefined 
-          ? savedStates[bp.manifest.id] 
-          : bp.enabled;
+        // Use enabled state from backend (already includes saved states)
+        const enabled = bp.enabled;
         
         logger.log('Plugins', `Mapping ${bp.manifest.id}: type=${rawType} -> ${pluginType}, icon=${icon}, enabled=${enabled}`);
         

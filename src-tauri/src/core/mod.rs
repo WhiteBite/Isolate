@@ -28,6 +28,7 @@ pub mod domain_routing;
 pub mod dynamic_hostlist;
 pub mod env_info;
 pub mod errors;
+pub mod geo;
 pub mod hostlists;
 pub mod hostlist_updater;
 pub mod hosts_manager;

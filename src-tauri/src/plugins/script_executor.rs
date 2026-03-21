@@ -5,6 +5,7 @@
 
 use crate::plugins::lua_runtime::{CheckResult, LuaRuntime, PluginStorage, ScriptPermissions};
 use crate::plugins::manifest::{PluginManifest, PluginType};
+use crate::plugins::sandbox::ExecutionMonitor;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -167,10 +168,17 @@ impl ScriptExecutor {
         // Get storage
         let storage = self.get_storage(plugin_id).await;
 
+        // Create execution monitor for sandbox violation logging
+        let monitor = ExecutionMonitor::new(
+            plugin_id,
+            permissions.timeout,
+            permissions.memory_limit,
+        );
+
         // Execute in blocking thread (Lua is not Send)
         let timeout_duration = permissions.timeout;
         let plugin_id_owned = plugin_id.to_string();
-        let _script_name_owned = script_name.to_string();
+        let script_name_owned = script_name.to_string();
         
         let result = timeout(timeout_duration, tokio::task::spawn_blocking(move || {
             // Create runtime in blocking context
@@ -184,38 +192,47 @@ impl ScriptExecutor {
 
         match result {
             Ok(Ok(Ok(check_result))) => {
+                monitor.log_completion(true);
                 info!(
                     plugin = %plugin_id,
-                    script = %script_name,
+                    script = %script_name_owned,
                     success = check_result.success,
                     latency = ?check_result.latency,
+                    elapsed_ms = monitor.elapsed().as_millis() as u64,
                     "Script check completed"
                 );
                 Ok(check_result)
             }
             Ok(Ok(Err(e))) => {
+                monitor.log_completion(false);
                 error!(
                     plugin = %plugin_id,
-                    script = %script_name,
+                    script = %script_name_owned,
                     error = %e,
+                    elapsed_ms = monitor.elapsed().as_millis() as u64,
                     "Script execution failed"
                 );
                 Err(ScriptError::from(e))
             }
             Ok(Err(e)) => {
+                monitor.log_completion(false);
                 error!(
                     plugin = %plugin_id,
-                    script = %script_name,
+                    script = %script_name_owned,
                     error = %e,
+                    elapsed_ms = monitor.elapsed().as_millis() as u64,
                     "Task join error"
                 );
                 Err(ScriptError::ExecutionFailed(e.to_string()))
             }
             Err(_) => {
+                // Log timeout violation
+                monitor.logger().log_timeout(monitor.elapsed(), timeout_duration);
                 warn!(
                     plugin = %plugin_id,
-                    script = %script_name,
+                    script = %script_name_owned,
                     timeout = ?timeout_duration,
+                    elapsed_ms = monitor.elapsed().as_millis() as u64,
                     "Script execution timed out"
                 );
                 Err(ScriptError::Timeout(timeout_duration))

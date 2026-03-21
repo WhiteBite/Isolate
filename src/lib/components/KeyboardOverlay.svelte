@@ -71,6 +71,7 @@
       icon: 'M13 10V3L4 14h7v7l9-11h-7z',
       shortcuts: [
         { keys: ['Ctrl', 'K'], description: 'Command Palette' },
+        { keys: ['Ctrl', 'F'], description: 'Search' },
         { keys: ['Ctrl', '`'], description: 'Toggle Terminal' },
         { keys: ['Ctrl', 'L'], description: 'Focus Logs' },
       ]

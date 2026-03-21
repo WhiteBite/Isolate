@@ -138,14 +138,15 @@ impl PluginStorage {
     }
 }
 
-/// HTTP client for Lua scripts
+/// HTTP client for Lua scripts with sandbox violation logging
 pub struct LuaHttpClient {
     client: reqwest::Client,
     permissions: ScriptPermissions,
+    plugin_id: String,
 }
 
 impl LuaHttpClient {
-    pub fn new(permissions: ScriptPermissions) -> Self {
+    pub fn new(plugin_id: impl Into<String>, permissions: ScriptPermissions) -> Self {
         let client = reqwest::Client::builder()
             .timeout(permissions.timeout)
             .build()
@@ -154,13 +155,26 @@ impl LuaHttpClient {
         Self {
             client,
             permissions,
+            plugin_id: plugin_id.into(),
         }
     }
 
-    pub async fn get(&self, url: &str) -> Result<HttpResponse, IsolateError> {
-        if !self.permissions.is_url_allowed(url) {
-            return Err(IsolateError::Network(format!("URL not in whitelist: {}", url)));
+    /// Check URL and log violation if blocked
+    fn check_url(&self, url: &str) -> Result<(), IsolateError> {
+        if self.permissions.is_url_allowed(url) {
+            return Ok(());
         }
+        
+        // Log the HTTP domain violation
+        use crate::plugins::sandbox::SandboxLogger;
+        let logger = SandboxLogger::new(&self.plugin_id);
+        logger.log_http_violation(url, &self.permissions.http_whitelist);
+        
+        Err(IsolateError::Network(format!("URL not in whitelist: {}", url)))
+    }
+
+    pub async fn get(&self, url: &str) -> Result<HttpResponse, IsolateError> {
+        self.check_url(url)?;
 
         let start = std::time::Instant::now();
         
@@ -181,9 +195,7 @@ impl LuaHttpClient {
     }
 
     pub async fn post(&self, url: &str, body: &str) -> Result<HttpResponse, IsolateError> {
-        if !self.permissions.is_url_allowed(url) {
-            return Err(IsolateError::Network(format!("URL not in whitelist: {}", url)));
-        }
+        self.check_url(url)?;
 
         let start = std::time::Instant::now();
         
@@ -204,9 +216,7 @@ impl LuaHttpClient {
     }
 
     pub async fn head(&self, url: &str) -> Result<HttpResponse, IsolateError> {
-        if !self.permissions.is_url_allowed(url) {
-            return Err(IsolateError::Network(format!("URL not in whitelist: {}", url)));
-        }
+        self.check_url(url)?;
 
         let start = std::time::Instant::now();
         
@@ -375,7 +385,7 @@ impl LuaRuntime {
     /// Uses a shared Tokio runtime for efficiency instead of creating new runtime per call.
     fn register_sync_api(&self) -> LuaResult<()> {
         let globals = self.lua.globals();
-        let http_client = Arc::new(LuaHttpClient::new(self.permissions.clone()));
+        let http_client = Arc::new(LuaHttpClient::new(&self.plugin_id, self.permissions.clone()));
         let storage = self.storage.clone();
         
         // Create a shared runtime for sync operations
@@ -605,7 +615,7 @@ impl LuaRuntime {
     /// avoiding blocking the async runtime with block_on() calls.
     async fn register_async_api(&self) -> LuaResult<()> {
         let globals = self.lua.globals();
-        let http_client = Arc::new(LuaHttpClient::new(self.permissions.clone()));
+        let http_client = Arc::new(LuaHttpClient::new(&self.plugin_id, self.permissions.clone()));
         let storage = self.storage.clone();
 
         // http_get - uses spawn_blocking to avoid blocking async runtime

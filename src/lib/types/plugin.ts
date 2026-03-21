@@ -99,6 +99,35 @@ export interface HostlistDefinition {
   tags?: string[];
 }
 
+// Registered Hostlist (matches Rust RegisteredHostlist)
+// Represents a hostlist that has been loaded from a plugin with resolved domains
+export interface RegisteredHostlist {
+  /** Original definition from plugin */
+  definition: HostlistDefinition;
+  /** Plugin ID that registered this hostlist */
+  plugin_id: string;
+  /** Resolved domains (loaded from file/inline/remote) */
+  domains: string[];
+  /** Path to the plugin directory */
+  plugin_path: string;
+  /** Last update timestamp (ISO 8601) */
+  updated_at?: string;
+  /** Whether the hostlist is enabled */
+  enabled: boolean;
+}
+
+// Hostlist Registry Statistics (matches Rust RegistryStats)
+export interface HostlistRegistryStats {
+  /** Total number of registered hostlists */
+  total_hostlists: number;
+  /** Number of enabled hostlists */
+  enabled_hostlists: number;
+  /** Total domains across all hostlists */
+  total_domains: number;
+  /** Unique domains (deduplicated) */
+  unique_domains: number;
+}
+
 // Strategy Definitions (matches Rust StrategyDefinition - legacy simple version)
 export interface StrategyDefinition {
   id: string;

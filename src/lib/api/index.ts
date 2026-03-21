@@ -299,3 +299,29 @@ export {
     reportError,
     type CrashReportingInfo,
 } from './crashReporting';
+
+// Plugins API
+export {
+    // Hostlist functions
+    getPluginHostlists,
+    getPluginHostlist,
+    getPluginHostlistDomains,
+    mergePluginHostlists,
+    getAllPluginDomains,
+    checkDomainInHostlists,
+    findMatchingHostlists,
+    getHostlistsByCategory,
+    getHostlistsByPlugin,
+    setHostlistEnabled,
+    reloadPluginHostlist,
+    getHostlistRegistryStats,
+    // Plugin services
+    getPluginServices,
+    // Plugin management
+    getAllPlugins,
+    reloadPlugins,
+    reloadPlugin,
+    // Types
+    type LoadedPluginInfo,
+    type ReloadPluginsResult,
+} from './plugins';

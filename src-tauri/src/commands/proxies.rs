@@ -489,6 +489,88 @@ pub async fn deactivate_proxy(
 // Subscription Fetch Command (for frontend)
 // ============================================================================
 
+// ============================================================================
+// Geo Detection Commands
+// ============================================================================
+
+/// Result of proxy country detection
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ProxyGeoResult {
+    pub server: String,
+    pub country_code: Option<String>,
+    pub country_name: Option<String>,
+}
+
+/// Detect country of a proxy server
+#[tauri::command]
+pub async fn detect_proxy_country(server: String) -> Result<ProxyGeoResult, IsolateError> {
+    validate_not_empty(&server, "Server address")?;
+    
+    info!(server = %server, "Detecting proxy country");
+    
+    let country_code = crate::core::geo::detect_proxy_country(&server)
+        .await
+        .map_err(|e| IsolateError::Network(format!("Geo lookup failed: {}", e)))?;
+    
+    let country_name = country_code
+        .as_ref()
+        .and_then(|code| crate::core::geo::country_code_to_name(code))
+        .map(|s| s.to_string());
+    
+    info!(server = %server, country = ?country_code, "Proxy country detected");
+    
+    Ok(ProxyGeoResult {
+        server,
+        country_code,
+        country_name,
+    })
+}
+
+/// Batch detect countries for multiple proxy servers
+#[tauri::command]
+pub async fn detect_proxy_countries_batch(
+    servers: Vec<String>,
+) -> Result<Vec<ProxyGeoResult>, IsolateError> {
+    if servers.is_empty() {
+        return Ok(Vec::new());
+    }
+    
+    if servers.len() > 100 {
+        return Err(IsolateError::Validation(
+            "Maximum 100 servers per batch request".to_string()
+        ));
+    }
+    
+    info!(count = servers.len(), "Batch detecting proxy countries");
+    
+    let results = crate::core::geo::detect_proxy_countries_batch(&servers).await;
+    
+    let geo_results: Vec<ProxyGeoResult> = servers
+        .into_iter()
+        .map(|server| {
+            let country_code = results.get(&server).cloned().flatten();
+            let country_name = country_code
+                .as_ref()
+                .and_then(|code| crate::core::geo::country_code_to_name(code))
+                .map(|s| s.to_string());
+            
+            ProxyGeoResult {
+                server,
+                country_code,
+                country_name,
+            }
+        })
+        .collect();
+    
+    info!(count = geo_results.len(), "Batch geo detection completed");
+    
+    Ok(geo_results)
+}
+
+// ============================================================================
+// Subscription Fetch Command (for frontend)
+// ============================================================================
+
 /// Fetch subscription content from URL (CORS-free)
 #[tauri::command]
 pub async fn fetch_subscription_content(url: String) -> Result<String, IsolateError> {

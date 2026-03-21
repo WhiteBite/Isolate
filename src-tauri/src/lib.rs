@@ -412,6 +412,9 @@ pub fn run() {
             commands::export_proxy_url,
             commands::import_subscription,
             commands::fetch_subscription_content,
+            // Proxy Geo commands
+            commands::detect_proxy_country,
+            commands::detect_proxy_countries_batch,
             // Proxy Chain commands
             commands::parse_proxy_url_info,
             commands::batch_import_proxies,
@@ -611,6 +614,10 @@ pub fn run() {
             commands::set_plugin_enabled,
             commands::get_plugin_enabled,
             commands::get_all_plugin_states,
+            // Plugin sandbox violations commands
+            commands::get_plugin_violations,
+            commands::get_plugin_violation_count,
+            commands::clear_plugin_violations,
             // Plugin settings persistence commands
             commands::get_plugin_settings,
             commands::set_plugin_settings,

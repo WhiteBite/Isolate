@@ -66,24 +66,16 @@
     return unsubscribe;
   });
 
-  // Initialize theme on mount
+  // Track plugin initialization state
+  let pluginsInitialized = $state(false);
+
+  // Initialize theme on mount (sync operations)
   $effect(() => {
     if (browser) {
       const cleanup = themeStore.init();
       initLocale(); // Initialize i18n
       
-      // Initialize plugin system
-      Promise.all([
-        initializePluginLoader(),
-        initPluginsStore()
-      ]).then(() => {
-        console.log('[Layout] Plugin system initialized');
-      }).catch(err => {
-        console.error('[Layout] Failed to initialize plugin system:', err);
-        // Don't block app loading on plugin errors
-      });
-      
-      // Initialize AI Pilot store
+      // Initialize AI Pilot store (doesn't depend on backend)
       aiPilotStore.init().catch(err => {
         console.error('[Layout] Failed to initialize AI Pilot:', err);
       });
@@ -96,6 +88,39 @@
         });
       };
     }
+  });
+
+  // Initialize plugin system after backend is ready
+  $effect(() => {
+    if (!browser || pluginsInitialized) return;
+    
+    (async () => {
+      try {
+        // Wait for backend to be ready before loading plugins
+        const backendReady = await waitForBackend({
+          maxRetries: 15,
+          initialDelay: 100,
+          maxDelay: 1000,
+        });
+        
+        if (!backendReady) {
+          console.warn('[Layout] Backend not ready, skipping plugin initialization');
+          return;
+        }
+        
+        // Initialize plugin loader (UI components) and store (backend plugins)
+        await Promise.all([
+          initializePluginLoader(),
+          initPluginsStore()
+        ]);
+        
+        pluginsInitialized = true;
+        console.log('[Layout] Plugin system initialized');
+      } catch (err) {
+        console.error('[Layout] Failed to initialize plugin system:', err);
+        // Don't block app loading on plugin errors
+      }
+    })();
   });
 
   async function checkOnboarding() {
@@ -509,6 +534,13 @@
         if (routes[e.key]) {
           e.preventDefault();
           goto(routes[e.key]);
+          return;
+        }
+        
+        // Ctrl+F — Open Command Palette (search alias)
+        if (e.key === 'f') {
+          e.preventDefault();
+          openCommandPalette();
           return;
         }
         

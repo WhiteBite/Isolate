@@ -48,6 +48,7 @@
       icon: '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />',
       shortcuts: [
         { keys: ['Ctrl', 'K'], description: 'Open Command Palette' },
+        { keys: ['Ctrl', 'F'], description: 'Search (opens Command Palette)' },
         { keys: ['Ctrl', 'Shift', 'P'], description: 'Open Command Palette (alt)' },
         { keys: ['Ctrl', '`'], description: 'Toggle Terminal' },
         { keys: ['Ctrl', 'L'], description: 'Focus on Logs/Terminal' },
